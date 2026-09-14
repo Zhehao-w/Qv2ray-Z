@@ -7,6 +7,7 @@ on:
       - ".github/xray-fixtures/**"
       - "src/base/models/CoreObjectModels.hpp"
       - "src/core/connection/serialization/vless.cpp"
+      - "src/core/kernel/V2RayKernelInteractions.cpp"
       - "src/plugins/protocols/core/OutboundHandler.*"
       - "src/plugins/protocols/ui/outbound/vless.*"
       - "src/ui/widgets/widgets/StreamSettingsWidget.*"
@@ -19,6 +20,7 @@ on:
       - ".github/xray-fixtures/**"
       - "src/base/models/CoreObjectModels.hpp"
       - "src/core/connection/serialization/vless.cpp"
+      - "src/core/kernel/V2RayKernelInteractions.cpp"
       - "src/plugins/protocols/core/OutboundHandler.*"
       - "src/plugins/protocols/ui/outbound/vless.*"
       - "src/ui/widgets/widgets/StreamSettingsWidget.*"
@@ -63,16 +65,11 @@ jobs:
           "$XRAY_BIN" help 2>&1 | tee "$RUNNER_TEMP/xray-help.txt"
           "$XRAY_BIN" help run 2>&1 | tee "$RUNNER_TEMP/xray-run-help.txt"
 
-          if grep -Eq '(^|[[:space:]])test([[:space:]]|$)' "$RUNNER_TEMP/xray-help.txt"; then
-            echo "XRAY_VALIDATE_MODE=test-command" >> "$GITHUB_ENV"
-            echo "Validation command: xray test -c <config>"
-          elif grep -q -- '-test' "$RUNNER_TEMP/xray-run-help.txt"; then
-            echo "XRAY_VALIDATE_MODE=run-test-flag" >> "$GITHUB_ENV"
-            echo "Validation command: xray run -test -c <config>"
-          else
+          if ! grep -q -- '-test' "$RUNNER_TEMP/xray-run-help.txt"; then
             echo "::error::The downloaded Xray ${XRAY_RELEASE} help does not advertise a supported config-validation interface."
             exit 1
           fi
+          echo "Validation command used by Qv2ray-Z: xray run -test -c <config>"
 
       - name: Assert fixture compatibility properties
         shell: bash
@@ -111,16 +108,34 @@ jobs:
             local config="$1"
             echo "::group::Validating ${config} with Xray ${XRAY_RELEASE}"
             jq . "$config"
-            if [[ "$XRAY_VALIDATE_MODE" == test-command ]]; then
-              "$XRAY_BIN" test -c "$config"
-            else
-              "$XRAY_BIN" run -test -c "$config"
-            fi
+            "$XRAY_BIN" run -test -c "$config"
             echo "::endgroup::"
           }
 
           validate .github/xray-fixtures/vless-tls-vision.json
           validate .github/xray-fixtures/vless-reality-vision.json
+
+      - name: Verify invalid config diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          invalid_config="$RUNNER_TEMP/invalid-xray-config.json"
+          printf '{ invalid json\n' > "$invalid_config"
+
+          set +e
+          output="$("$XRAY_BIN" run -test -c "$invalid_config" 2>&1)"
+          status=$?
+          set -e
+
+          if [[ $status -eq 0 ]]; then
+            echo "::error::Xray unexpectedly accepted an invalid config."
+            exit 1
+          fi
+          if [[ -z "${output//[[:space:]]/}" ]]; then
+            echo "::error::Xray returned no diagnostic for an invalid config."
+            exit 1
+          fi
+          printf '%s\n' "$output"
 
   qv2ray-vless-tests:
     name: Qt5 VLESS serialization tests
