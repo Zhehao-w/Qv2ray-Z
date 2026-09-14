@@ -49,16 +49,18 @@ if(WIN32)
     include(cmake/versioninfo/generate_product_version.cmake)
     generate_product_version(
         QV2RAY_RC
-        NAME               "Qv2ray"
-        BUNDLE             "Qv2ray Project Family"
+        NAME               "Qv2ray-Z"
+        BUNDLE             "Qv2ray-Z"
         ICON               "${CMAKE_SOURCE_DIR}/assets/icons/qv2ray.ico"
         VERSION_MAJOR      ${CMAKE_PROJECT_VERSION_MAJOR}
         VERSION_MINOR      ${CMAKE_PROJECT_VERSION_MINOR}
         VERSION_PATCH      ${CPACK_PACKAGE_VERSION_PATCH}
         VERSION_REVISION   ${QV2RAY_BUILD_VERSION}
-        COMPANY_NAME       "Qv2ray Workgroup"
-        COMPANY_COPYRIGHT  "Qv2ray Workgroup 2021"
-        FILE_DESCRIPTION   "Qv2ray Main Application"
+        COMPANY_NAME       "Qv2ray-Z community; based on Qv2ray"
+        COMPANY_COPYRIGHT  "Copyright (c) 2019-2021 Qv2ray Development Group; Qv2ray-Z contributors"
+        ORIGINAL_FILENAME  "qv2ray.exe"
+        INTERNAL_NAME      "qv2ray"
+        FILE_DESCRIPTION   "Qv2ray-Z Main Application"
         )
     add_definitions(-DUNICODE -D_UNICODE -DNOMINMAX)
     set(GUI_TYPE WIN32)
@@ -90,7 +92,7 @@ message(" ")
 message("Qv2ray Version: ${QV2RAY_VERSION_STRING}")
 message("Qv2ray Build Version: ${QV2RAY_BUILD_VERSION}")
 message("|-------------------------------------------------|")
-message("| Qv2ray, A Cross Platform v2ray Qt GUI Client.   |")
+message("| Qv2ray-Z, a community-maintained Xray Qt client.|")
 message("| Licenced under GPLv3                            |")
 message("|                                                 |")
 message("| You may only use this program to the extent     |")
@@ -98,7 +100,7 @@ message("| permitted by local law.                         |")
 message("|                                                 |")
 message("| See: https://www.gnu.org/licenses/gpl-3.0.html  |")
 message("|-------------------------------------------------|")
-message("| Project Homepage: https://github.com/Qv2ray     |")
+message("| Project: https://github.com/Zhehao-w/Qv2ray-Z   |")
 message("| Welcome to contribute!                          |")
 message("|-------------------------------------------------|")
 message(" ")
@@ -232,7 +234,7 @@ if(QV2RAY_BUILD_INFO)
 elseif(DEFINED ENV{_QV2RAY_BUILD_INFO_})
     set(_QV2RAY_BUILD_INFO_STR_ "$ENV{_QV2RAY_BUILD_INFO_}")
 else()
-    set(_QV2RAY_BUILD_INFO_STR_ "Qv2ray from manual build")
+    set(_QV2RAY_BUILD_INFO_STR_ "Qv2ray-Z from manual build")
 endif()
 
 if(QV2RAY_BUILD_EXTRA_INFO)

@@ -8,8 +8,8 @@
 
 const inline QMap<int, QString> UpdateChannelLink //
     {
-        { 0, "https://api.github.com/repos/Qv2ray/Qv2ray/releases/latest" },    //
-        { 1, "https://api.github.com/repos/Qv2ray/Qv2ray/releases?per_page=1" } //
+        { 0, "https://api.github.com/repos/Zhehao-w/Qv2ray-Z/releases/latest" },    //
+        { 1, "https://api.github.com/repos/Zhehao-w/Qv2ray-Z/releases?per_page=1" } //
     };
 #define QV_MODULE_NAME "Update"
 
@@ -75,12 +75,12 @@ namespace Qv2ray::components
             }
             const auto link = root["html_url"].toString("");
             const auto versionMessage =
-                QString("A new version of Qv2ray has been found:" NEWLINE "v%1" NEWLINE NEWLINE "%2" NEWLINE "------------" NEWLINE "%3")
+                QString("A new version of Qv2ray-Z has been found:" NEWLINE "v%1" NEWLINE NEWLINE "%2" NEWLINE "------------" NEWLINE "%3")
                     .arg(newVersionStr)
                     .arg(name)
                     .arg(root["body"].toString());
 
-            const auto result = QvMessageBoxAsk(nullptr, tr("Qv2ray Update"), versionMessage, { Yes, No, Ignore });
+            const auto result = QvMessageBoxAsk(nullptr, tr("Qv2ray-Z Update"), versionMessage, { Yes, No, Ignore });
             if (result == Yes)
             {
                 QvCoreApplication->OpenURL(link);
