@@ -130,6 +130,7 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(QJsonIO::GetValue(rawStream, { "realitySettings", "spiderX" }) == "/news");
 
         const auto stream = StreamSettingsObject::fromJson(rawStream);
+        REQUIRE(stream.realitySettings.spiderX == "/news");
         const auto runtimeStream = stream.toJson();
         REQUIRE(runtimeStream["security"] == "reality");
         REQUIRE(QJsonIO::GetValue(runtimeStream, { "realitySettings", "password" }) == "PUBLIC_KEY");

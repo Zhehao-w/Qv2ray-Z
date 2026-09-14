@@ -206,7 +206,10 @@ namespace Qv2ray::core::connection
                 if (query.hasQueryItem("sid"))
                     QJsonIO::SetValue(stream, query.queryItemValue("sid"), { "realitySettings", "shortId" });
                 if (query.hasQueryItem("spx"))
-                    QJsonIO::SetValue(stream, query.queryItemValue("spx"), { "realitySettings", "spiderX" });
+                {
+                    const auto spiderX = QUrl::fromPercentEncoding(query.queryItemValue("spx", QUrl::FullyEncoded).toUtf8());
+                    QJsonIO::SetValue(stream, spiderX, { "realitySettings", "spiderX" });
+                }
             }
 
             // assembling config
