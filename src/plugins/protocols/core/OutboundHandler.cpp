@@ -87,7 +87,9 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
         QUrlQuery query;
         const auto encryption = QJsonIO::GetValue(obj, { "vnext", 0, "users", 0, "encryption" }).toString("none");
         const auto flow = QJsonIO::GetValue(obj, "vnext", 0, "users", 0, "flow").toString();
-        const auto isVision = flow == "xtls-rprx-vision";
+        if (!flow.isEmpty() && !QStringList{ "xtls-rprx-vision", "xtls-rprx-vision-udp443" }.contains(flow))
+            return "(Unsupported VLESS flow)";
+        const auto isVision = flow == "xtls-rprx-vision" || flow == "xtls-rprx-vision-udp443";
         if (encryption != "none" || isVision)
             query.addQueryItem("encryption", encryption);
 
@@ -96,6 +98,8 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
             query.addQueryItem("type", network);
 
         const auto security = QJsonIO::GetValue(objStream, "security").toString("none");
+        if (!QStringList{ "none", "tls", "reality" }.contains(security))
+            return "(Unsupported VLESS stream security)";
         if (security != "none")
             query.addQueryItem("security", security);
 
@@ -159,7 +163,7 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
                 query.addQueryItem("mode", "multi");
         }
         // -------- TLS RELATED --------
-        const auto tlsKey = security == "xtls" ? "xtlsSettings" : security == "reality" ? "realitySettings" : "tlsSettings";
+        const auto tlsKey = security == "reality" ? "realitySettings" : "tlsSettings";
 
         const auto sni = QJsonIO::GetValue(objStream, { tlsKey, "serverName" }).toString();
         if (!sni.isEmpty())

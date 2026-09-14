@@ -33,27 +33,18 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
 {
     stream = sso;
     transportCombo->setCurrentText(stream.network);
-    // TLS XTLS
+    // TLS and REALITY
     {
-        const static QMap<QString, int> securityIndexMap{ { "none", 0 }, { "tls", 1 }, { "xtls", 2 }, { "reality", 3 } };
+        const static QMap<QString, int> securityIndexMap{ { "none", 0 }, { "tls", 1 }, { "reality", 2 } };
         if (securityIndexMap.contains(stream.security))
             securityTypeCB->setCurrentIndex(securityIndexMap[stream.security]);
         else
             LOG("Unsupported Security Type:", stream.security);
 
-#define tls_xtls_process(prefix)                                                                                                                     \
-    {                                                                                                                                                \
-        serverNameTxt->setText(stream.prefix##Settings.serverName);                                                                                  \
-        allowInsecureCB->setChecked(stream.prefix##Settings.allowInsecure);                                                                          \
-        enableSessionResumptionCB->setChecked(stream.prefix##Settings.enableSessionResumption);                                                      \
-        disableSystemRoot->setChecked(stream.prefix##Settings.disableSystemRoot);                                                                    \
-        alpnTxt->setText(stream.prefix##Settings.alpn.join("|"));                                                                                    \
-    }
-
-        tls_xtls_process(tls);
-
-        if (stream.security == "xtls")
-            tls_xtls_process(xtls);
+        serverNameTxt->setText(stream.tlsSettings.serverName);
+        enableSessionResumptionCB->setChecked(stream.tlsSettings.enableSessionResumption);
+        disableSystemRoot->setChecked(stream.tlsSettings.disableSystemRoot);
+        alpnTxt->setText(stream.tlsSettings.alpn.join("|"));
 
         if (stream.security == "reality")
             serverNameTxt->setText(stream.realitySettings.serverName);
@@ -306,7 +297,6 @@ void StreamSettingsWidget::on_securityTypeCB_currentIndexChanged(int arg1)
     realityMldsa65VerifyTxt->setVisible(isReality);
     realitySpiderXLabel->setVisible(isReality);
     realitySpiderXTxt->setVisible(isReality);
-    allowInsecureCB->setVisible(!isReality);
     enableSessionResumptionCB->setVisible(!isReality);
     disableSystemRoot->setVisible(!isReality);
     alpnLabel->setVisible(!isReality);
@@ -316,13 +306,9 @@ void StreamSettingsWidget::on_securityTypeCB_currentIndexChanged(int arg1)
     pinnedPeerCertificateChainSha256Btn->setVisible(!isReality);
 }
 
-//
-// Dirty hack, since XTLSSettings are the same as TLSSettings (Split them if required in the future)
-//
 void StreamSettingsWidget::on_serverNameTxt_textEdited(const QString &arg1)
 {
     stream.tlsSettings.serverName = arg1.trimmed();
-    stream.xtlsSettings.serverName = arg1.trimmed();
     stream.realitySettings.serverName = arg1.trimmed();
 }
 
@@ -352,33 +338,23 @@ void StreamSettingsWidget::on_realitySpiderXTxt_textEdited(const QString &arg1)
     stream.realitySettings.spiderX = arg1;
 }
 
-void StreamSettingsWidget::on_allowInsecureCB_stateChanged(int arg1)
-{
-    stream.tlsSettings.allowInsecure = arg1 == Qt::Checked;
-    stream.xtlsSettings.allowInsecure = arg1 == Qt::Checked;
-}
-
 void StreamSettingsWidget::on_enableSessionResumptionCB_stateChanged(int arg1)
 {
     stream.tlsSettings.enableSessionResumption = arg1 == Qt::Checked;
-    stream.xtlsSettings.enableSessionResumption = arg1 == Qt::Checked;
 }
 
 void StreamSettingsWidget::on_alpnTxt_textEdited(const QString &arg1)
 {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
     stream.tlsSettings.alpn = arg1.split('|', Qt::SplitBehaviorFlags::SkipEmptyParts);
-    stream.xtlsSettings.alpn = arg1.split('|', Qt::SplitBehaviorFlags::SkipEmptyParts);
 #else
     stream.tlsSettings.alpn = arg1.split('|', QString::SkipEmptyParts);
-    stream.xtlsSettings.alpn = arg1.split('|', QString::SkipEmptyParts);
 #endif
 }
 
 void StreamSettingsWidget::on_disableSystemRoot_stateChanged(int arg1)
 {
     stream.tlsSettings.disableSystemRoot = arg1;
-    stream.xtlsSettings.disableSystemRoot = arg1;
 }
 
 void StreamSettingsWidget::on_openCertEditorBtn_clicked()

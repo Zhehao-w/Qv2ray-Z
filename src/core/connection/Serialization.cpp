@@ -10,10 +10,10 @@ namespace Qv2ray::core::connection
         QList<std::pair<QString, CONFIGROOT>> ConvertConfigFromString(const QString &link, QString *aliasPrefix, QString *errMessage,
                                                                       QString *newGroup)
         {
-            const auto TLSOptionsFilter = [](QJsonObject &conf) {
+            const auto TLSOptionsFilter = [](QJsonObject &conf)
+            {
                 const auto disableSystemRoot = GlobalConfig.advancedConfig.disableSystemRoot;
-                for (const QString &prefix : { "tls", "xtls" })
-                    QJsonIO::SetValue(conf, disableSystemRoot, { "outbounds", 0, "streamSettings", prefix + "Settings", "disableSystemRoot" });
+                QJsonIO::SetValue(conf, disableSystemRoot, { "outbounds", 0, "streamSettings", "tlsSettings", "disableSystemRoot" });
             };
 
             QList<std::pair<QString, CONFIGROOT>> connectionConf;

@@ -874,27 +874,9 @@
          </item>
          <item>
           <property name="text">
-           <string notr="true">XTLS</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
            <string notr="true">REALITY</string>
           </property>
          </item>
-        </widget>
-       </item>
-       <item row="1" column="0" colspan="2">
-        <widget class="QCheckBox" name="allowInsecureCB">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="toolTip">
-          <string>AllowInsecure is insecure, do not allow insecure.</string>
-         </property>
-         <property name="text">
-          <string>Allow Insecure Certificates</string>
-         </property>
         </widget>
        </item>
        <item row="2" column="0" colspan="2">
@@ -1119,7 +1101,6 @@
   <tabstop>quicSecurityCB</tabstop>
   <tabstop>quicKeyTxt</tabstop>
   <tabstop>quicHeaderTypeCB</tabstop>
-  <tabstop>allowInsecureCB</tabstop>
   <tabstop>serverNameTxt</tabstop>
   <tabstop>soMarkSpinBox</tabstop>
   <tabstop>tcpFastOpenCB</tabstop>

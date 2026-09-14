@@ -13,44 +13,40 @@ TEST_CASE("Test VLESS URL Parsing")
     QString alias;
     QString errMessage;
 
-    SECTION("VLESSTCPXTLSSplice")
+    SECTION("Removed legacy XTLS security is rejected")
     {
         const static auto url = "vless://b0dd64e4-0fbd-4038-9139-d1f32a68a0dc@qv2ray.net:3279?security=xtls&flow=rprx-xtls-splice#VLESSTCPXTLSSplice";
 
         const auto result = vless::Deserialize(url, &alias, &errMessage);
 
-        INFO("Parsed: " << QJsonDocument(result).toJson().toStdString());
-        REQUIRE(errMessage.isEmpty());
-        REQUIRE(alias.toStdString() == "VLESSTCPXTLSSplice");
+        REQUIRE(result.isEmpty());
+        REQUIRE(errMessage.contains("Unsupported VLESS stream security"));
     }
 
-    SECTION("ALPN Parse Test")
+    SECTION("Removed legacy XTLS flow is rejected")
     {
-        const static auto url = "vless://24a613c1-de83-4c63-ba73-a9d08c88fec3@qv2ray.net:13432?security=xtls&alpn=h2%2Chttp%2F1.1";
+        const static auto url = "vless://24a613c1-de83-4c63-ba73-a9d08c88fec3@qv2ray.net:443?security=tls&flow=xtls-rprx-splice";
 
         const auto result = vless::Deserialize(url, &alias, &errMessage);
 
-        INFO("Parsed: " << QJsonDocument(result).toJson().toStdString());
-        REQUIRE(errMessage.isEmpty());
+        REQUIRE(result.isEmpty());
+        REQUIRE(errMessage.contains("Unsupported VLESS flow"));
+    }
 
-        const auto alpnField = QJsonIO::GetValue(result, "outbounds", 0, "streamSettings", "xtlsSettings", "alpn");
-        REQUIRE(alpnField.isArray());
+    SECTION("Removed values are not serialized")
+    {
+        QJsonObject settings;
+        QJsonIO::SetValue(settings, "example.com", { "vnext", 0, "address" });
+        QJsonIO::SetValue(settings, 443, { "vnext", 0, "port" });
+        QJsonIO::SetValue(settings, "b0dd64e4-0fbd-4038-9139-d1f32a68a0dc", { "vnext", 0, "users", 0, "id" });
+        QJsonIO::SetValue(settings, "none", { "vnext", 0, "users", 0, "encryption" });
 
-        const auto alpnArray = alpnField.toArray();
-        REQUIRE(!alpnArray.empty());
-        REQUIRE(alpnArray.size() == 2);
+        QJsonObject stream{ { "network", "tcp" }, { "security", "xtls" } };
+        REQUIRE(SerializeVLESSOutboundForTest("legacy", settings, stream) == "(Unsupported VLESS stream security)");
 
-        const auto firstALPN = alpnArray.first();
-        REQUIRE(firstALPN.isString());
-
-        const auto firstALPNString = firstALPN.toString();
-        REQUIRE(firstALPNString.toStdString() == "h2");
-
-        const auto lastALPN = alpnArray.last();
-        REQUIRE(lastALPN.isString());
-
-        const auto lastALPNString = lastALPN.toString();
-        REQUIRE(lastALPNString.toStdString() == "http/1.1");
+        stream["security"] = "tls";
+        QJsonIO::SetValue(settings, "xtls-rprx-direct", { "vnext", 0, "users", 0, "flow" });
+        REQUIRE(SerializeVLESSOutboundForTest("legacy", settings, stream) == "(Unsupported VLESS flow)");
     }
 
     SECTION("gRPC Parse Test")
@@ -92,7 +88,6 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(QJsonIO::GetValue(result, { "outbounds", 0, "streamSettings", "security" }) == "tls");
         REQUIRE(QJsonIO::GetValue(result, { "outbounds", 0, "settings", "vnext", 0, "users", 0, "flow" }) == "xtls-rprx-vision");
         REQUIRE(QJsonIO::GetValue(result, { "outbounds", 0, "streamSettings", "tlsSettings", "fingerprint" }) == "chrome");
-        REQUIRE(!QJsonIO::GetValue(result, { "outbounds", 0, "streamSettings", "xtlsSettings" }).isObject());
 
         const auto outbound = result["outbounds"].toArray().first().toObject();
         const auto stream = StreamSettingsObject::fromJson(outbound["streamSettings"].toObject());

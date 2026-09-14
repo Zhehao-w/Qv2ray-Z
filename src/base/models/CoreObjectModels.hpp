@@ -308,29 +308,15 @@ namespace Qv2ray::base::objects
         {
             QString serverName;
             QString fingerprint;
-            bool allowInsecure = false;
             bool enableSessionResumption = false;
             bool disableSystemRoot = false;
             QList<QString> alpn;
             QList<QString> pinnedPeerCertificateChainSha256;
             QList<CertificateObject> certificates;
-            JSONSTRUCT_COMPARE(TLSObject, serverName, fingerprint, allowInsecure, enableSessionResumption, disableSystemRoot, alpn,
-                               pinnedPeerCertificateChainSha256, certificates)
-            JSONSTRUCT_REGISTER(TLSObject, F(serverName, fingerprint, allowInsecure, enableSessionResumption, disableSystemRoot, alpn,
+            JSONSTRUCT_COMPARE(TLSObject, serverName, fingerprint, enableSessionResumption, disableSystemRoot, alpn, pinnedPeerCertificateChainSha256,
+                               certificates)
+            JSONSTRUCT_REGISTER(TLSObject, F(serverName, fingerprint, enableSessionResumption, disableSystemRoot, alpn,
                                              pinnedPeerCertificateChainSha256, certificates))
-        };
-        //
-        //
-        struct XTLSObject
-        {
-            QString serverName;
-            bool allowInsecure = false;
-            bool enableSessionResumption = false;
-            bool disableSystemRoot = false;
-            QList<QString> alpn;
-            QList<CertificateObject> certificates;
-            JSONSTRUCT_COMPARE(XTLSObject, serverName, allowInsecure, enableSessionResumption, disableSystemRoot, alpn, certificates)
-            JSONSTRUCT_REGISTER(XTLSObject, F(serverName, allowInsecure, enableSessionResumption, disableSystemRoot, alpn, certificates))
         };
         // Client-side REALITY settings. Current Xray-core calls the server
         // public-key authentication value "password" in outbound JSON.
@@ -354,7 +340,6 @@ namespace Qv2ray::base::objects
         QString security = "none";
         transfer::SockoptObject sockopt;
         transfer::TLSObject tlsSettings;
-        transfer::XTLSObject xtlsSettings;
         transfer::RealityObject realitySettings;
         transfer::TCPObject tcpSettings;
         transfer::KCPObject kcpSettings;
@@ -364,11 +349,10 @@ namespace Qv2ray::base::objects
         transfer::QuicObject quicSettings;
         transfer::gRPCObject grpcSettings;
         JSONSTRUCT_COMPARE(StreamSettingsObject, network, security, sockopt, //
-                           tcpSettings, tlsSettings, xtlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings,
-                           grpcSettings)
+                           tcpSettings, tlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings, grpcSettings)
         JSONSTRUCT_REGISTER(StreamSettingsObject, F(network, security, sockopt),
-                            F(tcpSettings, tlsSettings, xtlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings,
-                              quicSettings, grpcSettings))
+                            F(tcpSettings, tlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings,
+                              grpcSettings))
     };
 
     struct FakeDNSObject

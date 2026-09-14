@@ -24,14 +24,10 @@ namespace Qv2ray::core::connection
             const auto scy = server.users.front().security;
             vmessUriRoot["scy"] = (scy == "aes-128-gcm" || scy == "chacha20-poly1305" || scy == "none" || scy == "zero") ? scy : "auto";
             vmessUriRoot["net"] = transfer.network == "http" ? "h2" : transfer.network;
-            vmessUriRoot["tls"] = (transfer.security == "tls" || transfer.security == "xtls") ? "tls" : "none";
+            vmessUriRoot["tls"] = transfer.security == "tls" ? "tls" : "none";
             if (transfer.security == "tls")
             {
                 vmessUriRoot["sni"] = transfer.tlsSettings.serverName;
-            }
-            else if (transfer.security == "xtls")
-            {
-                vmessUriRoot["sni"] = transfer.xtlsSettings.serverName;
             }
 
             if (transfer.network == "tcp")
@@ -225,7 +221,7 @@ namespace Qv2ray::core::connection
                 {                                                            //
                     LOG("Reset obfs settings from " + type + " to none");    //
                     type = "none";                                           //
-                }                                                            //
+                } //
             }
 
             port = vmessConf["port"].toVariant().toInt();
@@ -292,7 +288,6 @@ namespace Qv2ray::core::connection
                 if (sni.isEmpty() && !host.isEmpty())
                     sni = host;
                 streaming.tlsSettings.serverName = sni;
-                streaming.tlsSettings.allowInsecure = false;
             }
             //
             // Network type

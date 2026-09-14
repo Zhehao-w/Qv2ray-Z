@@ -154,6 +154,41 @@ jobs:
           fi
           printf '%s\n' "$output"
 
+      - name: Confirm removed legacy features are rejected by Xray
+        shell: bash
+        run: |
+          set -euo pipefail
+          reject() {
+            local config="$1"
+            local expected="$2"
+            set +e
+            output="$("$XRAY_BIN" run -test -c "$config" 2>&1)"
+            status=$?
+            set -e
+            if [[ $status -eq 0 ]] || ! grep -Fq "$expected" <<< "$output"; then
+              printf '%s\n' "$output"
+              echo "::error::Xray did not reject ${config} with the expected diagnostic."
+              exit 1
+            fi
+          }
+
+          legacy_xtls="$RUNNER_TEMP/vless-legacy-xtls.json"
+          jq '.outbounds[0].streamSettings.security = "xtls"
+              | .outbounds[0].streamSettings.xtlsSettings = .outbounds[0].streamSettings.tlsSettings
+              | del(.outbounds[0].streamSettings.tlsSettings)' \
+            .github/xray-fixtures/vless-tls-vision.json > "$legacy_xtls"
+          reject "$legacy_xtls" 'Legacy XTLS has been removed'
+
+          legacy_flow="$RUNNER_TEMP/vless-legacy-flow.json"
+          jq '.outbounds[0].settings.vnext[0].users[0].flow = "xtls-rprx-splice"' \
+            .github/xray-fixtures/vless-reality-vision.json > "$legacy_flow"
+          reject "$legacy_flow" 'flow" doesn'"'"'t support "xtls-rprx-splice"'
+
+          allow_insecure="$RUNNER_TEMP/vless-allow-insecure.json"
+          jq '.outbounds[0].streamSettings.tlsSettings.allowInsecure = true' \
+            .github/xray-fixtures/vless-tls-vision.json > "$allow_insecure"
+          reject "$allow_insecure" 'feature "allowInsecure" has been removed'
+
   qv2ray-vless-tests:
     name: Qt5 VLESS serialization tests
     runs-on: ubuntu-22.04
@@ -232,3 +267,18 @@ jobs:
               print(f"valid XML: {path}")
           print(f"validated {len(files)} Qt Designer files")
           PY
+
+      - name: Verify obsolete implementation and UI entries are absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E 'xtlsSettings|allowInsecure|xtls-rprx-(direct|origin|splice)' -- \
+            'src/**' ':!src/**/*.ts'; then
+            echo "::error::Obsolete Xray implementation or UI entries remain."
+            exit 1
+          fi
+
+          grep -Fq '<string notr="true">xtls-rprx-vision</string>' src/plugins/protocols/ui/outbound/vless.ui
+          grep -Fq '<string notr="true">xtls-rprx-vision-udp443</string>' src/plugins/protocols/ui/outbound/vless.ui
+          grep -Fq '<string notr="true">TLS</string>' src/ui/widgets/widgets/StreamSettingsWidget.ui
+          grep -Fq '<string notr="true">REALITY</string>' src/ui/widgets/widgets/StreamSettingsWidget.ui
