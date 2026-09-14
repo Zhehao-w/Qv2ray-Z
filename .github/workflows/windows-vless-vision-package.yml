@@ -6,6 +6,11 @@ on:
       - dev
     paths:
       - ".github/workflows/windows-vless-vision-package.yml"
+      - "src/**"
+      - "test/**"
+      - "libs/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
   push:
     branches:
       - dev
@@ -150,6 +155,14 @@ jobs:
       - name: Smoke-test packaged Qv2ray-Z
         shell: pwsh
         run: |
+          $deployment = (Resolve-Path "build/deployment").Path
+          foreach ($file in @('qv2ray.exe', 'xray.exe', 'geoip.dat', 'geosite.dat')) {
+            $packagedFile = Join-Path $deployment $file
+            if (-not (Test-Path $packagedFile -PathType Leaf)) { throw "Deployment is missing $file" }
+          }
+
+          & "$deployment/xray.exe" version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "build/deployment/qv2ray.exe" --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
