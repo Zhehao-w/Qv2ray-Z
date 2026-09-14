@@ -191,6 +191,9 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
             const auto shortId = QJsonIO::GetValue(objStream, { "realitySettings", "shortId" }).toString();
             if (!shortId.isEmpty())
                 query.addQueryItem("sid", shortId);
+            const auto mldsa65Verify = QJsonIO::GetValue(objStream, { "realitySettings", "mldsa65Verify" }).toString();
+            if (!mldsa65Verify.isEmpty())
+                query.addQueryItem("pqv", mldsa65Verify);
             const auto spiderX = QJsonIO::GetValue(objStream, { "realitySettings", "spiderX" }).toString();
             if (!spiderX.isEmpty())
                 query.addQueryItem("spx", spiderX);

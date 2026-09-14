@@ -109,13 +109,30 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(exportedQuery.queryItemValue("sni") == "cdn.example.com");
         REQUIRE(exportedQuery.queryItemValue("fp") == "chrome");
         REQUIRE(exportedQuery.queryItemValue("flow") == "xtls-rprx-vision");
+        REQUIRE(!exportedQuery.hasQueryItem("pqv"));
     }
 
     SECTION("REALITY Vision import and export round trip")
     {
-        const static auto url =
-            "vless://b0dd64e4-0fbd-4038-9139-d1f32a68a0dc@192.0.2.1:443?encryption=none&type=tcp&security=reality&flow=xtls-rprx-vision&sni=example.com&fp=chrome&pbk=PUBLIC_KEY&sid=0123456789abcdef&spx=%2Fnews#REALITY%20Vision";
-        const auto result = vless::Deserialize(url, &alias, &errMessage);
+        // ML-DSA-65 public keys encode 1,952 bytes as 2,603 unpadded
+        // base64url characters. This deterministic value is fake but exercises
+        // the realistic length and URL-safe alphabet used by Xray.
+        const auto expectedPQV = QString("Ab0_-").repeated(521).left(2603);
+        QUrl inputUrl{ "vless://b0dd64e4-0fbd-4038-9139-d1f32a68a0dc@192.0.2.1:443#REALITY%20Vision" };
+        QUrlQuery inputQuery;
+        inputQuery.addQueryItem("encryption", "none");
+        inputQuery.addQueryItem("type", "tcp");
+        inputQuery.addQueryItem("security", "reality");
+        inputQuery.addQueryItem("flow", "xtls-rprx-vision");
+        inputQuery.addQueryItem("sni", "example.com");
+        inputQuery.addQueryItem("fp", "chrome");
+        inputQuery.addQueryItem("pbk", "PUBLIC_KEY");
+        inputQuery.addQueryItem("sid", "0123456789abcdef");
+        inputQuery.addQueryItem("spx", "/news");
+        inputQuery.addQueryItem("pqv", expectedPQV);
+        inputUrl.setQuery(inputQuery);
+
+        const auto result = vless::Deserialize(inputUrl.toString(QUrl::FullyEncoded), &alias, &errMessage);
         const auto outbound = result["outbounds"].toArray().first().toObject();
         const auto rawSettings = outbound["settings"].toObject();
         const auto rawStream = outbound["streamSettings"].toObject();
@@ -128,13 +145,16 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(!QJsonIO::GetValue(rawStream, { "realitySettings", "publicKey" }).isString());
         REQUIRE(QJsonIO::GetValue(rawStream, { "realitySettings", "shortId" }) == "0123456789abcdef");
         REQUIRE(QJsonIO::GetValue(rawStream, { "realitySettings", "spiderX" }) == "/news");
+        REQUIRE(QJsonIO::GetValue(rawStream, { "realitySettings", "mldsa65Verify" }) == expectedPQV);
 
         const auto stream = StreamSettingsObject::fromJson(rawStream);
         REQUIRE(stream.realitySettings.spiderX == "/news");
+        REQUIRE(stream.realitySettings.mldsa65Verify == expectedPQV);
         const auto runtimeStream = stream.toJson();
         REQUIRE(runtimeStream["security"] == "reality");
         REQUIRE(QJsonIO::GetValue(runtimeStream, { "realitySettings", "password" }) == "PUBLIC_KEY");
         REQUIRE(!QJsonIO::GetValue(runtimeStream, { "realitySettings", "publicKey" }).isString());
+        REQUIRE(QJsonIO::GetValue(runtimeStream, { "realitySettings", "mldsa65Verify" }) == expectedPQV);
 
         const auto exported = SerializeVLESSOutboundForTest(alias, rawSettings, runtimeStream);
         const QUrl exportedUrl{ exported };
@@ -152,6 +172,24 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(exportedQuery.queryItemValue("pbk") == "PUBLIC_KEY");
         REQUIRE(exportedQuery.queryItemValue("sid") == "0123456789abcdef");
         REQUIRE(exportedQuery.queryItemValue("spx") == "/news");
+        REQUIRE(exportedQuery.queryItemValue("pqv") == expectedPQV);
+        REQUIRE(!exportedQuery.hasQueryItem("mldsa65Verify"));
+
+        QString secondAlias;
+        QString secondError;
+        const auto secondResult = vless::Deserialize(exported, &secondAlias, &secondError);
+        REQUIRE(secondError.isEmpty());
+        REQUIRE(QJsonIO::GetValue(secondResult, { "outbounds", 0, "streamSettings", "realitySettings", "mldsa65Verify" }) == expectedPQV);
+
+        auto withoutPQV = runtimeStream;
+        auto realitySettings = withoutPQV["realitySettings"].toObject();
+        realitySettings["mldsa65Verify"] = "";
+        withoutPQV["realitySettings"] = realitySettings;
+        const QUrlQuery emptyQuery{ QUrl(SerializeVLESSOutboundForTest(alias, rawSettings, withoutPQV)) };
+        REQUIRE(!emptyQuery.hasQueryItem("pqv"));
+        REQUIRE(emptyQuery.queryItemValue("pbk") == "PUBLIC_KEY");
+        REQUIRE(emptyQuery.queryItemValue("sid") == "0123456789abcdef");
+        REQUIRE(emptyQuery.queryItemValue("spx") == "/news");
     }
 
     SECTION("Ordinary VLESS TLS export keeps legacy default omission")

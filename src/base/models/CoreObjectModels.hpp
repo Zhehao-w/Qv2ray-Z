@@ -340,9 +340,10 @@ namespace Qv2ray::base::objects
             QString fingerprint = "chrome";
             QString password;
             QString shortId;
+            QString mldsa65Verify;
             QString spiderX;
-            JSONSTRUCT_COMPARE(RealityObject, serverName, fingerprint, password, shortId, spiderX)
-            JSONSTRUCT_REGISTER(RealityObject, A(fingerprint), F(serverName, password, shortId, spiderX))
+            JSONSTRUCT_COMPARE(RealityObject, serverName, fingerprint, password, shortId, mldsa65Verify, spiderX)
+            JSONSTRUCT_REGISTER(RealityObject, A(fingerprint), F(serverName, password, shortId, mldsa65Verify, spiderX))
         };
     } // namespace transfer
     //
