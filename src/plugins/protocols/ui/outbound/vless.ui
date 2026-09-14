@@ -49,9 +49,6 @@
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-     <property name="editable">
-      <bool>true</bool>
-     </property>
      <item>
       <property name="text">
        <string notr="true">none</string>
@@ -69,11 +66,11 @@
    <item row="1" column="1">
     <widget class="QComboBox" name="flowCombo">
      <property name="toolTip">
-      <string>&lt;h3&gt;Notes for &lt;code&gt;udp443&lt;/code&gt; Methods&lt;/h3&gt;
+      <string>&lt;h3&gt;Notes for the &lt;code&gt;udp443&lt;/code&gt; Vision variant&lt;/h3&gt;
 
-&lt;p&gt;Some applications like Google Chrome would attempt to use QUIC protocol instead of TLS, which, won't benefit from XTLS at all. What's worse, QUIC over TCP will cause potential congestion control problem, downgrading your experience.&lt;/p&gt;
+&lt;p&gt;The standard Vision flow blocks UDP port 443 to prevent QUIC from bypassing Vision's TCP processing. The &lt;code&gt;udp443&lt;/code&gt; variant permits that traffic.&lt;/p&gt;
 
-&lt;p&gt;Non-&lt;code&gt;udp443&lt;/code&gt; methods block UDP 443 outbound traffic to workaround this situation. If you do want to let it go, use at your own peril.&lt;/p&gt;</string>
+&lt;p&gt;Select the variant required by your server configuration.&lt;/p&gt;</string>
      </property>
      <property name="editable">
       <bool>true</bool>
@@ -90,32 +87,7 @@
      </item>
      <item>
       <property name="text">
-       <string notr="true">xtls-rprx-splice</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string notr="true">xtls-rprx-direct</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string notr="true">xtls-rprx-origin</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string notr="true">xtls-rprx-splice-udp443</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string notr="true">xtls-rprx-direct-udp443</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string notr="true">xtls-rprx-origin-udp443</string>
+       <string notr="true">xtls-rprx-vision-udp443</string>
       </property>
      </item>
     </widget>

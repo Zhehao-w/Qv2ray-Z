@@ -46,8 +46,7 @@ class StreamSettingsWidget
     void on_quicKeyTxt_textEdited(const QString &arg1);
     void on_quicSecurityCB_currentIndexChanged(int arg1);
 
-    // TLS/XTLS
-    void on_allowInsecureCB_stateChanged(int arg1);
+    // TLS/REALITY
     void on_alpnTxt_textEdited(const QString &arg1);
     void on_enableSessionResumptionCB_stateChanged(int arg1);
     void on_securityTypeCB_currentIndexChanged(int arg1);

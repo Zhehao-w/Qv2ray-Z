@@ -164,7 +164,12 @@ namespace Qv2ray::core::connection
             // tls-wise settings
             const auto hasSecurity = query.hasQueryItem("security");
             const auto security = hasSecurity ? query.queryItemValue("security") : "none";
-            const auto tlsKey = security == "xtls" ? "xtlsSettings" : security == "reality" ? "realitySettings" : "tlsSettings";
+            if (!QStringList{ "none", "tls", "reality" }.contains(security))
+            {
+                *errMessage = QObject::tr("Unsupported VLESS stream security: %1").arg(security);
+                return CONFIGROOT();
+            }
+            const auto tlsKey = security == "reality" ? "realitySettings" : "tlsSettings";
             if (security != "none")
             {
                 QJsonIO::SetValue(stream, security, "security");
@@ -189,6 +194,11 @@ namespace Qv2ray::core::connection
             if (query.hasQueryItem("flow"))
             {
                 const auto flow = query.queryItemValue("flow");
+                if (!QStringList{ "xtls-rprx-vision", "xtls-rprx-vision-udp443" }.contains(flow))
+                {
+                    *errMessage = QObject::tr("Unsupported VLESS flow: %1").arg(flow);
+                    return CONFIGROOT();
+                }
                 QJsonIO::SetValue(outbound, flow, { "settings", "vnext", 0, "users", 0, "flow" });
             }
             if (query.hasQueryItem("fp"))

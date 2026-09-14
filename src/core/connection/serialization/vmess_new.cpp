@@ -13,8 +13,6 @@ namespace Qv2ray::core::connection
         const static QStringList NetworkType{ "tcp", "http", "ws", "kcp", "quic", "grpc" };
         const static QStringList QuicSecurityTypes{ "none", "aes-128-gcm", "chacha20-poly1305" };
         const static QStringList QuicKcpHeaderTypes{ "none", "srtp", "utp", "wechat-video", "dtls", "wireguard" };
-        const static QStringList FalseTypes{ "false", "False", "No", "Off", "0" };
-
         CONFIGROOT Deserialize(const QString &vmessStr, QString *alias, QString *errMessage)
         {
             QUrl url{ vmessStr };
@@ -75,7 +73,8 @@ namespace Qv2ray::core::connection
                 server.users.first().security = "auto";
             }
 
-            const static auto getQueryValue = [&query](const QString &key, const QString &defaultValue) {
+            const static auto getQueryValue = [&query](const QString &key, const QString &defaultValue)
+            {
                 if (query.hasQueryItem(key))
                     return query.queryItemValue(key, QUrl::FullyDecoded);
                 else
@@ -123,7 +122,6 @@ namespace Qv2ray::core::connection
 #undef default
             if (tls)
             {
-                stream.tlsSettings.allowInsecure = !FalseTypes.contains(getQueryValue("allowInsecure", "false"));
                 stream.tlsSettings.serverName = getQueryValue("tlsServerName", "");
             }
             CONFIGROOT root;
@@ -188,7 +186,7 @@ namespace Qv2ray::core::connection
             {
                 return {};
             }
-            bool hasTLS = stream.security == "tls" || stream.security == "xtls";
+            bool hasTLS = stream.security == "tls";
             auto protocol = stream.network;
             if (hasTLS)
                 protocol += "+tls";
@@ -196,11 +194,6 @@ namespace Qv2ray::core::connection
             {
                 if (!stream.tlsSettings.serverName.isEmpty())
                     query.addQueryItem("tlsServerName", stream.tlsSettings.serverName);
-            }
-            else if (stream.security == "xtls")
-            {
-                if (!stream.xtlsSettings.serverName.isEmpty())
-                    query.addQueryItem("tlsServerName", stream.xtlsSettings.serverName);
             }
             url.setPath("/");
             url.setScheme("vmess");
