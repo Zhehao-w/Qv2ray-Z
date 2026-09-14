@@ -1,6 +1,6 @@
 #include "3rdparty/QJsonStruct/QJsonIO.hpp"
 #include "Common.hpp"
-#include "plugins/protocols/core/OutboundHandler.hpp"
+#include "VLESSOutboundSerializerTestHelper.hpp"
 #include "src/core/connection/Serialization.hpp"
 
 #include <QUrlQuery>
@@ -95,11 +95,8 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(!QJsonIO::GetValue(result, { "outbounds", 0, "streamSettings", "xtlsSettings" }).isObject());
 
         const auto outbound = result["outbounds"].toArray().first().toObject();
-        const auto server = VLESSServerObject::fromJson(outbound["settings"].toObject()["vnext"].toArray().first().toObject());
         const auto stream = StreamSettingsObject::fromJson(outbound["streamSettings"].toObject());
-        QJsonObject settings;
-        settings["vnext"] = QJsonArray{ server.toJson() };
-        const auto exported = BuiltinSerializer().SerializeOutbound("vless", alias, {}, settings, stream.toJson());
+        const auto exported = SerializeVLESSOutboundForTest(alias, outbound["settings"].toObject(), stream.toJson());
         const QUrl exportedUrl{ exported };
         const QUrlQuery exportedQuery{ QUrl(exported) };
         REQUIRE(exportedUrl.fragment() == alias);
@@ -132,16 +129,13 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(QJsonIO::GetValue(rawStream, { "realitySettings", "shortId" }) == "0123456789abcdef");
         REQUIRE(QJsonIO::GetValue(rawStream, { "realitySettings", "spiderX" }) == "/news");
 
-        const auto server = VLESSServerObject::fromJson(rawSettings["vnext"].toArray().first().toObject());
         const auto stream = StreamSettingsObject::fromJson(rawStream);
-        QJsonObject settings;
-        settings["vnext"] = QJsonArray{ server.toJson() };
         const auto runtimeStream = stream.toJson();
         REQUIRE(runtimeStream["security"] == "reality");
         REQUIRE(QJsonIO::GetValue(runtimeStream, { "realitySettings", "password" }) == "PUBLIC_KEY");
         REQUIRE(!QJsonIO::GetValue(runtimeStream, { "realitySettings", "publicKey" }).isString());
 
-        const auto exported = BuiltinSerializer().SerializeOutbound("vless", alias, {}, settings, runtimeStream);
+        const auto exported = SerializeVLESSOutboundForTest(alias, rawSettings, runtimeStream);
         const QUrl exportedUrl{ exported };
         const QUrlQuery exportedQuery{ exportedUrl };
         REQUIRE(exportedUrl.fragment() == alias);
@@ -170,7 +164,7 @@ TEST_CASE("Test VLESS URL Parsing")
         stream["network"] = "tcp";
         stream["security"] = "tls";
 
-        const QUrlQuery query{ QUrl(BuiltinSerializer().SerializeOutbound("vless", "ordinary", {}, settings, stream)) };
+        const QUrlQuery query{ QUrl(SerializeVLESSOutboundForTest("ordinary", settings, stream)) };
         REQUIRE(!query.hasQueryItem("encryption"));
         REQUIRE(!query.hasQueryItem("type"));
         REQUIRE(!query.hasQueryItem("flow"));
