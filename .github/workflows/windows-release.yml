@@ -1,0 +1,182 @@
+name: Qv2ray-Z Windows release
+
+on:
+  push:
+    tags:
+      - "v2.7.0-z1"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build and publish Qt 5.15.2 / MSVC 14.2 package
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      _QV2RAY_BUILD_INFO_: Qv2ray-Z official Windows release
+      _QV2RAY_BUILD_EXTRA_INFO_: qt5.15.2-${{ github.sha }}-windows-2022
+
+    steps:
+      - name: Check out source and recursive submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install MSVC 14.2 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          toolset: 14.2
+          arch: x64
+
+      - name: Install Qt 5.15.2
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: 5.15.2
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Download historical Qv2ray Windows dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd libs
+          ./setup-libs.sh windows x64
+
+      - name: Locate CURL in the Windows dependency bundle
+        shell: pwsh
+        run: |
+          $prefix = (Resolve-Path "libs/x64-windows").Path
+          $header = Get-ChildItem $prefix -Recurse -File -Filter curl.h |
+            Where-Object { $_.FullName -match '[\\/]curl[\\/]curl\.h$' } |
+            Select-Object -First 1
+          $library = Get-ChildItem $prefix -Recurse -File |
+            Where-Object { $_.Name -in @('libcurl.lib', 'curl.lib') -and $_.FullName -notmatch '[\\/]debug[\\/]' } |
+            Select-Object -First 1
+
+          if (-not $header) { throw "CURL header was not found below $prefix" }
+          if (-not $library) { throw "CURL import library was not found below $prefix" }
+
+          # CMake's FindCURL expects the directory which contains curl/curl.h.
+          $include = Split-Path (Split-Path $header.FullName -Parent) -Parent
+          "CURL_INCLUDE_DIR=$include" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "CURL_LIBRARY=$($library.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "CURL include directory: $include"
+          Write-Host "CURL library: $($library.FullName)"
+
+      - name: Configure and build Qv2ray-Z Release
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_INSTALL_PREFIX="$PWD/build/deployment" `
+            -DQV2RAY_USE_V5_CORE=ON `
+            -DQV2RAY_HAS_BUILTIN_PLUGINS=ON `
+            -DCURL_INCLUDE_DIR="$env:CURL_INCLUDE_DIR" `
+            -DCURL_LIBRARY="$env:CURL_LIBRARY"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --install build --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Deploy Qt runtime and Qv2ray plugins
+        shell: pwsh
+        run: |
+          $deployment = (Resolve-Path "build/deployment").Path
+          windeployqt --release --compiler-runtime --verbose 2 --dir "$deployment" "$deployment/qv2ray.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $plugins = Get-ChildItem "$deployment/plugins" -File -Filter '*.dll'
+          if (-not $plugins) { throw 'No Qv2ray plugin DLLs were installed.' }
+          $plugins | ForEach-Object { Write-Host "Packaged plugin: $($_.Name)" }
+
+      - name: Download latest official Xray Windows x64 release
+        shell: pwsh
+        run: |
+          $tag = gh api repos/XTLS/Xray-core/releases/latest --jq .tag_name
+          if ($LASTEXITCODE -ne 0 -or -not $tag) { throw 'Could not resolve the latest Xray release.' }
+          Write-Host "Resolved latest official Xray release: $tag"
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/xray" | Out-Null
+          gh release download $tag `
+            --repo XTLS/Xray-core `
+            --pattern Xray-windows-64.zip `
+            --dir "$env:RUNNER_TEMP/xray"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Expand-Archive "$env:RUNNER_TEMP/xray/Xray-windows-64.zip" "$env:RUNNER_TEMP/xray/bin" -Force
+          "XRAY_BIN=$env:RUNNER_TEMP/xray/bin/xray.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Validate TLS Vision and REALITY Vision fixtures
+        shell: pwsh
+        run: |
+          $help = & "$env:XRAY_BIN" help 2>&1 | Out-String
+          $runHelp = & "$env:XRAY_BIN" help run 2>&1 | Out-String
+          $fixtures = @(
+            '.github/xray-fixtures/vless-tls-vision.json',
+            '.github/xray-fixtures/vless-reality-vision.json'
+          )
+
+          foreach ($fixture in $fixtures) {
+            Write-Host "Validating $fixture"
+            if ($help -match '(?m)(^|\s)test(\s|$)') {
+              & "$env:XRAY_BIN" test -c $fixture
+            } elseif ($runHelp -match '\-test') {
+              & "$env:XRAY_BIN" run -test -c $fixture
+            } else {
+              throw 'The latest Xray release does not advertise a supported validation interface.'
+            }
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Package Xray executable and assets
+        shell: pwsh
+        run: |
+          $deployment = (Resolve-Path "build/deployment").Path
+          foreach ($file in @('xray.exe', 'geoip.dat', 'geosite.dat')) {
+            $source = Join-Path "$env:RUNNER_TEMP/xray/bin" $file
+            if (-not (Test-Path $source)) { throw "Xray release is missing $file" }
+            Copy-Item $source $deployment -Force
+          }
+
+      - name: Smoke-test packaged Qv2ray-Z
+        shell: pwsh
+        run: |
+          $deployment = (Resolve-Path "build/deployment").Path
+          foreach ($file in @('qv2ray.exe', 'xray.exe', 'geoip.dat', 'geosite.dat')) {
+            $packagedFile = Join-Path $deployment $file
+            if (-not (Test-Path $packagedFile -PathType Leaf)) { throw "Deployment is missing $file" }
+          }
+
+          & "$deployment/xray.exe" version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $qv2rayVersion = & "$deployment/qv2ray.exe" --version 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host $qv2rayVersion
+
+          $expectedVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          if ($qv2rayVersion -notmatch [regex]::Escape($expectedVersion)) {
+            throw "qv2ray.exe did not report tag version $expectedVersion"
+          }
+
+      - name: Create versioned ZIP and SHA256 checksum
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $archiveName = "Qv2ray-Z-$version-Windows-x64.zip"
+          $archivePath = Join-Path $PWD $archiveName
+          Compress-Archive -Path "build/deployment/*" -DestinationPath $archivePath -CompressionLevel Optimal
+          if (-not (Test-Path $archivePath -PathType Leaf)) { throw "Failed to create $archiveName" }
+
+          $hash = (Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archiveName" | Out-File "$archivePath.sha256" -Encoding ascii -NoNewline
+          "RELEASE_ARCHIVE=$archiveName" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: docs/release-notes/2.7.0-z1.md
+          files: |
+            ${{ env.RELEASE_ARCHIVE }}
+            ${{ env.RELEASE_ARCHIVE }}.sha256
+          fail_on_unmatched_files: true

@@ -1,9 +1,9 @@
 # Packaging
 # Qv2ray Development and Research WorkGroup
-set(CPACK_PACKAGE_VENDOR "Qv2ray Development Group")
+set(CPACK_PACKAGE_VENDOR "Qv2ray-Z community")
 set(CPACK_PACKAGE_VERSION ${QV2RAY_VERSION_STRING})
 set(CPACK_PACKAGE_DESCRIPTION "Cross-platform V2Ray Client written in Qt.")
-set(CPACK_PACKAGE_HOMEPAGE_URL "https://qv2ray.net")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Zhehao-w/Qv2ray-Z")
 set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/assets/icons/qv2ray.ico")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 
@@ -15,8 +15,8 @@ if(WIN32)
         set(CPACK_GENERATOR "NSIS")
         set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/assets/icons/qv2ray.ico")
         set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/assets/icons/qv2ray.ico")
-        set(CPACK_NSIS_DISPLAY_NAME "Qv2ray")
-        set(CPACK_NSIS_PACKAGE_NAME "Qv2ray")
+        set(CPACK_NSIS_DISPLAY_NAME "Qv2ray-Z")
+        set(CPACK_NSIS_PACKAGE_NAME "Qv2ray-Z")
         set(CPACK_NSIS_EXTRA_PREINSTALL_COMMANDS "
             ExecWait \\\"taskkill /f /im qv2ray.exe\\\"
             ExecWait \\\"taskkill /f /im v2ray.exe\\\"
@@ -28,10 +28,10 @@ if(WIN32)
             CreateDirectory \\\"$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Qv2ray\\\"
             CreateShortCut \\\"$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Qv2ray\\\\Qv2ray.lnk\\\" \\\"$INSTDIR\\\\qv2ray.exe\\\"
             WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"DisplayIcon\\\" \\\"$INSTDIR\\\\qv2ray.exe\\\"
-            WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"HelpLink\\\" \\\"https://qv2ray.net\\\"
+            WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"HelpLink\\\" \\\"https://github.com/Zhehao-w/Qv2ray-Z/issues\\\"
             WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"InstallLocation\\\" \\\"$INSTDIR\\\"
-            WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"URLUpdateInfo\\\" \\\"https://github.com/Qv2ray/Qv2ray/releases\\\"
-            WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"URLInfoAbout\\\" \\\"https://github.com/Qv2ray/Qv2ray\\\"
+            WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"URLUpdateInfo\\\" \\\"https://github.com/Zhehao-w/Qv2ray-Z/releases\\\"
+            WriteRegStr HKLM \\\"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\qv2ray\\\" \\\"URLInfoAbout\\\" \\\"https://github.com/Zhehao-w/Qv2ray-Z\\\"
             ")
         set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "
             ExecWait \\\"taskkill /f /im qv2ray.exe\\\"

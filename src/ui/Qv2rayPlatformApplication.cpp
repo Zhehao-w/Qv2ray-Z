@@ -186,7 +186,7 @@ bool Qv2rayPlatformApplication::parseCommandLine(QString *errorMessage, bool *ca
     QCommandLineOption reconnectOption("reconnect", QObject::tr("Reconnect last connection"));
     QCommandLineOption exitOption("exit", QObject::tr("Exit Qv2ray"));
     //
-    parser.setApplicationDescription(QObject::tr("Qv2ray - A cross-platform Qt frontend for V2Ray."));
+    parser.setApplicationDescription(QObject::tr("Qv2ray-Z - A Qt frontend modernized for current Xray-core."));
     parser.setSingleDashWordOptionMode(QCommandLineParser::ParseAsLongOptions);
     //
     parser.addOption(noAPIOption);

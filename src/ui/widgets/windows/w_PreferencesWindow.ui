@@ -2219,7 +2219,7 @@ Custom DNS Settings</string>
             </font>
            </property>
            <property name="text">
-            <string>Qv2ray</string>
+            <string>Qv2ray-Z</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -2310,7 +2310,7 @@ Custom DNS Settings</string>
               </sizepolicy>
              </property>
              <property name="text">
-              <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a style=&quot; text-decoration: none; color:#2980b9;&quot; href=&quot;https://github.com/Qv2ray/Qv2ray&quot;&gt;https://github.com/Qv2ray/Qv2ray&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a style=&quot; text-decoration: none; color:#2980b9;&quot; href=&quot;https://github.com/Zhehao-w/Qv2ray-Z&quot;&gt;https://github.com/Zhehao-w/Qv2ray-Z&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
              <property name="textFormat">
               <enum>Qt::RichText</enum>
@@ -2326,7 +2326,7 @@ Custom DNS Settings</string>
            <item row="4" column="0">
             <widget class="QLabel" name="label_27">
              <property name="text">
-              <string>Official Repo</string>
+              <string>Qv2ray-Z Repository</string>
              </property>
              <property name="textFormat">
               <enum>Qt::PlainText</enum>
