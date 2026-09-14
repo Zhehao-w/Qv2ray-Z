@@ -60,6 +60,7 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
         fingerprintTxt->setText(stream.security == "reality" ? stream.realitySettings.fingerprint : stream.tlsSettings.fingerprint);
         realityPasswordTxt->setText(stream.realitySettings.password);
         realityShortIdTxt->setText(stream.realitySettings.shortId);
+        realityMldsa65VerifyTxt->setText(stream.realitySettings.mldsa65Verify);
         realitySpiderXTxt->setText(stream.realitySettings.spiderX);
         on_securityTypeCB_currentIndexChanged(securityTypeCB->currentIndex());
     }
@@ -301,6 +302,8 @@ void StreamSettingsWidget::on_securityTypeCB_currentIndexChanged(int arg1)
     realityPasswordTxt->setVisible(isReality);
     realityShortIdLabel->setVisible(isReality);
     realityShortIdTxt->setVisible(isReality);
+    realityMldsa65VerifyLabel->setVisible(isReality);
+    realityMldsa65VerifyTxt->setVisible(isReality);
     realitySpiderXLabel->setVisible(isReality);
     realitySpiderXTxt->setVisible(isReality);
     allowInsecureCB->setVisible(!isReality);
@@ -337,6 +340,11 @@ void StreamSettingsWidget::on_realityPasswordTxt_textEdited(const QString &arg1)
 void StreamSettingsWidget::on_realityShortIdTxt_textEdited(const QString &arg1)
 {
     stream.realitySettings.shortId = arg1.trimmed();
+}
+
+void StreamSettingsWidget::on_realityMldsa65VerifyTxt_textEdited(const QString &arg1)
+{
+    stream.realitySettings.mldsa65Verify = arg1;
 }
 
 void StreamSettingsWidget::on_realitySpiderXTxt_textEdited(const QString &arg1)

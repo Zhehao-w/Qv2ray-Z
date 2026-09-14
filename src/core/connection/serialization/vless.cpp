@@ -205,6 +205,8 @@ namespace Qv2ray::core::connection
                     QJsonIO::SetValue(stream, password, { "realitySettings", "password" });
                 if (query.hasQueryItem("sid"))
                     QJsonIO::SetValue(stream, query.queryItemValue("sid"), { "realitySettings", "shortId" });
+                if (query.hasQueryItem("pqv"))
+                    QJsonIO::SetValue(stream, query.queryItemValue("pqv"), { "realitySettings", "mldsa65Verify" });
                 if (query.hasQueryItem("spx"))
                 {
                     const auto spiderX = QUrl::fromPercentEncoding(query.queryItemValue("spx", QUrl::FullyEncoded).toUtf8());

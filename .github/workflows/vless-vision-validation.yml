@@ -115,6 +115,23 @@ jobs:
           validate .github/xray-fixtures/vless-tls-vision.json
           validate .github/xray-fixtures/vless-reality-vision.json
 
+          # Generate a disposable, syntactically valid ML-DSA-65 key with the
+          # same official Xray binary used for validation. Persist only the
+          # public verification value in the temporary client fixture.
+          verify="$($XRAY_BIN mldsa65 | awk '/^Verify: / { sub(/^Verify: /, ""); print; exit }')"
+          if [[ -z "$verify" ]]; then
+            echo "::error::Xray did not generate an ML-DSA-65 verification key."
+            exit 1
+          fi
+          reality_mldsa="$RUNNER_TEMP/vless-reality-vision-mldsa65.json"
+          jq --arg verify "$verify" \
+            '.outbounds[0].streamSettings.realitySettings.mldsa65Verify = $verify' \
+            .github/xray-fixtures/vless-reality-vision.json > "$reality_mldsa"
+          jq -e --arg verify "$verify" \
+            '.outbounds[0].streamSettings.realitySettings.mldsa65Verify == $verify' \
+            "$reality_mldsa"
+          validate "$reality_mldsa"
+
       - name: Verify invalid config diagnostics
         shell: bash
         run: |
