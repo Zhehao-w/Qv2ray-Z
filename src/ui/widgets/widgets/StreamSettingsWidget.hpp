@@ -52,6 +52,10 @@ class StreamSettingsWidget
     void on_enableSessionResumptionCB_stateChanged(int arg1);
     void on_securityTypeCB_currentIndexChanged(int arg1);
     void on_serverNameTxt_textEdited(const QString &arg1);
+    void on_fingerprintTxt_textEdited(const QString &arg1);
+    void on_realityPasswordTxt_textEdited(const QString &arg1);
+    void on_realityShortIdTxt_textEdited(const QString &arg1);
+    void on_realitySpiderXTxt_textEdited(const QString &arg1);
     void on_disableSystemRoot_stateChanged(int arg1);
     void on_openCertEditorBtn_clicked();
 

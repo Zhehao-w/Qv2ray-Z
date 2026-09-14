@@ -77,7 +77,7 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
     if (protocol == "vless")
     {
         QUrl url;
-        url.setFragment(QUrl::toPercentEncoding(alias));
+        url.setFragment(alias);
         url.setScheme(protocol);
         url.setHost(QJsonIO::GetValue(obj, { "vnext", 0, "address" }).toString());
         url.setPort(QJsonIO::GetValue(obj, { "vnext", 0, "port" }).toInt());
@@ -86,11 +86,13 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
         // -------- COMMON INFORMATION --------
         QUrlQuery query;
         const auto encryption = QJsonIO::GetValue(obj, { "vnext", 0, "users", 0, "encryption" }).toString("none");
-        if (encryption != "none")
+        const auto flow = QJsonIO::GetValue(obj, "vnext", 0, "users", 0, "flow").toString();
+        const auto isVision = flow == "xtls-rprx-vision";
+        if (encryption != "none" || isVision)
             query.addQueryItem("encryption", encryption);
 
         const auto network = QJsonIO::GetValue(objStream, "network").toString("tcp");
-        if (network != "tcp")
+        if (network != "tcp" || isVision)
             query.addQueryItem("type", network);
 
         const auto security = QJsonIO::GetValue(objStream, "security").toString("none");
@@ -157,27 +159,46 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
                 query.addQueryItem("mode", "multi");
         }
         // -------- TLS RELATED --------
-        const auto tlsKey = security == "xtls" ? "xtlsSettings" : "tlsSettings";
+        const auto tlsKey = security == "xtls" ? "xtlsSettings" : security == "reality" ? "realitySettings" : "tlsSettings";
 
         const auto sni = QJsonIO::GetValue(objStream, { tlsKey, "serverName" }).toString();
         if (!sni.isEmpty())
             query.addQueryItem("sni", sni);
 
         // ALPN
-        const auto alpnArray = QJsonIO::GetValue(objStream, { tlsKey, "alpn" }).toArray();
-        QStringList alpnList;
-        for (const auto v : alpnArray)
+        if (security != "reality")
         {
-            const auto alpn = v.toString();
-            if (!alpn.isEmpty())
-                alpnList << alpn;
+            const auto alpnArray = QJsonIO::GetValue(objStream, { tlsKey, "alpn" }).toArray();
+            QStringList alpnList;
+            for (const auto v : alpnArray)
+            {
+                const auto alpn = v.toString();
+                if (!alpn.isEmpty())
+                    alpnList << alpn;
+            }
+            query.addQueryItem("alpn", QUrl::toPercentEncoding(alpnList.join(",")));
         }
-        query.addQueryItem("alpn", QUrl::toPercentEncoding(alpnList.join(",")));
 
-        // -------- XTLS Flow --------
-        if (security == "xtls")
+        const auto fingerprint = QJsonIO::GetValue(objStream, { tlsKey, "fingerprint" }).toString();
+        if (!fingerprint.isEmpty())
+            query.addQueryItem("fp", fingerprint);
+
+        if (security == "reality")
         {
-            const auto flow = QJsonIO::GetValue(obj, "vnext", 0, "users", 0, "flow").toString();
+            const auto password = QJsonIO::GetValue(objStream, { "realitySettings", "password" }).toString();
+            if (!password.isEmpty())
+                query.addQueryItem("pbk", password);
+            const auto shortId = QJsonIO::GetValue(objStream, { "realitySettings", "shortId" }).toString();
+            if (!shortId.isEmpty())
+                query.addQueryItem("sid", shortId);
+            const auto spiderX = QJsonIO::GetValue(objStream, { "realitySettings", "spiderX" }).toString();
+            if (!spiderX.isEmpty())
+                query.addQueryItem("spx", spiderX);
+        }
+
+        // -------- VLESS Flow --------
+        if (!flow.isEmpty())
+        {
             query.addQueryItem("flow", flow);
         }
 

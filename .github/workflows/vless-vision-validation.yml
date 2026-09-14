@@ -1,0 +1,202 @@
+name: VLESS Vision compatibility
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/vless-vision-validation.yml"
+      - ".github/xray-fixtures/**"
+      - "src/base/models/CoreObjectModels.hpp"
+      - "src/core/connection/serialization/vless.cpp"
+      - "src/plugins/protocols/core/OutboundHandler.*"
+      - "src/plugins/protocols/ui/outbound/vless.*"
+      - "src/ui/widgets/widgets/StreamSettingsWidget.*"
+      - "test/**"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/vless-vision-validation.yml"
+      - ".github/xray-fixtures/**"
+      - "src/base/models/CoreObjectModels.hpp"
+      - "src/core/connection/serialization/vless.cpp"
+      - "src/plugins/protocols/core/OutboundHandler.*"
+      - "src/plugins/protocols/ui/outbound/vless.*"
+      - "src/ui/widgets/widgets/StreamSettingsWidget.*"
+      - "test/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  xray-compatibility:
+    name: Latest Xray config validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out fixtures
+        uses: actions/checkout@v4
+
+      - name: Download latest stable official Xray release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(gh api repos/XTLS/Xray-core/releases/latest --jq .tag_name)"
+          echo "Resolved latest stable Xray release: ${tag}"
+          echo "XRAY_RELEASE=${tag}" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/xray"
+          gh release download "$tag" \
+            --repo XTLS/Xray-core \
+            --pattern Xray-linux-64.zip \
+            --dir "$RUNNER_TEMP/xray"
+          unzip -q "$RUNNER_TEMP/xray/Xray-linux-64.zip" -d "$RUNNER_TEMP/xray/bin"
+          chmod +x "$RUNNER_TEMP/xray/bin/xray"
+          echo "XRAY_BIN=$RUNNER_TEMP/xray/bin/xray" >> "$GITHUB_ENV"
+
+      - name: Inspect Xray version, help, and validation interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$XRAY_BIN" version
+          "$XRAY_BIN" help 2>&1 | tee "$RUNNER_TEMP/xray-help.txt"
+          "$XRAY_BIN" help run 2>&1 | tee "$RUNNER_TEMP/xray-run-help.txt"
+
+          if grep -Eq '(^|[[:space:]])test([[:space:]]|$)' "$RUNNER_TEMP/xray-help.txt"; then
+            echo "XRAY_VALIDATE_MODE=test-command" >> "$GITHUB_ENV"
+            echo "Validation command: xray test -c <config>"
+          elif grep -q -- '-test' "$RUNNER_TEMP/xray-run-help.txt"; then
+            echo "XRAY_VALIDATE_MODE=run-test-flag" >> "$GITHUB_ENV"
+            echo "Validation command: xray run -test -c <config>"
+          else
+            echo "::error::The downloaded Xray ${XRAY_RELEASE} help does not advertise a supported config-validation interface."
+            exit 1
+          fi
+
+      - name: Assert fixture compatibility properties
+        shell: bash
+        run: |
+          set -euo pipefail
+          tls=.github/xray-fixtures/vless-tls-vision.json
+          reality=.github/xray-fixtures/vless-reality-vision.json
+
+          jq -e '.outbounds[0]
+            | .protocol == "vless"
+            and .settings.vnext[0].users[0].encryption == "none"
+            and .settings.vnext[0].users[0].flow == "xtls-rprx-vision"
+            and .streamSettings.network == "tcp"
+            and .streamSettings.security == "tls"
+            and (.streamSettings.tlsSettings.serverName | length > 0)
+            and (.streamSettings | has("xtlsSettings") | not)' "$tls"
+
+          jq -e '.outbounds[0]
+            | .protocol == "vless"
+            and .settings.vnext[0].users[0].encryption == "none"
+            and .settings.vnext[0].users[0].flow == "xtls-rprx-vision"
+            and .streamSettings.network == "tcp"
+            and .streamSettings.security == "reality"
+            and (.streamSettings.realitySettings.serverName | length > 0)
+            and .streamSettings.realitySettings.fingerprint == "chrome"
+            and (.streamSettings.realitySettings.password | length > 0)
+            and (.streamSettings.realitySettings | has("publicKey") | not)
+            and .streamSettings.realitySettings.shortId == "0123456789abcdef"
+            and .streamSettings.realitySettings.spiderX == "/"' "$reality"
+
+      - name: Validate TLS and REALITY Vision configs with Xray
+        shell: bash
+        run: |
+          set -euo pipefail
+          validate() {
+            local config="$1"
+            echo "::group::Validating ${config} with Xray ${XRAY_RELEASE}"
+            jq . "$config"
+            if [[ "$XRAY_VALIDATE_MODE" == test-command ]]; then
+              "$XRAY_BIN" test -c "$config"
+            else
+              "$XRAY_BIN" run -test -c "$config"
+            fi
+            echo "::endgroup::"
+          }
+
+          validate .github/xray-fixtures/vless-tls-vision.json
+          validate .github/xray-fixtures/vless-reality-vision.json
+
+  qv2ray-vless-tests:
+    name: Qt5 VLESS serialization tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source and recursive submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt5 and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            libcurl4-openssl-dev \
+            libgrpc++-dev \
+            libprotobuf-dev \
+            libqt5svg5-dev \
+            ninja-build \
+            pkg-config \
+            protobuf-compiler \
+            protobuf-compiler-grpc \
+            qtbase5-dev \
+            qttools5-dev
+
+      - name: Configure tests with the existing Qt5 architecture
+        run: |
+          cmake -S . -B build -GNinja \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DQV2RAY_AUTO_DEPLOY=OFF \
+            -DQV2RAY_HAS_BUILTIN_THEMES=OFF \
+            -DQV2RAY_HAS_SINGLEAPPLICATION=OFF \
+            -DQV2RAY_QT6=OFF \
+            -DQV2RAY_USE_V5_CORE=ON
+
+      - name: Build the VLESS test target
+        run: cmake --build build --target parse_vless_url --parallel 2
+
+      - name: Run VLESS serialization tests
+        run: ctest --test-dir build --output-on-failure -R '^QV2RAY_TEST_parse_vless_url$'
+
+  source-checks:
+    name: Source and UI checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check committed whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == pull_request ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}" HEAD
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            git diff-tree --check --root HEAD
+          fi
+
+      - name: Validate Qt Designer XML
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          files = sorted(Path("src").rglob("*.ui"))
+          for path in files:
+              ET.parse(path)
+              print(f"valid XML: {path}")
+          print(f"validated {len(files)} Qt Designer files")
+          PY

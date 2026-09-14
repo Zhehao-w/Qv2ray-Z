@@ -877,6 +877,11 @@
            <string notr="true">XTLS</string>
           </property>
          </item>
+         <item>
+          <property name="text">
+           <string notr="true">REALITY</string>
+          </property>
+         </item>
         </widget>
        </item>
        <item row="1" column="0" colspan="2">
@@ -920,23 +925,71 @@
         <widget class="QLineEdit" name="serverNameTxt"/>
        </item>
        <item row="5" column="0">
-        <widget class="QLabel" name="label_14">
+        <widget class="QLabel" name="fingerprintLabel">
+         <property name="text">
+          <string>Fingerprint</string>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="1">
+        <widget class="QLineEdit" name="fingerprintTxt">
+         <property name="placeholderText">
+          <string notr="true">chrome</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="0">
+        <widget class="QLabel" name="realityPasswordLabel">
+         <property name="text">
+          <string>Public Key / Authentication Key</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="1">
+        <widget class="QLineEdit" name="realityPasswordTxt"/>
+       </item>
+       <item row="7" column="0">
+        <widget class="QLabel" name="realityShortIdLabel">
+         <property name="text">
+          <string>Short ID</string>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="1">
+        <widget class="QLineEdit" name="realityShortIdTxt"/>
+       </item>
+       <item row="8" column="0">
+        <widget class="QLabel" name="realitySpiderXLabel">
+         <property name="text">
+          <string>SpiderX</string>
+         </property>
+        </widget>
+       </item>
+       <item row="8" column="1">
+        <widget class="QLineEdit" name="realitySpiderXTxt">
+         <property name="placeholderText">
+          <string notr="true">/</string>
+         </property>
+        </widget>
+       </item>
+       <item row="9" column="0">
+        <widget class="QLabel" name="alpnLabel">
          <property name="text">
           <string>ALPN</string>
          </property>
         </widget>
        </item>
-       <item row="5" column="1">
+       <item row="9" column="1">
         <widget class="QLineEdit" name="alpnTxt"/>
        </item>
-       <item row="6" column="0">
-        <widget class="QLabel" name="label_9">
+       <item row="10" column="0">
+        <widget class="QLabel" name="certificatesLabel">
          <property name="text">
           <string>Certificates</string>
          </property>
         </widget>
        </item>
-       <item row="6" column="1">
+       <item row="10" column="1">
         <widget class="QPushButton" name="openCertEditorBtn">
          <property name="enabled">
           <bool>false</bool>
@@ -949,7 +1002,7 @@
          </property>
         </widget>
        </item>
-       <item row="7" column="0" colspan="2">
+       <item row="11" column="0" colspan="2">
         <widget class="QPushButton" name="pinnedPeerCertificateChainSha256Btn">
          <property name="text">
           <string>Open pinnedPeerCertificateChainSha256 Editor</string>

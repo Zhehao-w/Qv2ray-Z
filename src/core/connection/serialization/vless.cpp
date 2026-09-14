@@ -72,7 +72,11 @@ namespace Qv2ray::core::connection
 
             // handle type
             const auto hasType = query.hasQueryItem("type");
-            const auto type = hasType ? query.queryItemValue("type") : "tcp";
+            const auto linkType = hasType ? query.queryItemValue("type") : "tcp";
+            // Xray calls this transport RAW, but continues to accept `tcp` as
+            // its compatibility alias. Keep Qv2ray storage and share links on
+            // `tcp`, while accepting either spelling on import.
+            const auto type = linkType == "raw" ? QStringLiteral("tcp") : linkType;
             if (type != "tcp")
                 QJsonIO::SetValue(stream, type, "network");
 
@@ -160,7 +164,7 @@ namespace Qv2ray::core::connection
             // tls-wise settings
             const auto hasSecurity = query.hasQueryItem("security");
             const auto security = hasSecurity ? query.queryItemValue("security") : "none";
-            const auto tlsKey = security == "xtls" ? "xtlsSettings" : "tlsSettings";
+            const auto tlsKey = security == "xtls" ? "xtlsSettings" : security == "reality" ? "realitySettings" : "tlsSettings";
             if (security != "none")
             {
                 QJsonIO::SetValue(stream, security, "security");
@@ -174,17 +178,38 @@ namespace Qv2ray::core::connection
             }
             // alpn
             const auto hasALPN = query.hasQueryItem("alpn");
-            if (hasALPN)
+            if (hasALPN && security != "reality")
             {
                 const auto alpnRaw = QUrl::fromPercentEncoding(query.queryItemValue("alpn").toUtf8());
                 const auto alpnArray = QJsonArray::fromStringList(alpnRaw.split(","));
                 QJsonIO::SetValue(stream, alpnArray, { tlsKey, "alpn" });
             }
-            // xtls-specific
-            if (security == "xtls")
+            // VLESS flow is independent of stream security (for example,
+            // Vision is used with both TLS and REALITY).
+            if (query.hasQueryItem("flow"))
             {
                 const auto flow = query.queryItemValue("flow");
                 QJsonIO::SetValue(outbound, flow, { "settings", "vnext", 0, "users", 0, "flow" });
+            }
+            if (query.hasQueryItem("fp"))
+                QJsonIO::SetValue(stream, query.queryItemValue("fp"), { tlsKey, "fingerprint" });
+            if (security == "reality")
+            {
+                // Share links retain the ecosystem-standard `pbk` name while
+                // current Xray outbound JSON uses `password`.
+                QString password;
+                for (const auto &key : { "pbk", "password", "publicKey" })
+                    if (password.isEmpty() && query.hasQueryItem(key))
+                        password = query.queryItemValue(key);
+                if (!password.isEmpty())
+                    QJsonIO::SetValue(stream, password, { "realitySettings", "password" });
+                if (query.hasQueryItem("sid"))
+                    QJsonIO::SetValue(stream, query.queryItemValue("sid"), { "realitySettings", "shortId" });
+                if (query.hasQueryItem("spx"))
+                {
+                    const auto spiderX = QUrl::fromPercentEncoding(query.queryItemValue("spx", QUrl::FullyEncoded).toUtf8());
+                    QJsonIO::SetValue(stream, spiderX, { "realitySettings", "spiderX" });
+                }
             }
 
             // assembling config
