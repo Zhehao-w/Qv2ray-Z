@@ -35,7 +35,7 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
     transportCombo->setCurrentText(stream.network);
     // TLS XTLS
     {
-        const static QMap<QString, int> securityIndexMap{ { "none", 0 }, { "tls", 1 }, { "xtls", 2 } };
+        const static QMap<QString, int> securityIndexMap{ { "none", 0 }, { "tls", 1 }, { "xtls", 2 }, { "reality", 3 } };
         if (securityIndexMap.contains(stream.security))
             securityTypeCB->setCurrentIndex(securityIndexMap[stream.security]);
         else
@@ -54,6 +54,14 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
 
         if (stream.security == "xtls")
             tls_xtls_process(xtls);
+
+        if (stream.security == "reality")
+            serverNameTxt->setText(stream.realitySettings.serverName);
+        fingerprintTxt->setText(stream.security == "reality" ? stream.realitySettings.fingerprint : stream.tlsSettings.fingerprint);
+        realityPasswordTxt->setText(stream.realitySettings.password);
+        realityShortIdTxt->setText(stream.realitySettings.shortId);
+        realitySpiderXTxt->setText(stream.realitySettings.spiderX);
+        on_securityTypeCB_currentIndexChanged(securityTypeCB->currentIndex());
     }
     // TCP
     {
@@ -288,6 +296,21 @@ void StreamSettingsWidget::on_transportCombo_currentIndexChanged(int arg1)
 void StreamSettingsWidget::on_securityTypeCB_currentIndexChanged(int arg1)
 {
     stream.security = securityTypeCB->itemText(arg1).toLower();
+    const auto isReality = stream.security == "reality";
+    realityPasswordLabel->setVisible(isReality);
+    realityPasswordTxt->setVisible(isReality);
+    realityShortIdLabel->setVisible(isReality);
+    realityShortIdTxt->setVisible(isReality);
+    realitySpiderXLabel->setVisible(isReality);
+    realitySpiderXTxt->setVisible(isReality);
+    allowInsecureCB->setVisible(!isReality);
+    enableSessionResumptionCB->setVisible(!isReality);
+    disableSystemRoot->setVisible(!isReality);
+    alpnLabel->setVisible(!isReality);
+    alpnTxt->setVisible(!isReality);
+    certificatesLabel->setVisible(!isReality);
+    openCertEditorBtn->setVisible(!isReality);
+    pinnedPeerCertificateChainSha256Btn->setVisible(!isReality);
 }
 
 //
@@ -297,6 +320,28 @@ void StreamSettingsWidget::on_serverNameTxt_textEdited(const QString &arg1)
 {
     stream.tlsSettings.serverName = arg1.trimmed();
     stream.xtlsSettings.serverName = arg1.trimmed();
+    stream.realitySettings.serverName = arg1.trimmed();
+}
+
+void StreamSettingsWidget::on_fingerprintTxt_textEdited(const QString &arg1)
+{
+    stream.tlsSettings.fingerprint = arg1.trimmed();
+    stream.realitySettings.fingerprint = arg1.trimmed();
+}
+
+void StreamSettingsWidget::on_realityPasswordTxt_textEdited(const QString &arg1)
+{
+    stream.realitySettings.password = arg1.trimmed();
+}
+
+void StreamSettingsWidget::on_realityShortIdTxt_textEdited(const QString &arg1)
+{
+    stream.realitySettings.shortId = arg1.trimmed();
+}
+
+void StreamSettingsWidget::on_realitySpiderXTxt_textEdited(const QString &arg1)
+{
+    stream.realitySettings.spiderX = arg1;
 }
 
 void StreamSettingsWidget::on_allowInsecureCB_stateChanged(int arg1)

@@ -85,6 +85,11 @@
      </item>
      <item>
       <property name="text">
+       <string notr="true">xtls-rprx-vision</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
        <string notr="true">xtls-rprx-splice</string>
       </property>
      </item>
