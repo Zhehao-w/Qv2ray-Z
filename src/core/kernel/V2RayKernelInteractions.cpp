@@ -175,19 +175,33 @@ namespace Qv2ray::core::kernel
             //
             QProcess process;
             process.setProcessEnvironment(env);
+            process.setProcessChannelMode(QProcess::MergedChannels);
             DEBUG("Starting V2Ray core with test options");
-#ifdef QV2RAY_USE_V5_CORE
-            process.start(kernelPath, { "test", "-c", path }, QIODevice::ReadWrite | QIODevice::Text);
-#else
-            process.start(kernelPath, { "-test", "-config", path }, QIODevice::ReadWrite | QIODevice::Text);
-#endif
-            process.waitForFinished();
+            process.start(kernelPath, { "run", "-test", "-c", path }, QIODevice::ReadWrite | QIODevice::Text);
 
-            if (process.exitCode() != 0)
+            if (!process.waitForStarted())
             {
-                QString output = QString(process.readAllStandardOutput());
-                QvMessageBoxWarn(nullptr, tr("Configuration Error"), output.mid(output.indexOf("anti-censorship.") + 17));
-                return std::nullopt;
+                return tr("Failed to start Xray configuration validation: %1").arg(process.errorString());
+            }
+
+            if (!process.waitForFinished())
+            {
+                process.kill();
+                process.waitForFinished();
+                const auto output = QString::fromLocal8Bit(process.readAll()).trimmed();
+                return output.isEmpty() ? tr("Xray configuration validation timed out.") : output;
+            }
+
+            if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0)
+            {
+                const auto output = QString::fromLocal8Bit(process.readAll()).trimmed();
+                if (!output.isEmpty())
+                    return output;
+
+                if (process.exitStatus() == QProcess::CrashExit)
+                    return tr("Xray configuration validation process crashed.");
+
+                return tr("Xray configuration validation failed with exit code %1.").arg(process.exitCode());
             }
 
             DEBUG("Config file check passed.");
