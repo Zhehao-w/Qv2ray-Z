@@ -1,0 +1,208 @@
+name: Windows VLESS Vision package
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-vless-vision-package.yml"
+      - ".github/xray-fixtures/**"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "libs/**"
+      - "src/**"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/windows-vless-vision-package.yml"
+      - ".github/xray-fixtures/**"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "libs/**"
+      - "src/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-package:
+    name: Windows 11-ready Qt5 package
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      QT_VERSION: 5.15.2
+      QT_ARCH: win64_msvc2019_64
+      ARTIFACT_NAME: Qv2ray-Z-Windows-x64-Qt5.15.2-with-Xray
+    steps:
+      - name: Check out source and recursive submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Enable the historical MSVC 2019 toolset
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          toolset: 14.2
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ env.QT_ARCH }}
+          cache: true
+
+      - name: Download historical Windows build dependencies
+        shell: bash
+        run: ./libs/setup-libs.sh windows x64
+
+      - name: Configure Release build
+        shell: bash
+        env:
+          CC: cl.exe
+          CXX: cl.exe
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/build/deployment" \
+            -DQV2RAY_AUTO_DEPLOY=ON \
+            -DQV2RAY_QT6=OFF \
+            -DQV2RAY_USE_V5_CORE=ON
+
+      - name: Build and deploy Qv2ray-Z
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build --parallel 2
+          cmake --install build
+
+      - name: Download latest stable official Windows Xray
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = gh api repos/XTLS/Xray-core/releases/latest --jq .tag_name
+          if (-not $tag) { throw "Unable to resolve the latest stable Xray release" }
+          "XRAY_RELEASE=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved latest stable official Xray release: $tag"
+
+          $download = Join-Path $env:RUNNER_TEMP "xray-download"
+          $expanded = Join-Path $env:RUNNER_TEMP "xray-expanded"
+          New-Item -ItemType Directory -Force -Path $download, $expanded | Out-Null
+          gh release download $tag `
+            --repo XTLS/Xray-core `
+            --pattern Xray-windows-64.zip `
+            --dir $download
+          Expand-Archive `
+            -Path (Join-Path $download "Xray-windows-64.zip") `
+            -DestinationPath $expanded `
+            -Force
+
+          $xray = (Resolve-Path (Join-Path $expanded "xray.exe")).Path
+          "XRAY_BIN=$xray" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $xray version
+
+      - name: Inspect Windows Xray validation interface
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $help = (& $env:XRAY_BIN help 2>&1 | Out-String)
+          $runHelp = (& $env:XRAY_BIN help run 2>&1 | Out-String)
+          Write-Host $help
+          Write-Host $runHelp
+
+          if ($help -match '(?m)(^|\s)test(\s|$)') {
+            "XRAY_VALIDATE_MODE=test-command" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Validation command: xray.exe test -c <config>"
+          } elseif ($runHelp -match '-test') {
+            "XRAY_VALIDATE_MODE=run-test-flag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Validation command: xray.exe run -test -c <config>"
+          } else {
+            throw "Xray $env:XRAY_RELEASE does not advertise a supported config-validation interface"
+          }
+
+      - name: Validate Vision fixtures with Windows Xray
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $fixtures = @(
+            ".github/xray-fixtures/vless-tls-vision.json",
+            ".github/xray-fixtures/vless-reality-vision.json"
+          )
+          foreach ($fixture in $fixtures) {
+            Write-Host "Validating $fixture with Xray $env:XRAY_RELEASE"
+            Get-Content $fixture
+            if ($env:XRAY_VALIDATE_MODE -eq "test-command") {
+              & $env:XRAY_BIN test -c $fixture
+            } else {
+              & $env:XRAY_BIN run -test -c $fixture
+            }
+            if ($LASTEXITCODE -ne 0) {
+              throw "Xray rejected $fixture with exit code $LASTEXITCODE"
+            }
+          }
+
+      - name: Add Xray and manual-test instructions to package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $coreDirectory = Join-Path $PWD "build/deployment/xray"
+          New-Item -ItemType Directory -Force -Path $coreDirectory | Out-Null
+          $xrayDirectory = Split-Path -Parent $env:XRAY_BIN
+          Copy-Item $env:XRAY_BIN $coreDirectory
+          Copy-Item (Join-Path $xrayDirectory "geoip.dat") $coreDirectory
+          Copy-Item (Join-Path $xrayDirectory "geosite.dat") $coreDirectory
+
+          @"
+          Qv2ray-Z Windows VLESS Vision validation package
+          =================================================
+          Build runner: windows-2022
+          Toolchain: MSVC 14.2, Qt $env:QT_VERSION
+          Bundled Xray: $env:XRAY_RELEASE (official XTLS/Xray-core Windows x64 release)
+
+          On first launch, select these paths in Preferences > Kernel Settings:
+            Core executable: <this folder>\xray\xray.exe
+            Assets directory: <this folder>\xray
+
+          Then import and manually connect one TLS Vision profile and one REALITY
+          Vision profile. No real credentials are included in this artifact.
+          "@ | Set-Content -Path "build/deployment/README-VLESS-VISION.txt"
+
+      - name: Verify packaged runtime layout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $required = @(
+            "build/deployment/qv2ray.exe",
+            "build/deployment/platforms/qwindows.dll",
+            "build/deployment/xray/xray.exe",
+            "build/deployment/xray/geoip.dat",
+            "build/deployment/xray/geosite.dat",
+            "build/deployment/README-VLESS-VISION.txt"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) { throw "Required runtime file is missing: $path" }
+          }
+          $plugins = @(Get-ChildItem "build/deployment/plugins" -Filter "*.dll" -File)
+          if ($plugins.Count -eq 0) { throw "No Qv2ray protocol plugin DLL was packaged" }
+
+          Write-Host "Packaged files:"
+          Get-ChildItem "build/deployment" -Recurse -File |
+            ForEach-Object { $_.FullName.Substring((Resolve-Path "build/deployment").Path.Length + 1) } |
+            Sort-Object
+
+      - name: Smoke-test executable startup path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & "build/deployment/qv2ray.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "qv2ray.exe --version failed with exit code $LASTEXITCODE" }
+
+      - name: Upload Windows test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: build/deployment/
+          if-no-files-found: error
+          retention-days: 14

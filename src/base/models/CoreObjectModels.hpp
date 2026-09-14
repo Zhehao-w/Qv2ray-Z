@@ -17,7 +17,7 @@ namespace Qv2ray::base::objects
             int port;
             QList<QString> domains;
             QList<QString> expectIPs;
-            DNSServerObject() : QV2RAY_DNS_IS_COMPLEX_DNS(false), port(53){};
+            DNSServerObject() : QV2RAY_DNS_IS_COMPLEX_DNS(false), port(53) {};
             DNSServerObject(const QString &_address) : DNSServerObject()
             {
                 address = _address;
@@ -224,7 +224,7 @@ namespace Qv2ray::base::objects
             int writeBufferSize = 2;
             QString seed;
             ObfsHeaderObject header;
-            KCPObject(){};
+            KCPObject() {};
             JSONSTRUCT_COMPARE(KCPObject, mtu, tti, uplinkCapacity, downlinkCapacity, congestion, readBufferSize, writeBufferSize, seed, header)
             JSONSTRUCT_REGISTER(KCPObject, F(mtu, tti, uplinkCapacity, downlinkCapacity, congestion, readBufferSize, writeBufferSize, header, seed))
         };
@@ -307,15 +307,16 @@ namespace Qv2ray::base::objects
         struct TLSObject
         {
             QString serverName;
+            QString fingerprint;
             bool allowInsecure = false;
             bool enableSessionResumption = false;
             bool disableSystemRoot = false;
             QList<QString> alpn;
             QList<QString> pinnedPeerCertificateChainSha256;
             QList<CertificateObject> certificates;
-            JSONSTRUCT_COMPARE(TLSObject, serverName, allowInsecure, enableSessionResumption, disableSystemRoot, alpn,
+            JSONSTRUCT_COMPARE(TLSObject, serverName, fingerprint, allowInsecure, enableSessionResumption, disableSystemRoot, alpn,
                                pinnedPeerCertificateChainSha256, certificates)
-            JSONSTRUCT_REGISTER(TLSObject, F(serverName, allowInsecure, enableSessionResumption, disableSystemRoot, alpn,
+            JSONSTRUCT_REGISTER(TLSObject, F(serverName, fingerprint, allowInsecure, enableSessionResumption, disableSystemRoot, alpn,
                                              pinnedPeerCertificateChainSha256, certificates))
         };
         //
@@ -331,6 +332,18 @@ namespace Qv2ray::base::objects
             JSONSTRUCT_COMPARE(XTLSObject, serverName, allowInsecure, enableSessionResumption, disableSystemRoot, alpn, certificates)
             JSONSTRUCT_REGISTER(XTLSObject, F(serverName, allowInsecure, enableSessionResumption, disableSystemRoot, alpn, certificates))
         };
+        // Client-side REALITY settings. Current Xray-core calls the server
+        // public-key authentication value "password" in outbound JSON.
+        struct RealityObject
+        {
+            QString serverName;
+            QString fingerprint = "chrome";
+            QString password;
+            QString shortId;
+            QString spiderX;
+            JSONSTRUCT_COMPARE(RealityObject, serverName, fingerprint, password, shortId, spiderX)
+            JSONSTRUCT_REGISTER(RealityObject, A(fingerprint), F(serverName, password, shortId, spiderX))
+        };
     } // namespace transfer
     //
     //
@@ -341,6 +354,7 @@ namespace Qv2ray::base::objects
         transfer::SockoptObject sockopt;
         transfer::TLSObject tlsSettings;
         transfer::XTLSObject xtlsSettings;
+        transfer::RealityObject realitySettings;
         transfer::TCPObject tcpSettings;
         transfer::KCPObject kcpSettings;
         transfer::WebSocketObject wsSettings;
@@ -349,9 +363,11 @@ namespace Qv2ray::base::objects
         transfer::QuicObject quicSettings;
         transfer::gRPCObject grpcSettings;
         JSONSTRUCT_COMPARE(StreamSettingsObject, network, security, sockopt, //
-                           tcpSettings, tlsSettings, xtlsSettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings, grpcSettings)
+                           tcpSettings, tlsSettings, xtlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings,
+                           grpcSettings)
         JSONSTRUCT_REGISTER(StreamSettingsObject, F(network, security, sockopt),
-                            F(tcpSettings, tlsSettings, xtlsSettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings, grpcSettings))
+                            F(tcpSettings, tlsSettings, xtlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings,
+                              quicSettings, grpcSettings))
     };
 
     struct FakeDNSObject
