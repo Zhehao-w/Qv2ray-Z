@@ -4,6 +4,7 @@
 #include "core/connection/ConnectionIO.hpp"
 #include "utils/QvHelpers.hpp"
 
+#include <QCoreApplication>
 #include <QProcess>
 
 #define QV2RAY_GENERATED_FILE_PATH (QV2RAY_GENERATED_DIR + "config.gen.json")
@@ -19,6 +20,15 @@
 
 namespace Qv2ray::core::kernel
 {
+    KernelPaths V2RayKernelInstance::EffectiveKernelPaths(const QString &configuredExecutable, const QString &configuredAssets)
+    {
+#ifdef Q_OS_WIN
+        return ResolveBundledKernelPaths(configuredExecutable, configuredAssets, QCoreApplication::applicationDirPath(), "xray.exe");
+#else
+        return { configuredExecutable, configuredAssets, false };
+#endif
+    }
+
 #if QV2RAY_FEATURE(kernel_check_permission)
     std::pair<bool, std::optional<QString>> V2RayKernelInstance::CheckAndSetCoreExecutableState(const QString &vCorePath)
     {
@@ -163,8 +173,9 @@ namespace Qv2ray::core::kernel
 
     std::optional<QString> V2RayKernelInstance::ValidateConfig(const QString &path)
     {
-        const auto kernelPath = GlobalConfig.kernelConfig.KernelPath();
-        const auto assetsPath = GlobalConfig.kernelConfig.AssetsPath();
+        const auto paths = EffectiveKernelPaths(GlobalConfig.kernelConfig.KernelPath(), GlobalConfig.kernelConfig.AssetsPath());
+        const auto &kernelPath = paths.executable;
+        const auto &assetsPath = paths.assets;
         if (const auto &[result, msg] = ValidateKernel(kernelPath, assetsPath); result)
         {
             DEBUG("V2Ray version: " + *msg);
@@ -254,11 +265,12 @@ namespace Qv2ray::core::kernel
             kernelStarted = false;
             return tr("V2Ray kernel failed to start: ") + *result;
         }
+        const auto paths = EffectiveKernelPaths(GlobalConfig.kernelConfig.KernelPath(), GlobalConfig.kernelConfig.AssetsPath());
         auto env = QProcessEnvironment::systemEnvironment();
-        env.insert("v2ray.location.asset", GlobalConfig.kernelConfig.AssetsPath());
-        env.insert("XRAY_LOCATION_ASSET", GlobalConfig.kernelConfig.AssetsPath());
+        env.insert("v2ray.location.asset", paths.assets);
+        env.insert("XRAY_LOCATION_ASSET", paths.assets);
         vProcess->setProcessEnvironment(env);
-        vProcess->start(GlobalConfig.kernelConfig.KernelPath(), { V2RAY_CORE_CONFIG_ARGV, filePath }, QIODevice::ReadWrite | QIODevice::Text);
+        vProcess->start(paths.executable, { V2RAY_CORE_CONFIG_ARGV, filePath }, QIODevice::ReadWrite | QIODevice::Text);
         vProcess->waitForStarted();
         kernelStarted = true;
 

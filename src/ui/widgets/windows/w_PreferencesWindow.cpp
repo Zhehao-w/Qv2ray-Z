@@ -190,8 +190,10 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     //
     // Kernel Settings
     {
-        vCorePathTxt->setText(CurrentConfig.kernelConfig.KernelPath());
-        vCoreAssetsPathTxt->setText(CurrentConfig.kernelConfig.AssetsPath());
+        const auto paths =
+            V2RayKernelInstance::EffectiveKernelPaths(CurrentConfig.kernelConfig.KernelPath(), CurrentConfig.kernelConfig.AssetsPath());
+        vCorePathTxt->setText(paths.executable);
+        vCoreAssetsPathTxt->setText(paths.assets);
         enableAPI->setChecked(CurrentConfig.kernelConfig.enableAPI);
         statsPortBox->setValue(CurrentConfig.kernelConfig.statsPort);
         //

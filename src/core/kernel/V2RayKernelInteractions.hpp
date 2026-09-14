@@ -1,5 +1,6 @@
 #pragma once
 #include "base/Qv2rayBase.hpp"
+#include "core/kernel/KernelPathResolver.hpp"
 #include "core/kernel/QvKernelABIChecker.hpp"
 
 class QProcess;
@@ -23,6 +24,7 @@ namespace Qv2ray::core::kernel
         //
         static std::optional<QString> ValidateConfig(const QString &path);
         static std::pair<bool, std::optional<QString>> ValidateKernel(const QString &vCorePath, const QString &vAssetsPath);
+        static KernelPaths EffectiveKernelPaths(const QString &configuredExecutable, const QString &configuredAssets);
 #if QV2RAY_FEATURE(kernel_check_permission)
         static std::pair<bool, std::optional<QString>> CheckAndSetCoreExecutableState(const QString &vCorePath);
 #endif
