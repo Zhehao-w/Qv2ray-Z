@@ -15,6 +15,12 @@ OutboundEditor::OutboundEditor(QWidget *parent) : QDialog(parent), tag(OUTBOUND_
 {
     QvMessageBusConnect(OutboundEditor);
     setupUi(this);
+    nameTxt = new QLineEdit(this);
+    nameTxt->setPlaceholderText(tr("A clear name shown in the connection list"));
+    formLayout_5->insertRow(0, tr("Name"), nameTxt);
+    ipLabel_3->setText(tr("Xray Outbound Tag"));
+    tagTxt->setPlaceholderText(tr("Internal routing identifier (most users should not change this)"));
+    tagTxt->setToolTip(tr("Used internally by Xray routing. Most users should not need to change this."));
     //
     streamSettingsWidget = new StreamSettingsWidget(this);
     streamSettingsWidget->SetStreamObject({});
@@ -57,9 +63,10 @@ QvMessageBusSlotImpl(OutboundEditor)
     }
 }
 
-OutboundEditor::OutboundEditor(const OUTBOUND &outboundEntry, QWidget *parent) : OutboundEditor(parent)
+OutboundEditor::OutboundEditor(const OUTBOUND &outboundEntry, QWidget *parent, const QString &displayName) : OutboundEditor(parent)
 {
     originalConfig = outboundEntry;
+    nameTxt->setText(displayName);
     reloadGUI();
 }
 
@@ -77,7 +84,12 @@ QString OutboundEditor::GetFriendlyName()
 {
     auto host = ipLineEdit->text().replace(":", "-").replace("/", "_").replace("\\", "_");
     auto port = portLineEdit->text().replace(":", "-").replace("/", "_").replace("\\", "_");
-    return tag.isEmpty() ? outboundType + "@" + host + ":" + port : tag;
+    return nameTxt->text().trimmed().isEmpty() ? outboundType + "@" + host + ":" + port : nameTxt->text().trimmed();
+}
+
+QString OutboundEditor::GetDisplayName() const
+{
+    return nameTxt->text().trimmed();
 }
 
 OUTBOUND OutboundEditor::generateConnectionJson()
@@ -111,7 +123,8 @@ OUTBOUND OutboundEditor::generateConnectionJson()
 
 void OutboundEditor::reloadGUI()
 {
-    tag = originalConfig["tag"].toString();
+    if (originalConfig.contains("tag"))
+        tag = originalConfig["tag"].toString();
     tagTxt->setText(tag);
     outboundType = originalConfig["protocol"].toString("vmess");
     muxConfig = originalConfig.contains("mux") ? originalConfig["mux"].toObject() : QJsonObject{};

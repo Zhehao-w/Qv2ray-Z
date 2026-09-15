@@ -117,6 +117,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     speedChart->addWidget(speedChartWidget);
     //
     modelHelper = new ConnectionListHelper(connectionTreeView);
+    connectionViewCombo = new QComboBox(leftWidget);
+    connectionViewCombo->setToolTip(tr("Choose a flat list or the traditional grouped tree"));
+    connectionViewCombo->addItem(tr("Flat"), false);
+    connectionViewCombo->addItem(tr("Grouped"), true);
+    connectionViewCombo->setCurrentIndex(GlobalConfig.uiConfig.groupedConnectionView ? 1 : 0);
+    horizontalLayout_6->insertWidget(1, connectionViewCombo);
+    modelHelper->SetGrouped(GlobalConfig.uiConfig.groupedConnectionView);
+    collapseGroupsBtn->setVisible(GlobalConfig.uiConfig.groupedConnectionView);
+    connect(connectionViewCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
+        const auto grouped = connectionViewCombo->itemData(index).toBool();
+        GlobalConfig.uiConfig.groupedConnectionView = grouped;
+        modelHelper->SetGrouped(grouped);
+        collapseGroupsBtn->setVisible(grouped);
+        if (grouped && !lastConnected.isEmpty())
+            connectionTreeView->expand(modelHelper->GetGroupIndex(lastConnected.groupId));
+    });
     //
     this->setWindowIcon(QIcon(":/assets/icons/qv2ray.png"));
     updateColorScheme();
@@ -809,6 +825,7 @@ void MainWindow::OnEditRequested(const ConnectionId &id)
     auto outBoundRoot = ConnectionManager->GetConnectionRoot(id);
     CONFIGROOT root;
     bool isChanged;
+    QString editedDisplayName;
 
     if (IsComplexConfig(outBoundRoot))
     {
@@ -821,9 +838,10 @@ void MainWindow::OnEditRequested(const ConnectionId &id)
     {
         LOG("INFO: Opening single connection edit window.");
         auto out = OUTBOUND(outBoundRoot["outbounds"].toArray().first().toObject());
-        OutboundEditor w(out, this);
+        OutboundEditor w(out, this, GetDisplayName(id));
         auto outboundEntry = w.OpenEditor();
         isChanged = w.result() == QDialog::Accepted;
+        editedDisplayName = w.GetDisplayName();
         QJsonArray outboundsList;
         outboundsList.push_back(outboundEntry);
         root.insert("outbounds", outboundsList);
@@ -832,6 +850,8 @@ void MainWindow::OnEditRequested(const ConnectionId &id)
     if (isChanged)
     {
         ConnectionManager->UpdateConnection(id, root);
+        if (!editedDisplayName.isEmpty() && editedDisplayName != GetDisplayName(id))
+            ConnectionManager->RenameConnection(id, editedDisplayName);
     }
 }
 void MainWindow::OnEditJsonRequested(const ConnectionId &id)
@@ -860,6 +880,8 @@ void MainWindow::on_locateBtn_clicked()
     {
         const auto index = modelHelper->GetConnectionPairIndex(id);
         connectionTreeView->setCurrentIndex(index);
+        if (modelHelper->IsGrouped())
+            connectionTreeView->expand(modelHelper->GetGroupIndex(id.groupId));
         connectionTreeView->scrollTo(index);
         on_connectionTreeView_clicked(index);
     }

@@ -79,6 +79,8 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
         wsHeadersTxt->setPlainText(wsHeaders);
         wsEarlyDataSB->setValue(stream.wsSettings.maxEarlyData);
         wsBrowserForwardCB->setChecked(stream.wsSettings.useBrowserForwarding);
+        wsBrowserForwardCB->hide();
+        label_25->hide();
         wsEarlyDataHeaderNameCB->setCurrentText(stream.wsSettings.earlyDataHeaderName);
     }
     // mKCP

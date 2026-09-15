@@ -93,8 +93,20 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     glyphTrayCB->setChecked(CurrentConfig.uiConfig.useGlyphTrayIcon);
     languageComboBox->setCurrentText(CurrentConfig.uiConfig.language);
     logLevelComboBox->setCurrentIndex(CurrentConfig.logLevel);
-    quietModeCB->setChecked(CurrentConfig.uiConfig.quietMode);
+    quietModeCB->setText(tr("Show connection and proxy status notifications"));
+    quietModeCB->setToolTip(tr("Errors, warnings, logs, status indicators and traffic statistics are always shown."));
+    quietModeCB->setChecked(!CurrentConfig.uiConfig.quietMode);
     useOldShareLinkFormatCB->setChecked(CurrentConfig.uiConfig.useOldShareLinkFormat);
+    // Keep the setting readable for migration, but modern exports no longer need
+    // to present this compatibility switch in the everyday preferences UI.
+    useOldShareLinkFormatCB->hide();
+    // The VMess-era NTP checker is legacy diagnostic UX. Generic application
+    // time handling is untouched; only the preference entry point is removed.
+    pushButton->hide();
+    // browserForwarder was a Qv2ray-specific top-level config object and is no
+    // longer accepted by current Xray-core. Retain its model solely so old
+    // preferences can be read without data-loss during migration.
+    groupBox_2->hide();
     startMinimizedCB->setChecked(CurrentConfig.uiConfig.startMinimized);
     startMinimizedCB->setEnabled(CurrentConfig.autoStartBehavior != AUTO_CONNECTION_NONE);
     exitByCloseEventCB->setChecked(CurrentConfig.uiConfig.exitByCloseEvent);
@@ -211,6 +223,60 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
         bypassBTCb->setChecked(CurrentConfig.defaultRouteConfig.connectionConfig.bypassBT);
         proxyDefaultCb->setChecked(!CurrentConfig.defaultRouteConfig.connectionConfig.enableProxy);
         bypassPrivateCb->setChecked(CurrentConfig.defaultRouteConfig.connectionConfig.bypassLAN);
+
+        auto *routingMode = new QComboBox(groupBox);
+        routingMode->setObjectName("routingModeCombo");
+        routingMode->addItem(tr("Global Proxy"), QvConfig_Connection::GlobalProxy);
+        routingMode->addItem(tr("Bypass Mainland China (Recommended in mainland China)"), QvConfig_Connection::BypassMainlandChina);
+        routingMode->addItem(tr("Direct"), QvConfig_Connection::Direct);
+        routingMode->addItem(tr("Custom"), QvConfig_Connection::Custom);
+        const auto &legacyRoute = CurrentConfig.defaultRouteConfig.connectionConfig;
+        int effectiveMode = legacyRoute.routingMode;
+        // Infer presets from the long-standing flags as well. This prevents a
+        // newly introduced UI preference from changing an older configuration.
+        if (!legacyRoute.enableProxy)
+            effectiveMode = QvConfig_Connection::Direct;
+        else if (legacyRoute.bypassCN && legacyRoute.bypassLAN)
+            effectiveMode = QvConfig_Connection::BypassMainlandChina;
+        else if (!legacyRoute.bypassCN && legacyRoute.bypassLAN)
+            effectiveMode = QvConfig_Connection::GlobalProxy;
+        else
+            effectiveMode = QvConfig_Connection::Custom;
+        routingMode->setCurrentIndex(routingMode->findData(effectiveMode));
+        auto *summary = new QLabel(groupBox);
+        summary->setWordWrap(true);
+        summary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        formLayout->insertRow(0, tr("Routing Mode"), routingMode);
+        formLayout->insertRow(1, tr("Effective Routing"), summary);
+
+        const auto updateRoutingMode = [this, routingMode, summary](int) {
+            auto &connection = CurrentConfig.defaultRouteConfig.connectionConfig;
+            const auto mode = routingMode->currentData().toInt();
+            connection.routingMode = mode;
+            const bool custom = mode == QvConfig_Connection::Custom;
+            label_16->setVisible(custom);
+            proxyDefaultCb->setVisible(custom);
+            label_41->setVisible(custom);
+            bypassPrivateCb->setVisible(custom);
+            label_17->setVisible(custom);
+            bypassCNCb->setVisible(custom);
+            if (!custom)
+            {
+                connection.enableProxy = mode != QvConfig_Connection::Direct;
+                connection.bypassCN = mode == QvConfig_Connection::BypassMainlandChina;
+                connection.bypassLAN = true;
+            }
+            if (mode == QvConfig_Connection::GlobalProxy)
+                summary->setText(tr("Private/LAN → Direct; everything else → Proxy."));
+            else if (mode == QvConfig_Connection::BypassMainlandChina)
+                summary->setText(tr("Private/LAN → Direct; custom Block, Proxy and Direct rules take precedence; geoip:cn and geosite:cn → Direct; everything else → Proxy."));
+            else if (mode == QvConfig_Connection::Direct)
+                summary->setText(tr("Internet traffic → Direct. Advanced rules are retained for later use."));
+            else
+                summary->setText(tr("Advanced routing controls and explicit rule order are used unchanged."));
+        };
+        connect(routingMode, QOverload<int>::of(&QComboBox::currentIndexChanged), updateRoutingMode);
+        updateRoutingMode(routingMode->currentIndex());
     }
     //
     //
@@ -911,7 +977,7 @@ void PreferencesWindow::on_setTestlatencyOnConnectedCB_stateChanged(int arg1)
 void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)
 {
     LOADINGCHECK
-    CurrentConfig.uiConfig.quietMode = arg1 == Qt::Checked;
+    CurrentConfig.uiConfig.quietMode = arg1 != Qt::Checked;
 }
 
 void PreferencesWindow::on_tproxyGroupBox_toggled(bool arg1)

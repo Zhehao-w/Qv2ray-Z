@@ -54,16 +54,27 @@ namespace Qv2ray::base::config
 
     struct QvConfig_Connection
     {
+        enum RoutingMode
+        {
+            GlobalProxy = 0,
+            BypassMainlandChina = 1,
+            Direct = 2,
+            Custom = 3
+        };
+
+        // This is a presentation preference. The established flags below remain
+        // authoritative, which keeps old configurations and group overrides valid.
+        int routingMode = BypassMainlandChina;
         bool enableProxy = true;
         bool bypassCN = true;
         bool bypassBT = false;
         bool bypassLAN = true;
         bool v2rayFreedomDNS = false;
         bool dnsIntercept = false;
-        JSONSTRUCT_COMPARE(QvConfig_Connection, enableProxy, //
+        JSONSTRUCT_COMPARE(QvConfig_Connection, routingMode, enableProxy, //
                            bypassCN, bypassBT, bypassLAN,    //
                            v2rayFreedomDNS, dnsIntercept)
-        JSONSTRUCT_REGISTER(QvConfig_Connection, F(bypassCN, bypassBT, bypassLAN, enableProxy, v2rayFreedomDNS, dnsIntercept))
+        JSONSTRUCT_REGISTER(QvConfig_Connection, F(routingMode, bypassCN, bypassBT, bypassLAN, enableProxy, v2rayFreedomDNS, dnsIntercept))
     };
 
     struct QvConfig_SystemProxy

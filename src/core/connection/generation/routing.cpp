@@ -35,7 +35,10 @@ namespace Qv2ray::core::connection::generation::routing
     ROUTING GenerateRoutes(bool enableProxy, bool bypassCN, bool bypassLAN, const QString &outTag, const QvConfig_Route &routeConfig)
     {
         ROUTING root;
-        root.insert("domainStrategy", routeConfig.domainStrategy);
+        // IPIfNonMatch lets the CN preset fall back from geosite matching to
+        // geoip:cn. Never replace an explicit advanced strategy.
+        const auto domainStrategy = bypassCN && routeConfig.domainStrategy.isEmpty() ? "IPIfNonMatch" : routeConfig.domainStrategy;
+        root.insert("domainStrategy", domainStrategy);
         root.insert("domainMatcher", routeConfig.domainMatcher);
         //
         // For Rules list
