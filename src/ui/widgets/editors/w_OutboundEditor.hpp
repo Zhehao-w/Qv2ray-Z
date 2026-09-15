@@ -14,10 +14,11 @@ class OutboundEditor
 {
     Q_OBJECT
   public:
-    explicit OutboundEditor(const OUTBOUND &outboundEntry, QWidget *parent = nullptr);
+    explicit OutboundEditor(const OUTBOUND &outboundEntry, QWidget *parent = nullptr, const QString &displayName = {});
     ~OutboundEditor();
     OUTBOUND OpenEditor();
     QString GetFriendlyName();
+    QString GetDisplayName() const;
 
   private:
     explicit OutboundEditor(QWidget *parent = nullptr);
@@ -35,6 +36,7 @@ class OutboundEditor
 
   private:
     QString tag;
+    QLineEdit *nameTxt = nullptr;
     void reloadGUI();
     bool useForwardProxy;
     OUTBOUND generateConnectionJson();

@@ -25,6 +25,8 @@ namespace Qv2ray::ui::widgets::models
         ~ConnectionListHelper();
         void Sort(ConnectionInfoRole, Qt::SortOrder);
         void Filter(const QString &);
+        void SetGrouped(bool grouped);
+        bool IsGrouped() const { return groupedView; }
 
         inline QModelIndex GetConnectionPairIndex(const ConnectionGroupPair &id) const
         {
@@ -52,6 +54,9 @@ namespace Qv2ray::ui::widgets::models
         QHash<GroupId, QStandardItem *> groups;
         QHash<ConnectionGroupPair, QStandardItem *> pairs;
         QHash<ConnectionId, QList<QStandardItem *>> connections;
+        bool groupedView = true;
+        QString filterText;
+        void rebuild();
     };
 
 } // namespace Qv2ray::ui::widgets::models

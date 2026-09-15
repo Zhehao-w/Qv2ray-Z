@@ -54,6 +54,39 @@ ConnectionListHelper::ConnectionListHelper(QTreeView *view, QObject *parent) : Q
     connect(ConnectionManager, &QvConfigHandler::OnStatsAvailable, statsLambda);
 }
 
+void ConnectionListHelper::SetGrouped(bool grouped)
+{
+    if (groupedView == grouped && !pairs.isEmpty())
+        return;
+    groupedView = grouped;
+    rebuild();
+}
+
+void ConnectionListHelper::rebuild()
+{
+    model->clear();
+    groups.clear();
+    pairs.clear();
+    connections.clear();
+    QSet<ConnectionId> added;
+    for (const auto &group : ConnectionManager->AllGroups())
+    {
+        if (groupedView)
+            addGroupItem(group);
+        for (const auto &connection : ConnectionManager->GetConnections(group))
+        {
+            if (!groupedView && added.contains(connection))
+            {
+                pairs[{ connection, group }] = connections[connection].first();
+                continue;
+            }
+            addConnectionItem({ connection, group });
+            added.insert(connection);
+        }
+    }
+    Filter(filterText);
+}
+
 ConnectionListHelper::~ConnectionListHelper()
 {
     delete model;
@@ -67,19 +100,34 @@ void ConnectionListHelper::Sort(ConnectionInfoRole role, Qt::SortOrder order)
 
 void ConnectionListHelper::Filter(const QString &key)
 {
+    filterText = key;
+    if (!groupedView)
+    {
+        for (auto it = pairs.cbegin(); it != pairs.cend(); ++it)
+        {
+            const auto index = model->indexFromItem(it.value());
+            const auto widget = static_cast<ConnectionItemWidget *>(parentView->indexWidget(index));
+            parentView->setRowHidden(index.row(), index.parent(), !widget->NameMatched(key));
+        }
+        return;
+    }
     for (const auto &groupId : ConnectionManager->AllGroups())
     {
+        if (!groups.contains(groupId))
+            continue;
         const auto groupItem = model->indexFromItem(groups[groupId]);
-        bool isTotallyHide = true;
+        bool anyVisible = false;
         for (const auto &connectionId : ConnectionManager->GetConnections(groupId))
         {
+            if (!pairs.contains({ connectionId, groupId }))
+                continue;
             const auto connectionItem = model->indexFromItem(pairs[{ connectionId, groupId }]);
-            const auto willTotallyHide = static_cast<ConnectionItemWidget *>(parentView->indexWidget(connectionItem))->NameMatched(key);
-            parentView->setRowHidden(connectionItem.row(), connectionItem.parent(), !willTotallyHide);
-            isTotallyHide &= willTotallyHide;
+            const auto matches = static_cast<ConnectionItemWidget *>(parentView->indexWidget(connectionItem))->NameMatched(key);
+            parentView->setRowHidden(connectionItem.row(), connectionItem.parent(), !matches);
+            anyVisible |= matches;
         }
-        parentView->indexWidget(groupItem)->setHidden(isTotallyHide);
-        if (!isTotallyHide)
+        parentView->setRowHidden(groupItem.row(), groupItem.parent(), !anyVisible);
+        if (anyVisible && !key.isEmpty())
             parentView->expand(groupItem);
     }
 }
@@ -93,9 +141,15 @@ QStandardItem *ConnectionListHelper::addConnectionItem(const ConnectionGroupPair
     connectionItem->setData(NumericString(GetConnectionTotalData(id.connectionId)), ConnectionInfoRole::ROLE_DATA_USAGE);
     //
     // Find groups
-    const auto groupIndex = groups.contains(id.groupId) ? groups[id.groupId] : addGroupItem(id.groupId);
-    // Append into model
-    groupIndex->appendRow(connectionItem);
+    if (groupedView)
+    {
+        const auto groupIndex = groups.contains(id.groupId) ? groups[id.groupId] : addGroupItem(id.groupId);
+        groupIndex->appendRow(connectionItem);
+    }
+    else
+    {
+        model->appendRow(connectionItem);
+    }
     const auto connectionIndex = connectionItem->index();
     //
     auto widget = new ConnectionItemWidget(id, parentView);
@@ -126,11 +180,18 @@ QStandardItem *ConnectionListHelper::addGroupItem(const GroupId &groupId)
 
 void ConnectionListHelper::OnConnectionCreated(const ConnectionGroupPair &id, const QString &)
 {
-    addConnectionItem(id);
+    Q_UNUSED(id)
+    rebuild();
 }
 
 void ConnectionListHelper::OnConnectionDeleted(const ConnectionGroupPair &id)
 {
+    if (!groupedView)
+    {
+        Q_UNUSED(id)
+        rebuild();
+        return;
+    }
     auto item = pairs.take(id);
     const auto index = model->indexFromItem(item);
     if (!index.isValid())
@@ -141,16 +202,25 @@ void ConnectionListHelper::OnConnectionDeleted(const ConnectionGroupPair &id)
 
 void ConnectionListHelper::OnConnectionLinkedWithGroup(const ConnectionGroupPair &pairId)
 {
-    addConnectionItem(pairId);
+    Q_UNUSED(pairId)
+    rebuild();
 }
 
 void ConnectionListHelper::OnGroupCreated(const GroupId &id, const QString &)
 {
-    addGroupItem(id);
+    Q_UNUSED(id)
+    rebuild();
 }
 
 void ConnectionListHelper::OnGroupDeleted(const GroupId &id, const QList<ConnectionId> &connections)
 {
+    if (!groupedView)
+    {
+        Q_UNUSED(id)
+        Q_UNUSED(connections)
+        rebuild();
+        return;
+    }
     for (const auto &conn : connections)
     {
         const ConnectionGroupPair pair{ conn, id };

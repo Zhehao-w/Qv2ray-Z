@@ -9,6 +9,7 @@
 #include "ui_w_MainWindow.h"
 
 #include <QHostAddress>
+#include <QComboBox>
 #include <QMainWindow>
 #include <QMenu>
 
@@ -113,6 +114,7 @@ class MainWindow
     SpeedWidget *speedChartWidget;
     SyntaxHighlighter *vCoreLogHighlighter;
     ConnectionInfoWidget *infoWidget;
+    QComboBox *connectionViewCombo = nullptr;
     //
     // Declare Actions
 #define DECL_ACTION(parent, name) QAction *name = new QAction(parent)

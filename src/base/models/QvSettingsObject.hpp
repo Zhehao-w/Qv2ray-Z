@@ -53,7 +53,10 @@ namespace Qv2ray::base::config
         QString language = "en_US";
         QList<ConnectionGroupPair> recentConnections;
         Qv2rayConfig_Graph graphConfig;
-        bool quietMode = false;
+        // Routine tray notifications are opt-in for fresh configurations. A value
+        // explicitly stored by an existing user is still loaded unchanged.
+        bool quietMode = true;
+        bool groupedConnectionView = false;
         bool useDarkTheme = false;
         bool useGlyphTrayIcon = true;
         bool useDarkTrayIcon = false;
@@ -62,9 +65,9 @@ namespace Qv2ray::base::config
         bool useOldShareLinkFormat = false;
         bool startMinimized = true;
         bool exitByCloseEvent = false;
-        JSONSTRUCT_COMPARE(Qv2rayConfig_UI, theme, language, quietMode, graphConfig, useDarkTheme, useDarkTrayIcon, useGlyphTrayIcon, maximumLogLines,
+        JSONSTRUCT_COMPARE(Qv2rayConfig_UI, theme, language, quietMode, groupedConnectionView, graphConfig, useDarkTheme, useDarkTrayIcon, useGlyphTrayIcon, maximumLogLines,
                            maxJumpListCount, recentConnections, useOldShareLinkFormat, startMinimized, exitByCloseEvent)
-        JSONSTRUCT_REGISTER(Qv2rayConfig_UI, F(theme, language, quietMode, graphConfig, useDarkTheme, useDarkTrayIcon, useGlyphTrayIcon,
+        JSONSTRUCT_REGISTER(Qv2rayConfig_UI, F(theme, language, quietMode, groupedConnectionView, graphConfig, useDarkTheme, useDarkTrayIcon, useGlyphTrayIcon,
                                                maximumLogLines, maxJumpListCount, recentConnections, useOldShareLinkFormat, startMinimized, exitByCloseEvent))
     };
 
