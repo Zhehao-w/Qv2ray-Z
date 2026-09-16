@@ -5,36 +5,123 @@
 [![GitHub release](https://img.shields.io/github/v/release/Zhehao-w/Qv2ray-Z?display_name=tag)](https://github.com/Zhehao-w/Qv2ray-Z/releases)
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-Qv2ray-Z is a community fork of the discontinued [Qv2ray](https://github.com/Qv2ray/Qv2ray) project. Upstream Qv2ray ended at version 2.7.0; Qv2ray-Z continues from that codebase and modernizes the client for current official Xray-core releases.
+Qv2ray-Z is a personal continuation of the discontinued [Qv2ray](https://github.com/Qv2ray/Qv2ray) desktop client, based on the upstream Qv2ray 2.7.0 codebase.
 
-Windows x64 is currently the primary validated release platform. Linux and macOS build support remains in the source tree, but Qv2ray-Z does not currently claim release-tested packages for those platforms.
+The project is maintained primarily for personal Windows use, with a focus on keeping the original Qt desktop experience compatible with modern official Xray-core releases.
 
-## Supported Xray features
+## Current stable release
 
-- VLESS over TCP with TLS
-- VLESS TCP REALITY
-- `xtls-rprx-vision` and `xtls-rprx-vision-udp443` flows
-- REALITY ML-DSA-65 verification (`pqv`)
+**Qv2ray-Z v2.7.0-z2**
+
+Windows x64 is the primary supported and tested platform.
+
+Release packages include:
+
+- Qv2ray-Z
+- Qt runtime and required plugins
+- Current official Xray-core Windows x64 build
+- `geoip.dat`
+- `geosite.dat`
+
+See the [Releases](../../releases) page for packaged builds and SHA256 checksums.
+
+## Modern Xray support
+
+Qv2ray-Z currently supports the modern Xray configurations used by this project:
+
+- VLESS over TCP / RAW
+- TLS
+- REALITY
+- `xtls-rprx-vision`
+- `xtls-rprx-vision-udp443`
+- REALITY ML-DSA-65 verification (`pqv` / `mldsa65Verify`)
 - Modern VLESS share-link import and export
-- A current official Xray-core bundled in the Windows package
-- Automatic discovery of the bundled Xray executable
+- Bundled Xray executable discovery
+- Validation against current official Xray-core releases
 
-Legacy XTLS modes that are unsupported by current Xray-core have been removed and are no longer exposed by Qv2ray-Z.
+Unsupported legacy XTLS modes from the original Qv2ray codebase have been removed from normal configuration generation.
 
-## Releases
+## Desktop improvements
 
-Release builds and checksums are published on the [Qv2ray-Z releases page](https://github.com/Zhehao-w/Qv2ray-Z/releases). The Windows ZIP contains Qv2ray-Z, the required Qt runtime and plugins, and an official Xray-core build with its GeoIP and GeoSite data files.
+Compared with the original Qv2ray 2.7.0 interface, Qv2ray-Z includes several usability improvements:
 
-## Building and testing
+- Simplified routing modes:
+  - Global Proxy
+  - Bypass Mainland China
+  - Direct
+  - Custom
+- Improved Mainland China routing behavior
+- Flat connection list with optional Grouped view
+- Clear separation between connection **Name** and internal Xray **Outbound Tag**
+- Cleaner preferences
+- Reduced legacy / obsolete options
+- Quiet connection and proxy notifications by default for fresh configurations
+- Existing realtime speed chart and traffic statistics retained
 
-Qv2ray-Z retains Qv2ray's CMake build. The validated Windows recipe uses Qt 5.15.2, MSVC 14.2, and the dependency setup in `libs/setup-libs.sh`; see the [Windows package workflow](.github/workflows/windows-vless-vision-package.yml) for the exact steps. Protocol serialization tests and Xray compatibility fixtures live under `test/` and `.github/xray-fixtures/`.
+## Routing
+
+The simplified routing presets are built on top of the existing Qv2ray routing model.
+
+For example, **Bypass Mainland China** uses:
+
+- private / LAN traffic → Direct
+- `geoip:cn` → Direct
+- `geosite:cn` → Direct
+- other traffic → Proxy
+
+Explicit custom routing rules retain higher priority.
+
+Advanced routing controls remain available when needed.
+
+## Private repository behavior
+
+This repository is maintained for personal use.
+
+The built-in GitHub release update checker is disabled by default because the repository and releases are private.
+
+Release builds are produced through GitHub Actions and downloaded manually from the private Releases page.
+
+## Building
+
+The primary validated Windows build uses:
+
+- Windows Server 2022
+- Qt 5.15.2
+- MSVC 14.2
+- CMake / Ninja
+
+The exact build and packaging process is defined in:
+
+- `.github/workflows/windows-vless-vision-package.yml`
+- `.github/workflows/windows-release.yml`
+
+The Windows package automatically downloads and bundles the latest official stable Xray-core release available at build time.
+
+## Validation
+
+The repository includes automated checks for:
+
+- TLS + Vision
+- REALITY + Vision
+- REALITY ML-DSA-65 verification
+- VLESS share-link serialization
+- Current Xray-core configuration compatibility
+- Windows Qt 5.15.2 packaging
+
+See:
+
+- `.github/workflows/vless-vision-validation.yml`
+- `.github/xray-fixtures/`
+- `test/`
 
 ## Based on Qv2ray
 
-Original project: <https://github.com/Qv2ray/Qv2ray>
+Original project:
 
-Qv2ray-Z continues from the upstream Qv2ray 2.7.0 codebase. Original copyright notices and project history are retained. Qv2ray-Z is free software licensed under the [GNU General Public License version 3](LICENSE), and its builds continue to include the existing third-party attribution.
+https://github.com/Qv2ray/Qv2ray
 
-## Contributing
+Qv2ray-Z continues from the upstream Qv2ray 2.7.0 codebase.
 
-Bug reports and focused contributions are welcome in the [Qv2ray-Z repository](https://github.com/Zhehao-w/Qv2ray-Z). Please include the Qv2ray-Z version, operating system, Qt version, and relevant logs when reporting a problem.
+Original copyright notices, attribution, project history, and third-party notices are retained.
+
+Qv2ray-Z remains licensed under the [GNU General Public License version 3](LICENSE).
