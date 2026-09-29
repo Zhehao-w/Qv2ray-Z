@@ -140,7 +140,19 @@ namespace Qv2ray::core::handler
         const auto connectionsPath = QV2RAY_CONFIG_DIR + "connections.json";
         const auto groupsPath = QV2RAY_CONFIG_DIR + "groups.json";
         const bool connectionsExisted = QFile::exists(connectionsPath);
-        const auto oldConnections = connectionsExisted ? StringFromFile(connectionsPath) : QString{};
+        QString oldConnections;
+        if (connectionsExisted)
+        {
+            QFile oldConnectionsFile(connectionsPath);
+            if (!oldConnectionsFile.open(QIODevice::ReadOnly))
+            {
+                metadataPersistenceEnabled = false;
+                LOG("Refusing to update connection metadata because the existing connections.json cannot be backed up: " +
+                    oldConnectionsFile.errorString());
+                return false;
+            }
+            oldConnections = QString::fromUtf8(oldConnectionsFile.readAll());
+        }
 
         if (!StringToFile(JsonToString(connectionsObject), connectionsPath))
         {
@@ -151,9 +163,13 @@ namespace Qv2ray::core::handler
         if (!StringToFile(JsonToString(groupObject), groupsPath))
         {
             LOG("Failed to save groups.json; rolling back connections.json.");
-            const bool rolledBack = connectionsExisted ? StringToFile(oldConnections, connectionsPath) : QFile::remove(connectionsPath);
-            if (!rolledBack && (connectionsExisted || QFile::exists(connectionsPath)))
-                LOG("CRITICAL: failed to roll back connections.json after groups.json write failure.");
+            const bool rolledBack = connectionsExisted ? StringToFile(oldConnections, connectionsPath)
+                                                       : (!QFile::exists(connectionsPath) || QFile::remove(connectionsPath));
+            if (!rolledBack)
+            {
+                metadataPersistenceEnabled = false;
+                LOG("CRITICAL: failed to roll back connections.json after groups.json write failure; metadata persistence is disabled for this session.");
+            }
             return false;
         }
 
