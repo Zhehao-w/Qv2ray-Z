@@ -58,8 +58,8 @@ TEST_CASE("Subscription membership preserves unmatched nodes when removal is dec
     const ConnectionId c{ "c" };
 
     const auto delta = BuildSubscriptionMembership({ a, b }, { a, c }, false);
-    REQUIRE(delta.finalConnections == QList<ConnectionId>{ a, c, b });
-    REQUIRE(delta.added == QList<ConnectionId>{ c });
+    REQUIRE((delta.finalConnections == QList<ConnectionId>{ a, c, b }));
+    REQUIRE((delta.added == QList<ConnectionId>{ c }));
     REQUIRE(delta.removed.isEmpty());
 }
 
@@ -70,7 +70,7 @@ TEST_CASE("Subscription membership removes only explicitly confirmed unmatched n
     const ConnectionId c{ "c" };
 
     const auto delta = BuildSubscriptionMembership({ a, b }, { a, c }, true);
-    REQUIRE(delta.finalConnections == QList<ConnectionId>{ a, c });
-    REQUIRE(delta.added == QList<ConnectionId>{ c });
-    REQUIRE(delta.removed == QList<ConnectionId>{ b });
+    REQUIRE((delta.finalConnections == QList<ConnectionId>{ a, c }));
+    REQUIRE((delta.added == QList<ConnectionId>{ c }));
+    REQUIRE((delta.removed == QList<ConnectionId>{ b }));
 }
