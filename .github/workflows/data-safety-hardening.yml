@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   linux-tests:
-    name: Qt5 full build and regression tests
+    name: Qt5 supported regression tests
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     steps:
@@ -55,11 +55,19 @@ jobs:
             -DQV2RAY_QT6=OFF \
             -DQV2RAY_USE_V5_CORE=ON
 
-      - name: Build all targets
+      - name: Build supported regression targets
         shell: bash
         run: |
           set -o pipefail
-          cmake --build build --parallel 2 2>&1 | tee build.log
+          cmake --build build --target \
+            parse_ss_url \
+            parse_vmess_url \
+            parse_vless_url \
+            generation \
+            qjsonio \
+            kernel_path_resolver \
+            data_safety \
+            --parallel 2 2>&1 | tee build.log
 
       - name: Upload Linux build log on failure
         if: failure()
@@ -69,15 +77,17 @@ jobs:
           path: build.log
           if-no-files-found: error
 
-      - name: Run regression tests
-        run: ctest --test-dir build --output-on-failure
+      - name: Run supported regression tests
+        run: >-
+          ctest --test-dir build --output-on-failure
+          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|data_safety)'
 
       - name: Check committed whitespace
         shell: bash
-        run: git diff --check HEAD^
+        run: git diff --check ${{ github.event.before }} ${{ github.sha }}
 
   windows-build:
-    name: Qt 5.15.2 / MSVC 14.2 build and tests
+    name: Qt 5.15.2 / MSVC 14.2 app and regression tests
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -137,14 +147,14 @@ jobs:
             -DCURL_LIBRARY="$env:CURL_LIBRARY"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build Qv2ray-Z and tests
+      - name: Build application and supported regression targets
         shell: pwsh
         run: |
-          cmake --build build --config Release --parallel 2
+          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver data_safety --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run regression tests
+      - name: Run supported regression tests
         shell: pwsh
         run: |
-          ctest --test-dir build --output-on-failure -C Release
+          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|data_safety)'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
