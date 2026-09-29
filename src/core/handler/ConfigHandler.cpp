@@ -931,6 +931,7 @@ namespace Qv2ray::core::handler
             return QV2RAY_CONNECTIONS_DIR + connectionId.toString() + QV2RAY_CONFIG_FILE_EXTENSION;
         };
         const auto rollbackRootWrites = [&]() {
+            bool rollbackFailed = false;
             for (auto i = writtenPlans.crbegin(); i != writtenPlans.crend(); ++i)
             {
                 const auto &plan = plans[*i];
@@ -938,12 +939,21 @@ namespace Qv2ray::core::handler
                 if (plan.isNew)
                 {
                     if (QFile::exists(path) && !QFile::remove(path))
+                    {
+                        rollbackFailed = true;
                         LOG("Failed to remove staged subscription connection during rollback: " + path);
+                    }
                 }
                 else if (!StringToFile(JsonToString(plan.oldRoot), path))
                 {
+                    rollbackFailed = true;
                     LOG("CRITICAL: failed to restore connection config during subscription rollback: " + plan.id.toString());
                 }
+            }
+            if (rollbackFailed)
+            {
+                metadataPersistenceEnabled = false;
+                LOG("CRITICAL: subscription rollback was incomplete; metadata persistence is disabled for this session.");
             }
         };
 
