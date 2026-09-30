@@ -508,8 +508,6 @@ namespace Qv2ray::components::proxy
             return unchanged;
         }
 
-        bool ClearOwnedWindowsSystemProxy();
-
         bool SetOwnedWindowsSystemProxy(const QString &proxyServer)
         {
             if (!LoadProxyOwnership())
@@ -526,6 +524,18 @@ namespace Qv2ray::components::proxy
                 if (!VerifyExistingOwnership())
                 {
                     LOG("System proxy ownership could not be verified unchanged; refusing to reassert Qv2ray proxy settings automatically.");
+                    return false;
+                }
+
+                QStringList currentTargets;
+                if (!EnumerateWinInetProxyTargets(&currentTargets))
+                    return false;
+                const auto ownershipComplete =
+                    currentTargets.size() == proxyOwnership.expected.size() &&
+                    std::all_of(currentTargets.cbegin(), currentTargets.cend(), [&](const QString &target) { return proxyOwnership.expected.contains(target); });
+                if (!ownershipComplete)
+                {
+                    LOG("Qv2ray only owns a subset of the current Windows proxy targets; refusing to report the system proxy as configured.");
                     return false;
                 }
 
@@ -679,9 +689,6 @@ namespace Qv2ray::components::proxy
         if (!LoadProxyOwnership())
             return false;
 
-        if (!proxyTakeoverLatch.IsBlocked())
-            return true;
-
         if (proxyOwnership.active() && !ClearOwnedWindowsSystemProxy())
         {
             LOG("Explicit Windows system proxy enable cannot proceed until remaining owned targets are resolved safely.");
@@ -689,7 +696,7 @@ namespace Qv2ray::components::proxy
         }
 
         proxyTakeoverLatch.AcknowledgeExplicitEnable();
-        LOG("Explicit Windows system proxy enable acknowledged; automatic acquisition is allowed again for this session.");
+        LOG("Explicit Windows system proxy enable acknowledged; prior ownership is resolved and automatic acquisition is allowed again for this session.");
 #endif
         return true;
     }
