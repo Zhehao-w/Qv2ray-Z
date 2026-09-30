@@ -16,7 +16,6 @@
 #include "utils/QvHelpers.hpp"
 
 #include <csignal>
-#include <cstdlib>
 
 #ifndef Q_OS_WIN
 #include <QSocketNotifier>
@@ -31,20 +30,16 @@ char **globalArgv;
 
 namespace
 {
+#ifndef Q_OS_WIN
+    constexpr char fatalSignalMessage[] = "Qv2ray-Z: fatal signal received; terminating without unsafe crash handling.\n";
+    int controlSignalPipe[2] = { -1, -1 };
+
     void fatalSignalHandler(int signum) noexcept
     {
-#ifndef Q_OS_WIN
-        static constexpr char message[] = "Qv2ray-Z: fatal signal received; terminating without unsafe crash handling.\n";
-        const auto ignored = ::write(STDERR_FILENO, message, sizeof(message) - 1);
+        const auto ignored = ::write(STDERR_FILENO, fatalSignalMessage, sizeof(fatalSignalMessage) - 1);
         Q_UNUSED(ignored)
         ::_exit(128 + signum);
-#else
-        std::_Exit(128 + signum);
-#endif
     }
-
-#ifndef Q_OS_WIN
-    int controlSignalPipe[2] = { -1, -1 };
 
     void controlSignalHandler(int signum) noexcept
     {
@@ -134,10 +129,9 @@ namespace
 #else
     bool installFatalSignalHandlers()
     {
-        bool success = true;
-        for (const auto signum : Qv2ray::common::diagnostics::FatalSignals())
-            success = std::signal(signum, fatalSignalHandler) != SIG_ERR && success;
-        return success;
+        // Keep the native Windows/CRT exception path intact so Windows Error
+        // Reporting and system crash-dump policy can observe fatal failures.
+        return true;
     }
 #endif
 } // namespace
@@ -177,9 +171,8 @@ int main(int argc, char *argv[])
     globalArgc = argc;
     globalArgv = argv;
 
-    // Fatal signal handlers must remain async-signal-safe. They only write a
-    // constant message on POSIX and terminate; all Qt/application work is kept
-    // outside signal context.
+    // POSIX fatal signal handlers perform only async-signal-safe work. Windows
+    // deliberately retains the native exception/diagnostic path instead.
     installFatalSignalHandlers();
 
     // This line must be called before any other ones, since we are using these
