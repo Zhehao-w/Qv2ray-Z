@@ -15,6 +15,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <algorithm>
 #include <vector>
 #endif
 
@@ -174,6 +175,7 @@ namespace Qv2ray::components::proxy
             {
                 if (!value.isObject())
                 {
+                    LOG("Windows proxy recovery record contains a non-object entry; refusing unsafe recovery.");
                     proxyOwnershipBlocked = true;
                     return false;
                 }
@@ -182,6 +184,7 @@ namespace Qv2ray::components::proxy
                 if (!entry[QStringLiteral("target")].isString() || !entry[QStringLiteral("original")].isObject() ||
                     !entry[QStringLiteral("expected")].isObject())
                 {
+                    LOG("Windows proxy recovery record contains an incomplete entry; refusing unsafe recovery.");
                     proxyOwnershipBlocked = true;
                     return false;
                 }
@@ -399,31 +402,61 @@ namespace Qv2ray::components::proxy
             return true;
         }
 
-        bool RollBackCurrentSet(const QStringList &modifiedTargets, const QMap<QString, SystemProxyState> &beforeStates,
-                                const WinInetProxyOwnership &previousOwnership)
+        bool ResolveFailedSet(const QMap<QString, SystemProxyState> &beforeStates)
         {
-            bool rollbackSucceeded = true;
-            for (const auto &target : modifiedTargets)
+            WinInetProxyOwnership unresolved;
+            bool changed = false;
+
+            for (const auto &target : proxyOwnership.expected.keys())
             {
-                if (!RestoreWinInetProxyState(target, beforeStates[target]))
-                    rollbackSucceeded = false;
+                SystemProxyState current;
+                if (!QueryWinInetProxyState(target, &current))
+                {
+                    unresolved.original[target] = proxyOwnership.original[target];
+                    unresolved.expected[target] = proxyOwnership.expected[target];
+                    continue;
+                }
+
+                if (beforeStates.contains(target) && current == beforeStates[target])
+                    continue;
+
+                if (!safety::IsStillOwned(proxyOwnership.expected[target], current))
+                {
+                    LOG("Proxy state changed outside Qv2ray during a failed set for " + ProxyTargetName(target) +
+                        "; not overwriting the current value.");
+                    continue;
+                }
+
+                const auto original = proxyOwnership.original[target];
+                if (!RestoreWinInetProxyState(target, original))
+                {
+                    unresolved.original[target] = original;
+                    unresolved.expected[target] = proxyOwnership.expected[target];
+                    continue;
+                }
+
+                changed = true;
+                SystemProxyState restored;
+                if (!QueryWinInetProxyState(target, &restored) || restored != original)
+                {
+                    // Keep ownership only if we can still prove the target contains
+                    // Qv2ray's value. Otherwise leave the observed value untouched.
+                    if (QueryWinInetProxyState(target, &restored) && safety::IsStillOwned(proxyOwnership.expected[target], restored))
+                    {
+                        unresolved.original[target] = original;
+                        unresolved.expected[target] = proxyOwnership.expected[target];
+                    }
+                }
             }
 
-            if (!modifiedTargets.isEmpty())
+            if (changed)
                 NotifyWinInetProxyChanged();
 
-            if (rollbackSucceeded)
-                proxyOwnership = previousOwnership;
-
-            // If rollback was incomplete, keep the pre-write recovery record in
-            // memory and on disk. A later recovery only restores targets whose
-            // current state still exactly matches Qv2ray's expected state.
-            if (!PersistProxyOwnership())
-                LOG("Windows proxy recovery record could not be updated after rollback.");
-
-            if (!rollbackSucceeded)
-                LOG("System proxy rollback was incomplete; persisted ownership will be resolved conservatively on the next clear/recovery.");
-            return rollbackSucceeded;
+            proxyOwnership = unresolved;
+            const auto persisted = PersistProxyOwnership();
+            if (!persisted)
+                LOG("Windows proxy recovery record could not be updated after a failed set.");
+            return !proxyOwnership.active() && persisted;
         }
 
         bool VerifyExistingOwnership()
@@ -494,23 +527,20 @@ namespace Qv2ray::components::proxy
                 intendedOwnership.expected[target] = safety::MakeOwnedManualProxyState(beforeStates[target], requiredFlags, proxyServer);
             }
 
-            const auto previousOwnership = proxyOwnership;
             proxyOwnership = intendedOwnership;
             if (!PersistProxyOwnership())
             {
-                proxyOwnership = previousOwnership;
+                proxyOwnership = {};
                 return false;
             }
 
-            QStringList modifiedTargets;
             for (const auto &target : targets)
             {
                 if (!ApplyOwnedManualProxyState(target, proxyOwnership.expected[target]))
                 {
-                    RollBackCurrentSet(modifiedTargets, beforeStates, previousOwnership);
+                    ResolveFailedSet(beforeStates);
                     return false;
                 }
-                modifiedTargets.append(target);
             }
             NotifyWinInetProxyChanged();
 
@@ -519,8 +549,8 @@ namespace Qv2ray::components::proxy
                 SystemProxyState actual;
                 if (!QueryWinInetProxyState(target, &actual) || !safety::IsStillOwned(proxyOwnership.expected[target], actual))
                 {
-                    LOG("Windows proxy write could not be verified for " + ProxyTargetName(target) + "; rolling back this set operation.");
-                    RollBackCurrentSet(modifiedTargets, beforeStates, previousOwnership);
+                    LOG("Windows proxy write could not be verified for " + ProxyTargetName(target) + "; resolving only targets still owned by Qv2ray.");
+                    ResolveFailedSet(beforeStates);
                     return false;
                 }
             }
@@ -592,7 +622,7 @@ namespace Qv2ray::components::proxy
         if (!LoadProxyOwnership())
             return false;
         if (!proxyOwnership.active())
-            return true;
+            return PersistProxyOwnership();
 
         LOG("Recovering Windows system proxy ownership left by a previous Qv2ray session.");
         return ClearOwnedWindowsSystemProxy();
