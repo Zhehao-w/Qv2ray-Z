@@ -1,0 +1,78 @@
+#include "utils/DiagnosticSafety.hpp"
+
+#include <QCoreApplication>
+#include <QJsonDocument>
+
+#include <csignal>
+
+#define CATCH_CONFIG_RUNNER
+#include "catch.hpp"
+
+using namespace Qv2ray::common::diagnostics;
+using Qv2ray::base::config::Qv2rayConfigObject;
+using Qv2ray::base::config::Qv2rayConfig_Network;
+
+int main(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
+    QCoreApplication::setApplicationVersion(QStringLiteral("diagnostic-test"));
+    return Catch::Session().run(argc, argv);
+}
+
+TEST_CASE("Diagnostic reports contain only allowlisted configuration metadata")
+{
+    Qv2rayConfigObject config;
+    const QString sentinel = QStringLiteral("SUPER-SECRET-DIAGNOSTIC-SENTINEL");
+
+    config.networkConfig.proxyType = Qv2rayConfig_Network::QVPROXY_CUSTOM;
+    config.networkConfig.address = sentinel;
+    config.networkConfig.userAgent = sentinel;
+    config.networkConfig.latencyRealPingTestURL = sentinel;
+    config.inboundConfig.socksSettings.account.user = sentinel;
+    config.inboundConfig.socksSettings.account.pass = sentinel;
+    config.inboundConfig.httpSettings.account.user = sentinel;
+    config.inboundConfig.httpSettings.account.pass = sentinel;
+    config.kernelConfig.v2CorePath_linux = sentinel;
+    config.kernelConfig.v2AssetsPath_linux = sentinel;
+    config.kernelConfig.v2CorePath_macx = sentinel;
+    config.kernelConfig.v2AssetsPath_macx = sentinel;
+    config.kernelConfig.v2CorePath_win = sentinel;
+    config.kernelConfig.v2AssetsPath_win = sentinel;
+
+    const auto info = BuildSafeDiagnosticInfo(&config, 2, 3);
+    const auto serialized = QJsonDocument(info).toJson(QJsonDocument::Compact);
+
+    REQUIRE_FALSE(serialized.contains(sentinel.toUtf8()));
+    REQUIRE(info.value(QStringLiteral("configLoaded")).toBool());
+    REQUIRE(info.value(QStringLiteral("networkProxyMode")).toInt() == static_cast<int>(Qv2rayConfig_Network::QVPROXY_CUSTOM));
+    REQUIRE(info.value(QStringLiteral("activeKernelCount")).toInt() == 2);
+    REQUIRE(info.value(QStringLiteral("pluginCount")).toInt() == 3);
+}
+
+TEST_CASE("HTTP header diagnostics redact values by default")
+{
+    REQUIRE(SafeHttpHeaderValueForLog("Authorization", "Bearer secret") == QByteArray("<redacted>"));
+    REQUIRE(SafeHttpHeaderValueForLog("Proxy-Authorization", "Basic secret") == QByteArray("<redacted>"));
+    REQUIRE(SafeHttpHeaderValueForLog("Cookie", "session=secret") == QByteArray("<redacted>"));
+    REQUIRE(SafeHttpHeaderValueForLog("Host", "private.example") == QByteArray("<redacted>"));
+    REQUIRE(SafeHttpHeaderValueForLog("User-Agent", "Qv2ray-Z test") == QByteArray("Qv2ray-Z test"));
+}
+
+TEST_CASE("Signal classification excludes uncatchable signals and queues control actions")
+{
+    const auto fatalSignals = FatalSignals();
+    REQUIRE(fatalSignals.contains(SIGABRT));
+    REQUIRE(fatalSignals.contains(SIGSEGV));
+
+#ifndef Q_OS_WIN
+    const auto controlSignals = ControlSignals();
+    REQUIRE(controlSignals.contains(SIGTERM));
+    REQUIRE(controlSignals.contains(SIGHUP));
+    REQUIRE(controlSignals.contains(SIGUSR1));
+    REQUIRE(controlSignals.contains(SIGUSR2));
+    REQUIRE_FALSE(fatalSignals.contains(SIGKILL));
+    REQUIRE_FALSE(controlSignals.contains(SIGKILL));
+#else
+    REQUIRE(ControlSignals().isEmpty());
+#endif
+}
