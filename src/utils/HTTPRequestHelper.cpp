@@ -285,9 +285,11 @@ namespace Qv2ray::common::network
     void NetworkRequestHelper::AsyncHttpGet(const QString &url, std::function<void(const QByteArray &)> funcPtr)
     {
         AsyncHttpGetResult(url, nullptr, [funcPtr = std::move(funcPtr)](const NetworkRequestResult &result) {
-            // Preserve legacy completion semantics without exposing HTTP/network error
-            // bodies to callers that still accept only a QByteArray.
-            funcPtr(result.ok() ? result.body : QByteArray{});
+            // Legacy callbacks receive only successful response bodies. Suppressing
+            // failure callbacks keeps error pages out of parsers that cannot inspect
+            // transport status and avoids reporting failed work as completed.
+            if (result.ok())
+                funcPtr(result.body);
         });
     }
 
