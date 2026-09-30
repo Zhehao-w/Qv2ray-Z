@@ -12,6 +12,7 @@
 #include <QtGlobal>
 
 #include <memory>
+#include <utility>
 
 namespace Qv2ray::components::proxy::safety
 {
@@ -95,15 +96,28 @@ namespace Qv2ray::components::proxy::safety
     {
         if (basePath.isEmpty())
             return {};
-        return QDir(basePath).filePath(QStringLiteral("proxy-safety"));
+        return QDir(basePath).filePath(QStringLiteral("Qv2ray-Z/proxy-safety"));
     }
 
     inline QString ProxySafetyDirectory()
     {
-        const auto path = ProxySafetyDirectoryForBase(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation));
+        const auto path = ProxySafetyDirectoryForBase(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation));
         if (path.isEmpty() || !QDir().mkpath(path))
             return {};
         return path;
+    }
+
+    inline bool ConfigPathsEquivalent(const QString &left, const QString &right)
+    {
+        if (left.isEmpty() || right.isEmpty())
+            return left == right;
+        const auto normalizedLeft = QDir::cleanPath(QDir::fromNativeSeparators(left));
+        const auto normalizedRight = QDir::cleanPath(QDir::fromNativeSeparators(right));
+#ifdef Q_OS_WIN
+        return normalizedLeft.compare(normalizedRight, Qt::CaseInsensitive) == 0;
+#else
+        return normalizedLeft == normalizedRight;
+#endif
     }
 
     inline QString ProxyRecoveryRecordPathForConfig(const QString &configPath)
