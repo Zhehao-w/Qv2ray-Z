@@ -110,7 +110,15 @@ void MainWindow::MWSetSystemProxy()
         LOG("ProxyAddress: " + proxyAddress);
         LOG("HTTP Port: " + QSTRN(httpPort));
         LOG("SOCKS Port: " + QSTRN(socksPort));
-        if (SetSystemProxy(proxyAddress, httpPort, socksPort))
+
+        auto proxySet = SetSystemProxy(proxyAddress, httpPort, socksPort);
+        if (!proxySet && explicitEnable && AllowSystemProxyReacquire())
+        {
+            LOG("Retrying explicit system proxy enable after resolving a newly detected external takeover.");
+            proxySet = SetSystemProxy(proxyAddress, httpPort, socksPort);
+        }
+
+        if (proxySet)
         {
             qvAppTrayIcon->setIcon(Q_TRAYICON("tray-systemproxy"));
             if (!GlobalConfig.uiConfig.quietMode)
