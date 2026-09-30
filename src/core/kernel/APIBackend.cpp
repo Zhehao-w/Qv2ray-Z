@@ -101,10 +101,17 @@ namespace Qv2ray::core::kernel
             apiFailCounter = 0;
         }
 
-        void Shutdown()
+        void Shutdown(QThread *ownerThread)
         {
+            Q_ASSERT(QThread::currentThread() == thread());
+            auto *workerThread = thread();
             Stop();
-            QThread::currentThread()->quit();
+
+            // Return QObject ownership to the facade thread before stopping the
+            // worker event loop. The facade can then delete both objects after
+            // wait() without mixing deleteLater with synchronous destruction.
+            moveToThread(ownerThread);
+            workerThread->quit();
         }
 
         void DetachFacade()
@@ -225,8 +232,6 @@ namespace Qv2ray::core::kernel
         workThread = new QThread();
         backend = new APIWorkerBackend(this);
         backend->moveToThread(workThread);
-        connect(workThread, &QThread::finished, backend, &QObject::deleteLater);
-        connect(workThread, &QThread::finished, workThread, &QObject::deleteLater);
         connect(workThread, &QThread::finished, [] { LOG("API thread stopped"); });
         workThread->start();
         DEBUG("API Worker initialised.");
@@ -237,24 +242,25 @@ namespace Qv2ray::core::kernel
         if (backend == nullptr || workThread == nullptr)
             return;
 
+        auto *ownerThread = thread();
         backend->RequestStop();
         backend->DetachFacade();
-        QMetaObject::invokeMethod(backend, [backend = backend]() { backend->Shutdown(); }, Qt::QueuedConnection);
+        const bool shutdownQueued = QMetaObject::invokeMethod(
+            backend, [backend = backend, ownerThread]() { backend->Shutdown(ownerThread); }, Qt::QueuedConnection);
 
-        if (workThread->wait(API_THREAD_SHUTDOWN_TIMEOUT_MS))
+        if (shutdownQueued && workThread->wait(API_THREAD_SHUTDOWN_TIMEOUT_MS))
         {
-            // The finished->deleteLater event targets the current thread and
-            // cannot run while this destructor is blocked in wait(). Deleting
-            // here removes that pending event safely.
+            Q_ASSERT(backend->thread() == ownerThread);
+            delete backend;
             delete workThread;
         }
         else
         {
             // RequestStop() cancels the active gRPC context and every call has
-            // a deadline. Do not reintroduce an unbounded wait here: the
-            // queued shutdown remains responsible for finishing the detached
-            // backend, and the thread deletes itself via finished->deleteLater.
-            LOG("API thread did not stop within the shutdown deadline; detached shutdown will continue without facade callbacks.");
+            // a deadline. If a pathological runtime still cannot stop within
+            // the bound, deliberately retain the detached worker objects
+            // rather than hanging forever or deleting a live QThread.
+            LOG("API thread did not stop within the shutdown deadline; detached worker objects are retained for process cleanup.");
         }
 
         backend = nullptr;
