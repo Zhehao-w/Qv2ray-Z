@@ -116,7 +116,16 @@ namespace Qv2ray::core::handler::data_safety
                     *error = QStringLiteral("Cannot read %1: %2").arg(path, file.errorString());
                 return false;
             }
-            *data = file.readAll();
+
+            const auto bytes = file.readAll();
+            if (file.error() != QFileDevice::NoError)
+            {
+                if (error)
+                    *error = QStringLiteral("Incomplete read for %1: %2").arg(path, file.errorString());
+                return false;
+            }
+
+            *data = bytes;
             return true;
         }
 
