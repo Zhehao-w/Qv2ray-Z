@@ -198,18 +198,15 @@ TEST_CASE("Oversized HTTP responses are rejected without exposing the body")
     REQUIRE(result.body.isEmpty());
 }
 
-TEST_CASE("Connection failures are distinct from HTTP failures")
+TEST_CASE("Transport failures are distinct from HTTP failures")
 {
-    LocalHttpServer server;
-    const auto port = server.port();
-    server.stop();
-
     NetworkRequestOptions options;
     options.timeoutMs = 500;
-    const auto result = NetworkRequestHelper::HttpGetResult(QUrl(QString("http://127.0.0.1:%1/unreachable").arg(port)), options);
+    const auto result = NetworkRequestHelper::HttpGetResult(QUrl(QStringLiteral("qv2ray-unsupported://example.invalid/")), options);
     REQUIRE_FALSE(result.ok());
     REQUIRE(result.status == NetworkRequestStatus::NetworkError);
     REQUIRE(result.httpStatus == 0);
+    REQUIRE(result.networkError != QNetworkReply::NoError);
 }
 
 TEST_CASE("Async request completes with structured success")
