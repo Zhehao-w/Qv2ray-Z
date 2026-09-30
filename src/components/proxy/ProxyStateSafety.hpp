@@ -1,12 +1,23 @@
 #pragma once
 
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QString>
 #include <QStringList>
 #include <QtGlobal>
 
+#include <memory>
+
 namespace Qv2ray::components::proxy::safety
 {
+    constexpr auto PROXY_CONFIG_PATH_RECORD_SCHEMA = 1;
+    constexpr auto PROXY_RECOVERY_RECORD_FILENAME = "windows-proxy-recovery.json";
+
     struct SystemProxyState
     {
         quint32 flags = 0;
@@ -53,6 +64,181 @@ namespace Qv2ray::components::proxy::safety
       private:
         bool blocked = false;
     };
+
+    class ProcessOwnershipLock
+    {
+      public:
+        explicit ProcessOwnershipLock(const QString &path) : lock(path) {}
+
+        bool TryAcquire()
+        {
+            return lock.isLocked() || lock.tryLock(0);
+        }
+
+        bool IsLocked() const
+        {
+            return lock.isLocked();
+        }
+
+      private:
+        QLockFile lock;
+    };
+
+    enum class ConfigPathRecordStatus
+    {
+        Missing,
+        Loaded,
+        Error,
+    };
+
+    inline QString ProxySafetyDirectoryForBase(const QString &basePath)
+    {
+        if (basePath.isEmpty())
+            return {};
+        return QDir(basePath).filePath(QStringLiteral("proxy-safety"));
+    }
+
+    inline QString ProxySafetyDirectory()
+    {
+        const auto path = ProxySafetyDirectoryForBase(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation));
+        if (path.isEmpty() || !QDir().mkpath(path))
+            return {};
+        return path;
+    }
+
+    inline QString ProxyRecoveryRecordPathForConfig(const QString &configPath)
+    {
+        if (configPath.isEmpty())
+            return {};
+        return QDir(configPath).filePath(QString::fromLatin1(PROXY_RECOVERY_RECORD_FILENAME));
+    }
+
+    inline QString ProxyProcessLockPath()
+    {
+        const auto directory = ProxySafetyDirectory();
+        return directory.isEmpty() ? QString() : QDir(directory).filePath(QStringLiteral("windows-proxy-owner.lock"));
+    }
+
+    inline QString ProxyConfigPathRecordPath()
+    {
+        const auto directory = ProxySafetyDirectory();
+        return directory.isEmpty() ? QString() : QDir(directory).filePath(QStringLiteral("windows-proxy-config.json"));
+    }
+
+    inline std::unique_ptr<ProcessOwnershipLock> &ProxyProcessLock()
+    {
+        static std::unique_ptr<ProcessOwnershipLock> lock;
+        return lock;
+    }
+
+    inline bool EnsureProxyProcessLock()
+    {
+        auto &lock = ProxyProcessLock();
+        if (lock && lock->IsLocked())
+            return true;
+
+        const auto path = ProxyProcessLockPath();
+        if (path.isEmpty())
+            return false;
+
+        auto candidate = std::make_unique<ProcessOwnershipLock>(path);
+        if (!candidate->TryAcquire())
+            return false;
+
+        lock = std::move(candidate);
+        return true;
+    }
+
+    inline bool HasProxyProcessLock()
+    {
+        const auto &lock = ProxyProcessLock();
+        return lock && lock->IsLocked();
+    }
+
+    inline bool &ProxyAccessAllowedState()
+    {
+        static bool allowed = false;
+        return allowed;
+    }
+
+    inline void SetProxyAccessAllowed(bool allowed)
+    {
+        ProxyAccessAllowedState() = allowed;
+    }
+
+    inline bool CanManageSystemProxy()
+    {
+        return HasProxyProcessLock() && ProxyAccessAllowedState();
+    }
+
+    inline ConfigPathRecordStatus ReadConfigPathRecord(const QString &path, QString *configPath)
+    {
+        if (!configPath || path.isEmpty())
+            return ConfigPathRecordStatus::Error;
+
+        configPath->clear();
+        if (!QFile::exists(path))
+            return ConfigPathRecordStatus::Missing;
+
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+            return ConfigPathRecordStatus::Error;
+        const auto payload = file.readAll();
+        const auto readError = file.error();
+        file.close();
+        if (readError != QFile::NoError)
+            return ConfigPathRecordStatus::Error;
+
+        QJsonParseError parseError;
+        const auto document = QJsonDocument::fromJson(payload, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !document.isObject())
+            return ConfigPathRecordStatus::Error;
+
+        const auto root = document.object();
+        if (root[QStringLiteral("schema")].toInt(-1) != PROXY_CONFIG_PATH_RECORD_SCHEMA ||
+            !root[QStringLiteral("config_path")].isString())
+            return ConfigPathRecordStatus::Error;
+
+        const auto loadedPath = root[QStringLiteral("config_path")].toString();
+        if (loadedPath.isEmpty())
+            return ConfigPathRecordStatus::Error;
+
+        *configPath = loadedPath;
+        return ConfigPathRecordStatus::Loaded;
+    }
+
+    inline bool WriteConfigPathRecord(const QString &path, const QString &configPath)
+    {
+        if (path.isEmpty() || configPath.isEmpty())
+            return false;
+
+        QJsonObject root;
+        root[QStringLiteral("schema")] = PROXY_CONFIG_PATH_RECORD_SCHEMA;
+        root[QStringLiteral("config_path")] = configPath;
+        const auto payload = QJsonDocument(root).toJson(QJsonDocument::Compact);
+
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly))
+            return false;
+        if (file.write(payload) != payload.size())
+        {
+            file.cancelWriting();
+            return false;
+        }
+        return file.commit();
+    }
+
+    inline ConfigPathRecordStatus ReadPreviousProxyConfigPath(QString *configPath)
+    {
+        const auto path = ProxyConfigPathRecordPath();
+        return path.isEmpty() ? ConfigPathRecordStatus::Error : ReadConfigPathRecord(path, configPath);
+    }
+
+    inline bool RememberProxyConfigPath(const QString &configPath)
+    {
+        const auto path = ProxyConfigPathRecordPath();
+        return !path.isEmpty() && WriteConfigPathRecord(path, configPath);
+    }
 
     inline bool OwnsExactlyTargets(const QStringList &currentTargets, const QStringList &ownedTargets)
     {
