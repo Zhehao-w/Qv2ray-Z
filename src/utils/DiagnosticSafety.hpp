@@ -58,27 +58,6 @@ namespace Qv2ray::common::diagnostics
         return QByteArrayLiteral("<redacted>");
     }
 
-    inline QVector<int> FatalSignals()
-    {
-#ifndef Q_OS_WIN
-        QVector<int> signalList{ SIGABRT, SIGSEGV };
-#ifdef SIGBUS
-        signalList.append(SIGBUS);
-#endif
-#ifdef SIGILL
-        signalList.append(SIGILL);
-#endif
-#ifdef SIGFPE
-        signalList.append(SIGFPE);
-#endif
-        return signalList;
-#else
-        // Preserve Windows Error Reporting/default CRT exception handling rather
-        // than replacing it with a custom signal path that could suppress dumps.
-        return {};
-#endif
-    }
-
     inline QVector<int> ControlSignals()
     {
 #ifndef Q_OS_WIN
