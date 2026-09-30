@@ -72,6 +72,7 @@ namespace Qv2ray::components::proxy
         };
 
         WinInetProxyOwnership proxyOwnership;
+        safety::ExternalTakeoverLatch proxyTakeoverLatch;
         bool proxyOwnershipLoaded = false;
         bool proxyOwnershipBlocked = false;
 
@@ -152,9 +153,18 @@ namespace Qv2ray::components::proxy
                 return false;
             }
 
-            QJsonParseError parseError;
-            const auto document = QJsonDocument::fromJson(file.readAll(), &parseError);
+            const auto payload = file.readAll();
+            const auto readError = file.error();
             file.close();
+            if (readError != QFile::NoError)
+            {
+                LOG("Failed while reading Windows proxy recovery record; system proxy changes are blocked: " + path);
+                proxyOwnershipBlocked = true;
+                return false;
+            }
+
+            QJsonParseError parseError;
+            const auto document = QJsonDocument::fromJson(payload, &parseError);
             if (parseError.error != QJsonParseError::NoError || !document.isObject())
             {
                 LOG("Windows proxy recovery record is invalid; system proxy changes are blocked until it is resolved: " + path);
@@ -424,6 +434,7 @@ namespace Qv2ray::components::proxy
                 {
                     LOG("Proxy state changed outside Qv2ray during a failed set for " + ProxyTargetName(target) +
                         "; not overwriting the current value.");
+                    proxyTakeoverLatch.MarkExternalTakeover();
                     continue;
                 }
 
@@ -456,6 +467,7 @@ namespace Qv2ray::components::proxy
 
                 LOG("Proxy state changed while resolving a failed set for " + ProxyTargetName(target) +
                     "; leaving the observed value untouched and relinquishing ownership.");
+                proxyTakeoverLatch.MarkExternalTakeover();
             }
 
             if (notifyNeeded)
@@ -484,6 +496,7 @@ namespace Qv2ray::components::proxy
                 if (!safety::IsStillOwned(proxyOwnership.expected[target], current))
                 {
                     LOG("System proxy changed outside Qv2ray for " + ProxyTargetName(target) + "; relinquishing ownership without overwriting it.");
+                    proxyTakeoverLatch.MarkExternalTakeover();
                     proxyOwnership.original.remove(target);
                     proxyOwnership.expected.remove(target);
                     unchanged = false;
@@ -495,10 +508,18 @@ namespace Qv2ray::components::proxy
             return unchanged;
         }
 
+        bool ClearOwnedWindowsSystemProxy();
+
         bool SetOwnedWindowsSystemProxy(const QString &proxyServer)
         {
             if (!LoadProxyOwnership())
                 return false;
+
+            if (!proxyTakeoverLatch.AllowsAutomaticSet())
+            {
+                LOG("Automatic Windows system proxy acquisition is blocked because external proxy changes were observed this session.");
+                return false;
+            }
 
             if (proxyOwnership.active())
             {
@@ -602,6 +623,7 @@ namespace Qv2ray::components::proxy
                 if (!safety::IsStillOwned(proxyOwnership.expected[target], current))
                 {
                     LOG("System proxy changed outside Qv2ray for " + ProxyTargetName(target) + "; not restoring the old snapshot.");
+                    proxyTakeoverLatch.MarkExternalTakeover();
                     proxyOwnership.original.remove(target);
                     proxyOwnership.expected.remove(target);
                     continue;
@@ -636,6 +658,7 @@ namespace Qv2ray::components::proxy
 
                 LOG("Proxy state changed while restoring " + ProxyTargetName(target) +
                     "; leaving the observed value untouched and relinquishing ownership.");
+                proxyTakeoverLatch.MarkExternalTakeover();
                 proxyOwnership.original.remove(target);
                 proxyOwnership.expected.remove(target);
             }
@@ -649,6 +672,27 @@ namespace Qv2ray::components::proxy
         }
     } // namespace
 #endif
+
+    bool AllowSystemProxyReacquire()
+    {
+#ifdef Q_OS_WIN
+        if (!LoadProxyOwnership())
+            return false;
+
+        if (!proxyTakeoverLatch.IsBlocked())
+            return true;
+
+        if (proxyOwnership.active() && !ClearOwnedWindowsSystemProxy())
+        {
+            LOG("Explicit Windows system proxy enable cannot proceed until remaining owned targets are resolved safely.");
+            return false;
+        }
+
+        proxyTakeoverLatch.AcknowledgeExplicitEnable();
+        LOG("Explicit Windows system proxy enable acknowledged; automatic acquisition is allowed again for this session.");
+#endif
+        return true;
+    }
 
     bool RecoverSystemProxyIfNeeded()
     {
