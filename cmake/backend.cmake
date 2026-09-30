@@ -26,8 +26,14 @@ else()
 endif()
 
 # qv2ray_baselib contains generated protobuf objects, so every static-library
-# consumer needs the protobuf runtime alongside gRPC.
-list(APPEND QV2RAY_BACKEND_LIBRARY ${Protobuf_LIBRARIES})
+# consumer needs the protobuf runtime alongside gRPC. Prefer CMake's imported
+# target so Windows links the import library instead of treating the runtime
+# DLL as linker input.
+if(TARGET protobuf::libprotobuf)
+    list(APPEND QV2RAY_BACKEND_LIBRARY protobuf::libprotobuf)
+else()
+    list(APPEND QV2RAY_BACKEND_LIBRARY ${Protobuf_LIBRARIES})
+endif()
 
 set(API_PROTO "${CMAKE_SOURCE_DIR}/assets/v2ray_api.proto")
 set(API_PROTO_PATH "${CMAKE_SOURCE_DIR}/assets")
