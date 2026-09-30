@@ -72,6 +72,7 @@ jobs:
             qjsonio \
             kernel_path_resolver \
             kernel_process_lifecycle \
+            threading_hygiene \
             windows_integration_safety \
             data_safety \
             --parallel 2 2>&1 | tee build.log
@@ -87,7 +88,7 @@ jobs:
       - name: Run supported regression tests
         run: >-
           ctest --test-dir build --output-on-failure
-          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|windows_integration_safety|data_safety)'
+          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety)'
 
       - name: Check committed whitespace
         shell: bash
@@ -143,13 +144,16 @@ jobs:
           $library = Get-ChildItem $prefix -Recurse -File |
             Where-Object { $_.Name -in @('libcurl.lib', 'curl.lib') -and $_.FullName -notmatch '[\\/]debug[\\/]' } |
             Select-Object -First 1
+          $runtime = Join-Path $prefix "bin"
 
           if (-not $header) { throw "CURL header was not found below $prefix" }
           if (-not $library) { throw "CURL import library was not found below $prefix" }
+          if (-not (Test-Path $runtime)) { throw "Windows runtime dependency directory was not found at $runtime" }
 
           $include = Split-Path (Split-Path $header.FullName -Parent) -Parent
           "CURL_INCLUDE_DIR=$include" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "CURL_LIBRARY=$($library.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $runtime | Out-File $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Configure Qv2ray-Z
         shell: pwsh
@@ -167,11 +171,29 @@ jobs:
       - name: Build application and supported regression targets
         shell: pwsh
         run: |
-          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle windows_integration_safety data_safety --parallel 2
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety --parallel 2 2>&1 | Tee-Object -FilePath build.log
+          $buildExitCode = $LASTEXITCODE
+          if ($buildExitCode -ne 0) { exit $buildExitCode }
+
+      - name: Upload Windows build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-safety-windows-build-log
+          path: build.log
+          if-no-files-found: error
 
       - name: Run supported regression tests
         shell: pwsh
         run: |
-          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|windows_integration_safety|data_safety)'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety)' 2>&1 | Tee-Object -FilePath ctest.log
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
+      - name: Upload Windows test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-safety-windows-test-log
+          path: ctest.log
+          if-no-files-found: error

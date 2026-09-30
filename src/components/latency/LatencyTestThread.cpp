@@ -20,9 +20,13 @@ namespace Qv2ray::components::latency
 
     void LatencyTestThread::pushRequest(const ConnectionId &id, int totalTestCount, Qv2rayLatencyTestingMethod method)
     {
-        if (isStop)
+        if (shouldStop())
             return;
+
         std::unique_lock<std::mutex> lockGuard{ m };
+        if (shouldStop())
+            return;
+
         const auto &[protocol, host, port] = GetConnectionInfo(id);
         requests.emplace_back(LatencyTestRequest{ id, host, port, totalTestCount, method });
     }
@@ -32,11 +36,14 @@ namespace Qv2ray::components::latency
         loop = uvw::Loop::create();
         stopTimer = loop->resource<uvw::TimerHandle>();
         stopTimer->on<uvw::TimerEvent>([this](auto &, auto &handle) {
-            if (isStop)
+            if (shouldStop())
             {
-                if (!requests.empty())
+                {
+                    std::unique_lock<std::mutex> lockGuard{ m };
                     requests.clear();
-                int timer_count = 0;
+                }
+
+                int timerCount = 0;
                 uv_walk(
                     loop->raw(),
                     [](uv_handle_t *handle, void *arg) {
@@ -44,8 +51,8 @@ namespace Qv2ray::components::latency
                         if (uv_is_closing(handle) == 0)
                             counter++;
                     },
-                    &timer_count);
-                if (timer_count == 1) // only current timer
+                    &timerCount);
+                if (timerCount == 1) // only current timer
                 {
                     handle.stop();
                     handle.close();
@@ -53,49 +60,65 @@ namespace Qv2ray::components::latency
                     loop->close();
                     loop->stop();
                 }
+                return;
             }
-            else
+
+            std::vector<LatencyTestRequest> pendingRequests;
             {
+                std::unique_lock<std::mutex> lockGuard{ m };
+                if (shouldStop())
+                {
+                    requests.clear();
+                    return;
+                }
                 if (requests.empty())
                     return;
-                std::unique_lock<std::mutex> lockGuard{ m };
-                auto parent = qobject_cast<LatencyTestHost *>(this->parent());
-                for (auto &req : requests)
+                pendingRequests.swap(requests);
+            }
+
+            auto parent = qobject_cast<LatencyTestHost *>(this->parent());
+            for (auto &req : pendingRequests)
+            {
+                if (shouldStop())
+                    break;
+
+                switch (req.method)
                 {
-                    switch (req.method)
+                    case ICMPING:
                     {
-                        case ICMPING:
-                        {
-                            auto ptr = std::make_shared<icmping::ICMPPing>(loop, req, parent);
-                            ptr->start();
-                        }
+                        auto ptr = std::make_shared<icmping::ICMPPing>(loop, req, parent);
+                        ptr->start();
+                    }
+                    break;
+                    case TCPING:
+                    default:
+                    {
+                        auto ptr = std::make_shared<tcping::TCPing>(loop, req, parent);
+                        ptr->start();
                         break;
-                        case TCPING:
-                        default:
-                        {
-                            auto ptr = std::make_shared<tcping::TCPing>(loop, req, parent);
-                            ptr->start();
-                            break;
-                        }
-                        case REALPING:
-                        {
-                            auto ptr = std::make_shared<realping::RealPing>(loop, req, parent);
-                            ptr->start();
-                            break;
-                        }
+                    }
+                    case REALPING:
+                    {
+                        auto ptr = std::make_shared<realping::RealPing>(loop, req, parent);
+                        ptr->start();
+                        break;
                     }
                 }
-                requests.clear();
             }
         });
         stopTimer->start(uvw::TimerHandle::Time{ 500 }, uvw::TimerHandle::Time{ 500 });
         loop->run();
     }
+
     void LatencyTestThread::pushRequest(const QList<ConnectionId> &ids, int totalTestCount, Qv2rayLatencyTestingMethod method)
     {
-        if (isStop)
+        if (shouldStop())
             return;
+
         std::unique_lock<std::mutex> lockGuard{ m };
+        if (shouldStop())
+            return;
+
         for (const auto &id : ids)
         {
             const auto &[protocol, host, port] = GetConnectionInfo(id);

@@ -369,7 +369,7 @@ namespace Qv2ray::core::kernel
         else
         {
             DEBUG("Starting API");
-            apiWorker->StartAPI(tagProtocolMap);
+            apiWorker->StartAPI(tagProtocolMap, GlobalConfig.kernelConfig.statsPort);
             apiEnabled = true;
         }
 
