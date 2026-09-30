@@ -134,9 +134,14 @@ TEST_CASE("Proxy recovery location index round-trips independently of the select
     corrupt.close();
     REQUIRE(ReadConfigPathRecord(recordPath, &loadedPath) == ConfigPathRecordStatus::Error);
 
-    const auto safetyRoot = ProxySafetyDirectoryForBase(QStringLiteral("C:/Users/test/AppData/Local/Qv2ray-Z"));
-    REQUIRE(safetyRoot.endsWith(QStringLiteral("proxy-safety")));
+    const auto safetyRoot = ProxySafetyDirectoryForBase(QStringLiteral("C:/Users/test/AppData/Local"));
+    REQUIRE(safetyRoot.endsWith(QStringLiteral("Qv2ray-Z/proxy-safety")));
     REQUIRE(ProxyRecoveryRecordPathForConfig(configPath).endsWith(QString::fromLatin1(PROXY_RECOVERY_RECORD_FILENAME)));
+    REQUIRE(ConfigPathsEquivalent(QStringLiteral("C:/portable/profile-a/"), QStringLiteral("C:/portable/profile-a")));
+    REQUIRE_FALSE(ConfigPathsEquivalent(QStringLiteral("C:/portable/profile-a"), QStringLiteral("C:/portable/profile-b")));
+#ifdef Q_OS_WIN
+    REQUIRE(ConfigPathsEquivalent(QStringLiteral("C:/Portable/Profile-A"), QStringLiteral("c:\\portable\\profile-a\\")));
+#endif
 }
 
 TEST_CASE("Windows URL protocol command line quotes every argument")
