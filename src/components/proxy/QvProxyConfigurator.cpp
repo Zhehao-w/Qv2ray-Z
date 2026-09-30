@@ -37,9 +37,7 @@ namespace Qv2ray::components::proxy
         {
             // * means disabled.
             if (!lines[i].contains("*"))
-            {
                 result << lines[i];
-            }
         }
 
         LOG("Found " + QSTRN(result.size()) + " network services: " + result.join(";"));
@@ -164,10 +162,10 @@ namespace Qv2ray::components::proxy
                 return false;
             }
 
-            std::vector<unsigned char> buffer(size);
-            auto entries = reinterpret_cast<RASENTRYNAME *>(buffer.data());
+            const auto entryCount = (size + sizeof(RASENTRYNAME) - 1) / sizeof(RASENTRYNAME);
+            std::vector<RASENTRYNAME> entries(entryCount);
             entries[0].dwSize = sizeof(RASENTRYNAME);
-            ret = RasEnumEntries(nullptr, nullptr, entries, &size, &count);
+            ret = RasEnumEntries(nullptr, nullptr, entries.data(), &size, &count);
             if (ret != ERROR_SUCCESS)
             {
                 LOG("Failed to enumerate RAS entries, error=" + QSTRN(ret));
@@ -351,9 +349,7 @@ namespace Qv2ray::components::proxy
 
             auto intendedStates = proxyOwnership.expected;
             for (const auto &target : targets)
-            {
                 intendedStates[target] = safety::MakeOwnedManualProxyState(beforeStates[target], PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY, proxyServer);
-            }
 
             QStringList modifiedTargets;
             for (const auto &target : targets)
@@ -437,7 +433,7 @@ namespace Qv2ray::components::proxy
     } // namespace
 #endif
 
-    void SetSystemProxy(const QString &address, int httpPort, int socksPort)
+    bool SetSystemProxy(const QString &address, int httpPort, int socksPort)
     {
         LOG("Setting up System Proxy");
         bool hasHTTP = (httpPort > 0 && httpPort < 65536);
@@ -447,25 +443,20 @@ namespace Qv2ray::components::proxy
         if (!hasHTTP)
         {
             LOG("No valid HTTP inbound is available for the Windows system proxy.");
-            return;
+            return false;
         }
         LOG("Qv2ray will set system proxy to use HTTP");
 #else
         if (!hasHTTP && !hasSOCKS)
         {
             LOG("Nothing?");
-            return;
+            return false;
         }
 
         if (hasHTTP)
-        {
             LOG("Qv2ray will set system proxy to use HTTP");
-        }
-
         if (hasSOCKS)
-        {
             LOG("Qv2ray will set system proxy to use SOCKS");
-        }
 #endif
 
         bool proxySet = true;
@@ -536,10 +527,10 @@ namespace Qv2ray::components::proxy
         {
             const auto returnCode = QProcess::execute(action.first, action.second);
             DEBUG(QString("[%1] Program: %2, Args: %3").arg(returnCode).arg(action.first).arg(action.second.join(";")));
-            results << (returnCode == QProcess::NormalExit);
+            results << (returnCode == 0);
         }
-
-        if (results.count(true) != actions.size())
+        proxySet = results.count(true) == actions.size();
+        if (!proxySet)
             LOG("Something wrong when setting proxies.");
 #else
         for (const auto &service : macOSgetNetworkServices())
@@ -547,22 +538,22 @@ namespace Qv2ray::components::proxy
             LOG("Setting proxy for interface: " + service);
             if (hasHTTP)
             {
-                QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "on" });
-                QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "on" });
-                QProcess::execute("/usr/sbin/networksetup", { "-setwebproxy", service, address, QSTRN(httpPort) });
-                QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxy", service, address, QSTRN(httpPort) });
+                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "on" }) == 0) && proxySet;
+                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "on" }) == 0) && proxySet;
+                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setwebproxy", service, address, QSTRN(httpPort) }) == 0) && proxySet;
+                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxy", service, address, QSTRN(httpPort) }) == 0) && proxySet;
             }
 
             if (hasSOCKS)
             {
-                QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "on" });
-                QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxy", service, address, QSTRN(socksPort) });
+                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "on" }) == 0) && proxySet;
+                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxy", service, address, QSTRN(socksPort) }) == 0) && proxySet;
             }
         }
 #endif
 
         if (!proxySet)
-            return;
+            return false;
 
         QMap<Events::SystemProxy::SystemProxyType, int> portSettings;
         if (hasHTTP)
@@ -570,9 +561,10 @@ namespace Qv2ray::components::proxy
         if (hasSOCKS)
             portSettings.insert(Events::SystemProxy::SystemProxyType::SystemProxy_SOCKS, socksPort);
         PluginHost->SendEvent({ portSettings, Events::SystemProxy::SystemProxyStateType::SetProxy });
+        return true;
     }
 
-    void ClearSystemProxy()
+    bool ClearSystemProxy()
     {
         LOG("Clearing System Proxy");
         bool proxyCleared = true;
@@ -599,19 +591,21 @@ namespace Qv2ray::components::proxy
         {
             const auto returnCode = QProcess::execute(action.first, action.second);
             DEBUG(QString("[%1] Program: %2, Args: %3").arg(returnCode).arg(action.first).arg(action.second.join(";")));
+            proxyCleared = (returnCode == 0) && proxyCleared;
         }
 #else
         for (const auto &service : macOSgetNetworkServices())
         {
             LOG("Clearing proxy for interface: " + service);
-            QProcess::execute("/usr/sbin/networksetup", { "-setautoproxystate", service, "off" });
-            QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "off" });
-            QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "off" });
-            QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "off" });
+            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setautoproxystate", service, "off" }) == 0) && proxyCleared;
+            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "off" }) == 0) && proxyCleared;
+            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "off" }) == 0) && proxyCleared;
+            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "off" }) == 0) && proxyCleared;
         }
 #endif
 
         if (proxyCleared)
             PluginHost->SendEvent(Events::SystemProxy::EventObject{ {}, Events::SystemProxy::SystemProxyStateType::ClearProxy });
+        return proxyCleared;
     }
 } // namespace Qv2ray::components::proxy
