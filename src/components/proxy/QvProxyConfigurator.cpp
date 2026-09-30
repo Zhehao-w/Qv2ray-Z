@@ -405,7 +405,7 @@ namespace Qv2ray::components::proxy
         bool ResolveFailedSet(const QMap<QString, SystemProxyState> &beforeStates)
         {
             WinInetProxyOwnership unresolved;
-            bool changed = false;
+            bool notifyNeeded = false;
 
             for (const auto &target : proxyOwnership.expected.keys())
             {
@@ -435,21 +435,30 @@ namespace Qv2ray::components::proxy
                     continue;
                 }
 
-                changed = true;
+                notifyNeeded = true;
                 SystemProxyState restored;
-                if (!QueryWinInetProxyState(target, &restored) || restored != original)
+                if (!QueryWinInetProxyState(target, &restored))
                 {
-                    // Keep ownership only if we can still prove the target contains
-                    // Qv2ray's value. Otherwise leave the observed value untouched.
-                    if (QueryWinInetProxyState(target, &restored) && safety::IsStillOwned(proxyOwnership.expected[target], restored))
-                    {
-                        unresolved.original[target] = original;
-                        unresolved.expected[target] = proxyOwnership.expected[target];
-                    }
+                    unresolved.original[target] = original;
+                    unresolved.expected[target] = proxyOwnership.expected[target];
+                    continue;
                 }
+
+                if (restored == original)
+                    continue;
+
+                if (safety::IsStillOwned(proxyOwnership.expected[target], restored))
+                {
+                    unresolved.original[target] = original;
+                    unresolved.expected[target] = proxyOwnership.expected[target];
+                    continue;
+                }
+
+                LOG("Proxy state changed while resolving a failed set for " + ProxyTargetName(target) +
+                    "; leaving the observed value untouched and relinquishing ownership.");
             }
 
-            if (changed)
+            if (notifyNeeded)
                 NotifyWinInetProxyChanged();
 
             proxyOwnership = unresolved;
@@ -568,13 +577,25 @@ namespace Qv2ray::components::proxy
                 return PersistProxyOwnership();
             }
 
-            bool changed = false;
+            bool notifyNeeded = false;
             for (const auto &target : proxyOwnership.expected.keys())
             {
                 SystemProxyState current;
                 if (!QueryWinInetProxyState(target, &current))
                 {
                     LOG("Cannot verify proxy state for " + ProxyTargetName(target) + "; keeping ownership for a later retry.");
+                    continue;
+                }
+
+                const auto original = proxyOwnership.original[target];
+                if (current == original)
+                {
+                    // This can happen after a crash between restoring a target and
+                    // updating/removing the recovery record. Refresh consumers and
+                    // mark the target recovered without writing it again.
+                    notifyNeeded = true;
+                    proxyOwnership.original.remove(target);
+                    proxyOwnership.expected.remove(target);
                     continue;
                 }
 
@@ -586,27 +607,40 @@ namespace Qv2ray::components::proxy
                     continue;
                 }
 
-                const auto original = proxyOwnership.original[target];
                 if (!RestoreWinInetProxyState(target, original))
                 {
                     LOG("Could not restore original proxy state for " + ProxyTargetName(target) + "; ownership retained for retry.");
                     continue;
                 }
 
-                changed = true;
+                notifyNeeded = true;
                 SystemProxyState restored;
-                if (QueryWinInetProxyState(target, &restored) && restored == original)
+                if (!QueryWinInetProxyState(target, &restored))
+                {
+                    LOG("Restored proxy state could not be queried for " + ProxyTargetName(target) + "; ownership retained for retry.");
+                    continue;
+                }
+
+                if (restored == original)
                 {
                     proxyOwnership.original.remove(target);
                     proxyOwnership.expected.remove(target);
+                    continue;
                 }
-                else
+
+                if (safety::IsStillOwned(proxyOwnership.expected[target], restored))
                 {
-                    LOG("Restored proxy state could not be verified for " + ProxyTargetName(target) + "; ownership retained for retry.");
+                    LOG("Restored proxy state still equals Qv2ray's value for " + ProxyTargetName(target) + "; ownership retained for retry.");
+                    continue;
                 }
+
+                LOG("Proxy state changed while restoring " + ProxyTargetName(target) +
+                    "; leaving the observed value untouched and relinquishing ownership.");
+                proxyOwnership.original.remove(target);
+                proxyOwnership.expected.remove(target);
             }
 
-            if (changed)
+            if (notifyNeeded)
                 NotifyWinInetProxyChanged();
 
             const auto ownershipReleased = !proxyOwnership.active();
