@@ -15,8 +15,6 @@
 #include "utils/DiagnosticSafety.hpp"
 #include "utils/QvHelpers.hpp"
 
-#include <csignal>
-
 #ifndef Q_OS_WIN
 #include <QSocketNotifier>
 #include <fcntl.h>
@@ -28,18 +26,10 @@
 int globalArgc;
 char **globalArgv;
 
+#ifndef Q_OS_WIN
 namespace
 {
-#ifndef Q_OS_WIN
-    constexpr char fatalSignalMessage[] = "Qv2ray-Z: fatal signal received; terminating without unsafe crash handling.\n";
     int controlSignalPipe[2] = { -1, -1 };
-
-    void fatalSignalHandler(int signum) noexcept
-    {
-        const auto ignored = ::write(STDERR_FILENO, fatalSignalMessage, sizeof(fatalSignalMessage) - 1);
-        Q_UNUSED(ignored)
-        ::_exit(128 + signum);
-    }
 
     void controlSignalHandler(int signum) noexcept
     {
@@ -71,14 +61,6 @@ namespace
         ::sigemptyset(&action.sa_mask);
         action.sa_flags = SA_RESTART;
         return ::sigaction(signum, &action, nullptr) == 0;
-    }
-
-    bool installFatalSignalHandlers()
-    {
-        bool success = true;
-        for (const auto signum : Qv2ray::common::diagnostics::FatalSignals())
-            success = installSignalAction(signum, fatalSignalHandler) && success;
-        return success;
     }
 
     void dispatchControlSignal(int signum)
@@ -133,15 +115,8 @@ namespace
             success = installSignalAction(signum, controlSignalHandler) && success;
         return success;
     }
-#else
-    bool installFatalSignalHandlers()
-    {
-        // Keep the native Windows/CRT exception path intact so Windows Error
-        // Reporting and system crash-dump policy can observe fatal failures.
-        return true;
-    }
-#endif
 } // namespace
+#endif
 
 void BootstrapMessageBox(const QString &title, const QString &text)
 {
@@ -178,9 +153,8 @@ int main(int argc, char *argv[])
     globalArgc = argc;
     globalArgv = argv;
 
-    // POSIX fatal signal handlers perform only async-signal-safe work. Windows
-    // deliberately retains the native exception/diagnostic path instead.
-    installFatalSignalHandlers();
+    // Fatal crashes deliberately retain the platform's native handling so core
+    // dumps / Windows Error Reporting are not replaced by application code.
 
     // This line must be called before any other ones, since we are using these
     // values to identify instances.
