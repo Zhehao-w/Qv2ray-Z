@@ -113,11 +113,13 @@ namespace Qv2ray::components::proxy::safety
             return left == right;
         const auto normalizedLeft = QDir::cleanPath(QDir::fromNativeSeparators(left));
         const auto normalizedRight = QDir::cleanPath(QDir::fromNativeSeparators(right));
-#ifdef Q_OS_WIN
-        return normalizedLeft.compare(normalizedRight, Qt::CaseInsensitive) == 0;
-#else
+        // Keep case significant even on Windows. NTFS directories can opt into
+        // per-directory case sensitivity, so folding case here could collapse
+        // two distinct profiles and skip recovery for the real previous owner.
+        // A false distinction on a case-insensitive directory is conservative:
+        // startup will reconcile/fail closed rather than risk restoring the
+        // wrong proxy ownership record.
         return normalizedLeft == normalizedRight;
-#endif
     }
 
     inline QString ProxyRecoveryRecordPathForConfig(const QString &configPath)
