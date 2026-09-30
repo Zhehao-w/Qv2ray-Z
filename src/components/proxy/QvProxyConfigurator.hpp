@@ -6,6 +6,7 @@
 namespace Qv2ray::components::proxy
 {
     bool ClearSystemProxy();
+    bool RecoverSystemProxyIfNeeded();
     bool SetSystemProxy(const QString &address, int http_port, int socks_port);
 } // namespace Qv2ray::components::proxy
 
