@@ -2,11 +2,10 @@
 
 #include "base/Qv2rayBase.hpp"
 #include "components/plugins/QvPluginHost.hpp"
+#include "components/proxy/ProxyStateSafety.hpp"
 #include "utils/QvHelpers.hpp"
 #ifdef Q_OS_WIN
-//
 #include <Windows.h>
-//
 #include <WinInet.h>
 #include <ras.h>
 #include <raserror.h>
@@ -17,8 +16,8 @@
 
 namespace Qv2ray::components::proxy
 {
-
     using ProcessArgument = QPair<QString, QStringList>;
+
 #ifdef Q_OS_MACOS
     QStringList macOSgetNetworkServices()
     {
@@ -47,203 +46,395 @@ namespace Qv2ray::components::proxy
         return result;
     }
 #endif
+
 #ifdef Q_OS_WIN
-#define NO_CONST(expr) const_cast<wchar_t *>(expr)
-    // static auto DEFAULT_CONNECTION_NAME =
-    // NO_CONST(L"DefaultConnectionSettings");
-    ///
-    /// INTERNAL FUNCTION
-    bool __QueryProxyOptions()
+    namespace
     {
-        INTERNET_PER_CONN_OPTION_LIST List;
-        INTERNET_PER_CONN_OPTION Option[5];
-        //
-        unsigned long nSize = sizeof(INTERNET_PER_CONN_OPTION_LIST);
-        Option[0].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
-        Option[1].dwOption = INTERNET_PER_CONN_AUTODISCOVERY_FLAGS;
-        Option[2].dwOption = INTERNET_PER_CONN_FLAGS;
-        Option[3].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
-        Option[4].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
-        //
-        List.dwSize = sizeof(INTERNET_PER_CONN_OPTION_LIST);
-        List.pszConnection = nullptr; // NO_CONST(DEFAULT_CONNECTION_NAME);
-        List.dwOptionCount = 5;
-        List.dwOptionError = 0;
-        List.pOptions = Option;
+        using safety::SystemProxyState;
 
-        if (!InternetQueryOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &List, &nSize))
+        struct WinInetProxyOwnership
         {
-            LOG("InternetQueryOption failed, GLE=" + QSTRN(GetLastError()));
-        }
+            QMap<QString, SystemProxyState> original;
+            QMap<QString, SystemProxyState> expected;
 
-        LOG("System default proxy info:");
-
-        if (Option[0].Value.pszValue != nullptr)
-        {
-            LOG(QString::fromWCharArray(Option[0].Value.pszValue));
-        }
-
-        if ((Option[2].Value.dwValue & PROXY_TYPE_AUTO_PROXY_URL) == PROXY_TYPE_AUTO_PROXY_URL)
-        {
-            LOG("PROXY_TYPE_AUTO_PROXY_URL");
-        }
-
-        if ((Option[2].Value.dwValue & PROXY_TYPE_AUTO_DETECT) == PROXY_TYPE_AUTO_DETECT)
-        {
-            LOG("PROXY_TYPE_AUTO_DETECT");
-        }
-
-        if ((Option[2].Value.dwValue & PROXY_TYPE_DIRECT) == PROXY_TYPE_DIRECT)
-        {
-            LOG("PROXY_TYPE_DIRECT");
-        }
-
-        if ((Option[2].Value.dwValue & PROXY_TYPE_PROXY) == PROXY_TYPE_PROXY)
-        {
-            LOG("PROXY_TYPE_PROXY");
-        }
-
-        if (!InternetQueryOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &List, &nSize))
-        {
-            LOG("InternetQueryOption failed,GLE=" + QSTRN(GetLastError()));
-        }
-
-        if (Option[4].Value.pszValue != nullptr)
-        {
-            LOG(QString::fromStdWString(Option[4].Value.pszValue));
-        }
-
-        INTERNET_VERSION_INFO Version;
-        nSize = sizeof(INTERNET_VERSION_INFO);
-        InternetQueryOption(nullptr, INTERNET_OPTION_VERSION, &Version, &nSize);
-
-        if (Option[0].Value.pszValue != nullptr)
-        {
-            GlobalFree(Option[0].Value.pszValue);
-        }
-
-        if (Option[3].Value.pszValue != nullptr)
-        {
-            GlobalFree(Option[3].Value.pszValue);
-        }
-
-        if (Option[4].Value.pszValue != nullptr)
-        {
-            GlobalFree(Option[4].Value.pszValue);
-        }
-
-        return false;
-    }
-    bool __SetProxyOptions(LPWSTR proxy_full_addr, bool isPAC)
-    {
-        INTERNET_PER_CONN_OPTION_LIST list;
-        DWORD dwBufSize = sizeof(list);
-        // Fill the list structure.
-        list.dwSize = sizeof(list);
-        // NULL == LAN, otherwise connectoid name.
-        list.pszConnection = nullptr;
-
-        if (nullptr == proxy_full_addr)
-        {
-            LOG("Clearing system proxy");
-            //
-            list.dwOptionCount = 1;
-            list.pOptions = new INTERNET_PER_CONN_OPTION[1];
-
-            // Ensure that the memory was allocated.
-            if (nullptr == list.pOptions)
+            bool active() const
             {
-                // Return if the memory wasn't allocated.
+                return !expected.isEmpty();
+            }
+
+            void clear()
+            {
+                original.clear();
+                expected.clear();
+            }
+        };
+
+        WinInetProxyOwnership proxyOwnership;
+
+        QString ProxyTargetName(const QString &target)
+        {
+            return target.isEmpty() ? QStringLiteral("LAN") : QStringLiteral("RAS:%1").arg(target);
+        }
+
+        void NotifyWinInetProxyChanged()
+        {
+            InternetSetOption(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
+            InternetSetOption(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
+        }
+
+        QString TakeWinInetString(INTERNET_PER_CONN_OPTION &option)
+        {
+            QString result;
+            if (option.Value.pszValue != nullptr)
+            {
+                result = QString::fromWCharArray(option.Value.pszValue);
+                GlobalFree(option.Value.pszValue);
+                option.Value.pszValue = nullptr;
+            }
+            return result;
+        }
+
+        void FreeWinInetStrings(INTERNET_PER_CONN_OPTION (&options)[5])
+        {
+            for (const auto index : { 0, 3, 4 })
+            {
+                if (options[index].Value.pszValue != nullptr)
+                {
+                    GlobalFree(options[index].Value.pszValue);
+                    options[index].Value.pszValue = nullptr;
+                }
+            }
+        }
+
+        bool QueryWinInetProxyState(const QString &target, SystemProxyState *state)
+        {
+            INTERNET_PER_CONN_OPTION options[5]{};
+            options[0].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
+            options[1].dwOption = INTERNET_PER_CONN_AUTODISCOVERY_FLAGS;
+            options[2].dwOption = INTERNET_PER_CONN_FLAGS;
+            options[3].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
+            options[4].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+
+            std::wstring targetName = target.toStdWString();
+            INTERNET_PER_CONN_OPTION_LIST list{};
+            list.dwSize = sizeof(list);
+            list.pszConnection = target.isEmpty() ? nullptr : const_cast<wchar_t *>(targetName.c_str());
+            list.dwOptionCount = 5;
+            list.pOptions = options;
+
+            DWORD size = sizeof(list);
+            if (!InternetQueryOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, &size))
+            {
+                const auto error = GetLastError();
+                FreeWinInetStrings(options);
+                LOG("InternetQueryOption failed for " + ProxyTargetName(target) + ", GLE=" + QSTRN(error));
                 return false;
             }
 
-            // Set flags.
-            list.pOptions[0].dwOption = INTERNET_PER_CONN_FLAGS;
-            list.pOptions[0].Value.dwValue = PROXY_TYPE_DIRECT;
+            state->flags = options[2].Value.dwValue;
+            state->autodiscoveryFlags = options[1].Value.dwValue;
+            state->autoConfigUrl = TakeWinInetString(options[0]);
+            state->proxyBypass = TakeWinInetString(options[3]);
+            state->proxyServer = TakeWinInetString(options[4]);
+            return true;
         }
-        else if (isPAC)
-        {
-            LOG("Setting system proxy for PAC");
-            //
-            list.dwOptionCount = 2;
-            list.pOptions = new INTERNET_PER_CONN_OPTION[2];
 
-            if (nullptr == list.pOptions)
+        bool EnumerateWinInetProxyTargets(QStringList *targets)
+        {
+            targets->clear();
+            targets->append(QString()); // Empty target means the LAN settings.
+
+            RASENTRYNAME entry{};
+            entry.dwSize = sizeof(entry);
+            DWORD size = sizeof(entry);
+            DWORD count = 0;
+            auto ret = RasEnumEntries(nullptr, nullptr, &entry, &size, &count);
+
+            if (ret == ERROR_SUCCESS)
             {
+                if (count > 0)
+                    targets->append(QString::fromWCharArray(entry.szEntryName));
+                targets->removeDuplicates();
+                return true;
+            }
+
+            if (ret != ERROR_BUFFER_TOO_SMALL)
+            {
+                LOG("Failed to enumerate RAS entries, error=" + QSTRN(ret));
                 return false;
             }
 
-            // Set flags.
-            list.pOptions[0].dwOption = INTERNET_PER_CONN_FLAGS;
-            list.pOptions[0].Value.dwValue = PROXY_TYPE_DIRECT | PROXY_TYPE_AUTO_PROXY_URL;
-            // Set proxy name.
-            list.pOptions[1].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
-            list.pOptions[1].Value.pszValue = proxy_full_addr;
-        }
-        else
-        {
-            LOG("Setting system proxy for Global Proxy");
-            //
-            list.dwOptionCount = 2;
-            list.pOptions = new INTERNET_PER_CONN_OPTION[2];
-
-            if (nullptr == list.pOptions)
-            {
-                return false;
-            }
-
-            // Set flags.
-            list.pOptions[0].dwOption = INTERNET_PER_CONN_FLAGS;
-            list.pOptions[0].Value.dwValue = PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY;
-            // Set proxy name.
-            list.pOptions[1].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
-            list.pOptions[1].Value.pszValue = proxy_full_addr;
-            // Set proxy override.
-            // list.pOptions[2].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
-            // auto localhost = L"localhost";
-            // list.pOptions[2].Value.pszValue = NO_CONST(localhost);
-        }
-
-        // Set proxy for LAN.
-        if (!InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, dwBufSize))
-        {
-            LOG("InternetSetOption failed for LAN, GLE=" + QSTRN(GetLastError()));
-        }
-
-        RASENTRYNAME entry;
-        entry.dwSize = sizeof(entry);
-        std::vector<RASENTRYNAME> entries;
-        DWORD size = sizeof(entry), count;
-        LPRASENTRYNAME entryAddr = &entry;
-        auto ret = RasEnumEntries(nullptr, nullptr, entryAddr, &size, &count);
-        if (ERROR_BUFFER_TOO_SMALL == ret)
-        {
-            entries.resize(count);
+            std::vector<unsigned char> buffer(size);
+            auto entries = reinterpret_cast<RASENTRYNAME *>(buffer.data());
             entries[0].dwSize = sizeof(RASENTRYNAME);
-            entryAddr = entries.data();
-            ret = RasEnumEntries(nullptr, nullptr, entryAddr, &size, &count);
+            ret = RasEnumEntries(nullptr, nullptr, entries, &size, &count);
+            if (ret != ERROR_SUCCESS)
+            {
+                LOG("Failed to enumerate RAS entries, error=" + QSTRN(ret));
+                return false;
+            }
+
+            for (DWORD index = 0; index < count; ++index)
+                targets->append(QString::fromWCharArray(entries[index].szEntryName));
+
+            targets->removeDuplicates();
+            return true;
         }
-        if (ERROR_SUCCESS != ret)
+
+        bool ApplyOwnedManualProxyState(const QString &target, const SystemProxyState &state)
         {
-            LOG("Failed to list entry names");
+            std::wstring targetName = target.toStdWString();
+            std::wstring proxyServer = state.proxyServer.toStdWString();
+
+            INTERNET_PER_CONN_OPTION options[2]{};
+            options[0].dwOption = INTERNET_PER_CONN_FLAGS;
+            options[0].Value.dwValue = state.flags;
+            options[1].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+            options[1].Value.pszValue = const_cast<wchar_t *>(proxyServer.c_str());
+
+            INTERNET_PER_CONN_OPTION_LIST list{};
+            list.dwSize = sizeof(list);
+            list.pszConnection = target.isEmpty() ? nullptr : const_cast<wchar_t *>(targetName.c_str());
+            list.dwOptionCount = 2;
+            list.pOptions = options;
+
+            if (!InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, sizeof(list)))
+            {
+                LOG("InternetSetOption failed for " + ProxyTargetName(target) + ", GLE=" + QSTRN(GetLastError()));
+                return false;
+            }
+            return true;
+        }
+
+        bool RestoreWinInetProxyState(const QString &target, const SystemProxyState &state)
+        {
+            std::wstring targetName = target.toStdWString();
+            std::wstring autoConfigUrl = state.autoConfigUrl.toStdWString();
+            std::wstring proxyBypass = state.proxyBypass.toStdWString();
+            std::wstring proxyServer = state.proxyServer.toStdWString();
+
+            INTERNET_PER_CONN_OPTION options[5]{};
+            options[0].dwOption = INTERNET_PER_CONN_FLAGS;
+            options[0].Value.dwValue = state.flags;
+            options[1].dwOption = INTERNET_PER_CONN_AUTODISCOVERY_FLAGS;
+            options[1].Value.dwValue = state.autodiscoveryFlags;
+            options[2].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
+            options[2].Value.pszValue = const_cast<wchar_t *>(autoConfigUrl.c_str());
+            options[3].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
+            options[3].Value.pszValue = const_cast<wchar_t *>(proxyBypass.c_str());
+            options[4].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+            options[4].Value.pszValue = const_cast<wchar_t *>(proxyServer.c_str());
+
+            INTERNET_PER_CONN_OPTION_LIST list{};
+            list.dwSize = sizeof(list);
+            list.pszConnection = target.isEmpty() ? nullptr : const_cast<wchar_t *>(targetName.c_str());
+            list.dwOptionCount = 5;
+            list.pOptions = options;
+
+            if (!InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, sizeof(list)))
+            {
+                LOG("Failed to restore proxy state for " + ProxyTargetName(target) + ", GLE=" + QSTRN(GetLastError()));
+                return false;
+            }
+            return true;
+        }
+
+        bool QueryTargetStates(const QStringList &targets, QMap<QString, SystemProxyState> *states)
+        {
+            states->clear();
+            for (const auto &target : targets)
+            {
+                SystemProxyState state;
+                if (!QueryWinInetProxyState(target, &state))
+                    return false;
+                states->insert(target, state);
+            }
+            return true;
+        }
+
+        void PreserveKnownOwnershipAfterRollbackFailure(const QStringList &modifiedTargets, const QMap<QString, SystemProxyState> &originalStates,
+                                                        const QMap<QString, SystemProxyState> &intendedStates)
+        {
+            for (const auto &target : modifiedTargets)
+            {
+                SystemProxyState current;
+                if (!QueryWinInetProxyState(target, &current))
+                {
+                    proxyOwnership.original.remove(target);
+                    proxyOwnership.expected.remove(target);
+                    continue;
+                }
+
+                if (intendedStates.contains(target) && safety::IsStillOwned(intendedStates[target], current))
+                {
+                    proxyOwnership.original[target] = originalStates[target];
+                    proxyOwnership.expected[target] = intendedStates[target];
+                }
+            }
+        }
+
+        bool RollBackCurrentSet(const QStringList &modifiedTargets, const QMap<QString, SystemProxyState> &beforeStates,
+                                const QMap<QString, SystemProxyState> &originalStates, const QMap<QString, SystemProxyState> &intendedStates,
+                                const WinInetProxyOwnership &previousOwnership)
+        {
+            bool rollbackSucceeded = true;
+            for (const auto &target : modifiedTargets)
+            {
+                if (!RestoreWinInetProxyState(target, beforeStates[target]))
+                    rollbackSucceeded = false;
+            }
+
+            if (!modifiedTargets.isEmpty())
+                NotifyWinInetProxyChanged();
+
+            if (rollbackSucceeded)
+            {
+                proxyOwnership = previousOwnership;
+                return true;
+            }
+
+            proxyOwnership = previousOwnership;
+            PreserveKnownOwnershipAfterRollbackFailure(modifiedTargets, originalStates, intendedStates);
+            LOG("System proxy rollback was incomplete; only targets still proven to contain Qv2ray's value remain owned.");
             return false;
         }
 
-        // Set proxy for each connectoid.
-        for (DWORD i = 0; i < count; ++i)
+        bool VerifyExistingOwnership()
         {
-            list.pszConnection = entryAddr[i].szEntryName;
-            if (!InternetSetOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, dwBufSize))
+            bool lostOwnership = false;
+            for (const auto &target : proxyOwnership.expected.keys())
             {
-                LOG("InternetSetOption failed for connectoid " + QString::fromWCharArray(list.pszConnection) + ", GLE=" + QSTRN(GetLastError()));
+                SystemProxyState current;
+                if (!QueryWinInetProxyState(target, &current))
+                {
+                    LOG("Cannot verify existing proxy ownership for " + ProxyTargetName(target) + "; leaving it untouched.");
+                    proxyOwnership.original.remove(target);
+                    proxyOwnership.expected.remove(target);
+                    lostOwnership = true;
+                    continue;
+                }
+
+                if (!safety::IsStillOwned(proxyOwnership.expected[target], current))
+                {
+                    LOG("System proxy changed outside Qv2ray for " + ProxyTargetName(target) + "; relinquishing ownership without overwriting it.");
+                    proxyOwnership.original.remove(target);
+                    proxyOwnership.expected.remove(target);
+                    lostOwnership = true;
+                }
             }
+            return !lostOwnership;
         }
 
-        delete[] list.pOptions;
-        InternetSetOption(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
-        InternetSetOption(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
-        return true;
-    }
+        bool SetOwnedWindowsSystemProxy(const QString &proxyServer)
+        {
+            const auto previousOwnership = proxyOwnership;
+            if (proxyOwnership.active() && !VerifyExistingOwnership())
+            {
+                LOG("System proxy ownership changed externally; refusing to reassert Qv2ray proxy settings automatically.");
+                return false;
+            }
+
+            QStringList targets;
+            if (!EnumerateWinInetProxyTargets(&targets))
+                return false;
+
+            QMap<QString, SystemProxyState> beforeStates;
+            if (!QueryTargetStates(targets, &beforeStates))
+                return false;
+
+            auto originalStates = proxyOwnership.original;
+            for (const auto &target : targets)
+            {
+                if (!originalStates.contains(target))
+                    originalStates[target] = beforeStates[target];
+            }
+
+            auto intendedStates = proxyOwnership.expected;
+            for (const auto &target : targets)
+            {
+                intendedStates[target] = safety::MakeOwnedManualProxyState(beforeStates[target], PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY, proxyServer);
+            }
+
+            QStringList modifiedTargets;
+            for (const auto &target : targets)
+            {
+                if (!ApplyOwnedManualProxyState(target, intendedStates[target]))
+                {
+                    RollBackCurrentSet(modifiedTargets, beforeStates, originalStates, intendedStates, previousOwnership);
+                    return false;
+                }
+                modifiedTargets.append(target);
+            }
+            NotifyWinInetProxyChanged();
+
+            for (const auto &target : targets)
+            {
+                SystemProxyState actual;
+                if (!QueryWinInetProxyState(target, &actual) || !safety::IsStillOwned(intendedStates[target], actual))
+                {
+                    LOG("Windows proxy write could not be verified for " + ProxyTargetName(target) + "; rolling back this set operation.");
+                    RollBackCurrentSet(modifiedTargets, beforeStates, originalStates, intendedStates, previousOwnership);
+                    return false;
+                }
+            }
+
+            proxyOwnership.original = originalStates;
+            proxyOwnership.expected = intendedStates;
+            return true;
+        }
+
+        bool ClearOwnedWindowsSystemProxy()
+        {
+            if (!proxyOwnership.active())
+            {
+                LOG("Qv2ray does not own the current Windows system proxy; ClearSystemProxy is a no-op.");
+                return true;
+            }
+
+            bool changed = false;
+            for (const auto &target : proxyOwnership.expected.keys())
+            {
+                SystemProxyState current;
+                if (!QueryWinInetProxyState(target, &current))
+                {
+                    LOG("Cannot verify proxy state for " + ProxyTargetName(target) + "; keeping ownership for a later retry.");
+                    continue;
+                }
+
+                if (!safety::IsStillOwned(proxyOwnership.expected[target], current))
+                {
+                    LOG("System proxy changed outside Qv2ray for " + ProxyTargetName(target) + "; not restoring the old snapshot.");
+                    proxyOwnership.original.remove(target);
+                    proxyOwnership.expected.remove(target);
+                    continue;
+                }
+
+                const auto original = proxyOwnership.original[target];
+                if (!RestoreWinInetProxyState(target, original))
+                {
+                    LOG("Could not restore original proxy state for " + ProxyTargetName(target) + "; ownership retained for retry.");
+                    continue;
+                }
+
+                changed = true;
+                SystemProxyState restored;
+                if (QueryWinInetProxyState(target, &restored) && restored == original)
+                {
+                    proxyOwnership.original.remove(target);
+                    proxyOwnership.expected.remove(target);
+                }
+                else
+                {
+                    LOG("Restored proxy state could not be verified for " + ProxyTargetName(target) + "; ownership retained for retry.");
+                }
+            }
+
+            if (changed)
+                NotifyWinInetProxyChanged();
+
+            return !proxyOwnership.active();
+        }
+    } // namespace
 #endif
 
     void SetSystemProxy(const QString &address, int httpPort, int socksPort)
@@ -255,13 +446,10 @@ namespace Qv2ray::components::proxy
 #ifdef Q_OS_WIN
         if (!hasHTTP)
         {
-            LOG("Nothing?");
+            LOG("No valid HTTP inbound is available for the Windows system proxy.");
             return;
         }
-        else
-        {
-            LOG("Qv2ray will set system proxy to use HTTP");
-        }
+        LOG("Qv2ray will set system proxy to use HTTP");
 #else
         if (!hasHTTP && !hasSOCKS)
         {
@@ -280,130 +468,80 @@ namespace Qv2ray::components::proxy
         }
 #endif
 
+        bool proxySet = true;
 #ifdef Q_OS_WIN
-        QString __a;
+        QString proxyAddress;
         const QHostAddress ha(address);
         const auto type = ha.protocol();
         if (type == QAbstractSocket::IPv6Protocol)
         {
-            // many software do not recognize IPv6 proxy server string though
-            const auto str = ha.toString(); // RFC5952
-            __a = "[" + str + "]:" + QSTRN(httpPort);
+            const auto str = ha.toString();
+            proxyAddress = "[" + str + "]:" + QSTRN(httpPort);
         }
         else
         {
-             __a = address + ":" + QSTRN(httpPort);
+            proxyAddress = address + ":" + QSTRN(httpPort);
         }
 
-        LOG("Windows proxy string: " + __a);
-        auto proxyStrW = new WCHAR[__a.length() + 1];
-        wcscpy(proxyStrW, __a.toStdWString().c_str());
-        //
-        __QueryProxyOptions();
-
-        if (!__SetProxyOptions(proxyStrW, false))
-        {
-            LOG("Failed to set proxy.");
-        }
-
-        __QueryProxyOptions();
+        LOG("Windows proxy string: " + proxyAddress);
+        proxySet = SetOwnedWindowsSystemProxy(proxyAddress);
+        if (!proxySet)
+            LOG("Windows system proxy was not changed because ownership could not be established safely.");
 #elif defined(Q_OS_LINUX)
         QList<ProcessArgument> actions;
         actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "manual" } };
-        //
         bool isKDE = qEnvironmentVariable("XDG_SESSION_DESKTOP") == "KDE" || qEnvironmentVariable("XDG_SESSION_DESKTOP") == "plasma";
         const auto configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
 
-        //
-        // Configure HTTP Proxies for HTTP, FTP and HTTPS
         if (hasHTTP)
         {
-            // iterate over protocols...
             for (const auto &protocol : QStringList{ "http", "ftp", "https" })
             {
-                // for GNOME:
-                {
-                    actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "host", address } };
-                    actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "port", QSTRN(httpPort) } };
-                }
+                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "host", address } };
+                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "port", QSTRN(httpPort) } };
 
-                // for KDE:
                 if (isKDE)
                 {
                     actions << ProcessArgument{ "kwriteconfig5",
-                                                { "--file", configPath + "/kioslaverc", //
-                                                  "--group", "Proxy Settings",          //
-                                                  "--key", protocol + "Proxy",          //
-                                                  "http://" + address + " " + QSTRN(httpPort) } };
+                                                { "--file", configPath + "/kioslaverc", "--group", "Proxy Settings", "--key",
+                                                  protocol + "Proxy", "http://" + address + " " + QSTRN(httpPort) } };
                 }
             }
         }
 
-        // Configure SOCKS5 Proxies
         if (hasSOCKS)
         {
-            // for GNOME:
-            {
-                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "host", address } };
-                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "port", QSTRN(socksPort) } };
+            actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "host", address } };
+            actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "port", QSTRN(socksPort) } };
 
-                // for KDE:
-                if (isKDE)
-                {
-                    actions << ProcessArgument{ "kwriteconfig5",
-                                                { "--file", configPath + "/kioslaverc", //
-                                                  "--group", "Proxy Settings",          //
-                                                  "--key", "socksProxy",                //
-                                                  "socks://" + address + " " + QSTRN(socksPort) } };
-                }
-            }
-        }
-        // Setting Proxy Mode to Manual
-        {
-            // for GNOME:
-            {
-                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "manual" } };
-            }
-
-            // for KDE:
             if (isKDE)
             {
                 actions << ProcessArgument{ "kwriteconfig5",
-                                            { "--file", configPath + "/kioslaverc", //
-                                              "--group", "Proxy Settings",          //
-                                              "--key", "ProxyType", "1" } };
+                                            { "--file", configPath + "/kioslaverc", "--group", "Proxy Settings", "--key", "socksProxy",
+                                              "socks://" + address + " " + QSTRN(socksPort) } };
             }
         }
 
-        // Notify kioslaves to reload system proxy configuration.
+        actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "manual" } };
         if (isKDE)
         {
+            actions << ProcessArgument{ "kwriteconfig5",
+                                        { "--file", configPath + "/kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "1" } };
             actions << ProcessArgument{ "dbus-send",
-                                        { "--type=signal", "/KIO/Scheduler",                 //
-                                          "org.kde.KIO.Scheduler.reparseSlaveConfiguration", //
-                                          "string:''" } };
+                                        { "--type=signal", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "string:''" } };
         }
-        // Execute them all!
-        //
-        // note: do not use std::all_of / any_of / none_of,
-        // because those are short-circuit and cannot guarantee atomicity.
+
         QList<bool> results;
         for (const auto &action : actions)
         {
-            // execute and get the code
             const auto returnCode = QProcess::execute(action.first, action.second);
-            // print out the commands and result codes
             DEBUG(QString("[%1] Program: %2, Args: %3").arg(returnCode).arg(action.first).arg(action.second.join(";")));
-            // give the code back
             results << (returnCode == QProcess::NormalExit);
         }
 
         if (results.count(true) != actions.size())
-        {
             LOG("Something wrong when setting proxies.");
-        }
 #else
-
         for (const auto &service : macOSgetNetworkServices())
         {
             LOG("Setting proxy for interface: " + service);
@@ -421,10 +559,11 @@ namespace Qv2ray::components::proxy
                 QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxy", service, address, QSTRN(socksPort) });
             }
         }
-
 #endif
-        //
-        // Trigger plugin events
+
+        if (!proxySet)
+            return;
+
         QMap<Events::SystemProxy::SystemProxyType, int> portSettings;
         if (hasHTTP)
             portSettings.insert(Events::SystemProxy::SystemProxyType::SystemProxy_HTTP, httpPort);
@@ -436,52 +575,31 @@ namespace Qv2ray::components::proxy
     void ClearSystemProxy()
     {
         LOG("Clearing System Proxy");
+        bool proxyCleared = true;
 
 #ifdef Q_OS_WIN
-        if (!__SetProxyOptions(nullptr, false))
-        {
-            LOG("Failed to clear proxy.");
-        }
+        proxyCleared = ClearOwnedWindowsSystemProxy();
+        if (!proxyCleared)
+            LOG("Some Windows proxy targets remain owned because their original state could not be restored safely.");
 #elif defined(Q_OS_LINUX)
         QList<ProcessArgument> actions;
         const bool isKDE = qEnvironmentVariable("XDG_SESSION_DESKTOP") == "KDE" || qEnvironmentVariable("XDG_SESSION_DESKTOP") == "plasma";
         const auto configRoot = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
 
-        // Setting System Proxy Mode to: None
-        {
-            // for GNOME:
-            {
-                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "none" } };
-            }
-
-            // for KDE:
-            if (isKDE)
-            {
-                actions << ProcessArgument{ "kwriteconfig5",
-                                            { "--file", configRoot + "/kioslaverc", //
-                                              "--group", "Proxy Settings",          //
-                                              "--key", "ProxyType", "0" } };
-            }
-        }
-
-        // Notify kioslaves to reload system proxy configuration.
+        actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "none" } };
         if (isKDE)
         {
+            actions << ProcessArgument{ "kwriteconfig5",
+                                        { "--file", configRoot + "/kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "0" } };
             actions << ProcessArgument{ "dbus-send",
-                                        { "--type=signal", "/KIO/Scheduler",                 //
-                                          "org.kde.KIO.Scheduler.reparseSlaveConfiguration", //
-                                          "string:''" } };
+                                        { "--type=signal", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "string:''" } };
         }
 
-        // Execute the Actions
         for (const auto &action : actions)
         {
-            // execute and get the code
             const auto returnCode = QProcess::execute(action.first, action.second);
-            // print out the commands and result codes
             DEBUG(QString("[%1] Program: %2, Args: %3").arg(returnCode).arg(action.first).arg(action.second.join(";")));
         }
-
 #else
         for (const auto &service : macOSgetNetworkServices())
         {
@@ -491,10 +609,9 @@ namespace Qv2ray::components::proxy
             QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "off" });
             QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "off" });
         }
-
 #endif
-        //
-        // Trigger plugin events
-        PluginHost->SendEvent(Events::SystemProxy::EventObject{ {}, Events::SystemProxy::SystemProxyStateType::ClearProxy });
+
+        if (proxyCleared)
+            PluginHost->SendEvent(Events::SystemProxy::EventObject{ {}, Events::SystemProxy::SystemProxyStateType::ClearProxy });
     }
 } // namespace Qv2ray::components::proxy
