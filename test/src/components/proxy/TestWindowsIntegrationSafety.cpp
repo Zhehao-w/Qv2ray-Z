@@ -53,6 +53,17 @@ TEST_CASE("External proxy takeover blocks automatic reacquisition until explicit
     REQUIRE_FALSE(latch.IsBlocked());
 }
 
+TEST_CASE("System proxy configured state requires ownership of every current target")
+{
+    using namespace Qv2ray::components::proxy::safety;
+
+    const QStringList allTargets{ QString(), QStringLiteral("Corp VPN"), QStringLiteral("Dial-up") };
+    REQUIRE(OwnsExactlyTargets(allTargets, allTargets));
+    REQUIRE(OwnsExactlyTargets(allTargets, { QStringLiteral("Dial-up"), QString(), QStringLiteral("Corp VPN") }));
+    REQUIRE_FALSE(OwnsExactlyTargets(allTargets, { QString(), QStringLiteral("Corp VPN") }));
+    REQUIRE_FALSE(OwnsExactlyTargets(allTargets, { QString(), QStringLiteral("Corp VPN"), QStringLiteral("Other") }));
+}
+
 TEST_CASE("System proxy snapshots round-trip without losing Windows state")
 {
     using namespace Qv2ray::components::proxy::safety;
