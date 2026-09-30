@@ -32,3 +32,4 @@ ADD_QV2RAY_TEST(kernel_process_lifecycle src/core/kernel/TestKernelProcessLifecy
 ADD_QV2RAY_TEST(threading_hygiene src/core/kernel/TestThreadingHygiene.cpp)
 ADD_QV2RAY_TEST(windows_integration_safety src/components/proxy/TestWindowsIntegrationSafety.cpp)
 ADD_QV2RAY_TEST(data_safety src/core/handler/TestDataSafety.cpp)
+ADD_QV2RAY_TEST(http_request_safety src/utils/TestHTTPRequestHelper.cpp)
