@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QJsonDocument>
+#include <QSet>
 
 #include <csignal>
 
@@ -41,12 +42,25 @@ TEST_CASE("Diagnostic reports contain only allowlisted configuration metadata")
 
     const auto info = BuildSafeDiagnosticInfo(&config, 2, 3);
     const auto serialized = QJsonDocument(info).toJson(QJsonDocument::Compact);
+    const auto report = BuildSafeDiagnosticReport(&config, 2, 3).toUtf8();
 
     REQUIRE_FALSE(serialized.contains(sentinel.toUtf8()));
+    REQUIRE_FALSE(report.contains(sentinel.toUtf8()));
     REQUIRE(info.value(QStringLiteral("configLoaded")).toBool());
     REQUIRE(info.value(QStringLiteral("networkProxyMode")).toInt() == static_cast<int>(Qv2rayConfig_Network::QVPROXY_CUSTOM));
     REQUIRE(info.value(QStringLiteral("activeKernelCount")).toInt() == 2);
     REQUIRE(info.value(QStringLiteral("pluginCount")).toInt() == 3);
+
+    const QSet<QString> expectedKeys{
+        QStringLiteral("reportVersion"),     QStringLiteral("application"),      QStringLiteral("version"),
+        QStringLiteral("qtVersion"),         QStringLiteral("operatingSystem"), QStringLiteral("cpuArchitecture"),
+        QStringLiteral("activeKernelCount"), QStringLiteral("pluginCount"),      QStringLiteral("configLoaded"),
+        QStringLiteral("configVersion"),     QStringLiteral("networkProxyMode"), QStringLiteral("kernelApiEnabled")
+    };
+    QSet<QString> actualKeys;
+    for (const auto &key : info.keys())
+        actualKeys.insert(key);
+    REQUIRE(actualKeys == expectedKeys);
 }
 
 TEST_CASE("HTTP header diagnostics redact every value")
@@ -61,11 +75,11 @@ TEST_CASE("HTTP header diagnostics redact every value")
 
 TEST_CASE("Signal classification excludes uncatchable signals and queues control actions")
 {
+#ifndef Q_OS_WIN
     const auto fatalSignals = FatalSignals();
     REQUIRE(fatalSignals.contains(SIGABRT));
     REQUIRE(fatalSignals.contains(SIGSEGV));
 
-#ifndef Q_OS_WIN
     const auto controlSignals = ControlSignals();
     REQUIRE(controlSignals.contains(SIGTERM));
     REQUIRE(controlSignals.contains(SIGHUP));
@@ -74,6 +88,7 @@ TEST_CASE("Signal classification excludes uncatchable signals and queues control
     REQUIRE_FALSE(fatalSignals.contains(SIGKILL));
     REQUIRE_FALSE(controlSignals.contains(SIGKILL));
 #else
+    REQUIRE(FatalSignals().isEmpty());
     REQUIRE(ControlSignals().isEmpty());
 #endif
 }
