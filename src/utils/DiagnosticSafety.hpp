@@ -60,8 +60,8 @@ namespace Qv2ray::common::diagnostics
 
     inline QVector<int> FatalSignals()
     {
-        QVector<int> signalList{ SIGABRT, SIGSEGV };
 #ifndef Q_OS_WIN
+        QVector<int> signalList{ SIGABRT, SIGSEGV };
 #ifdef SIGBUS
         signalList.append(SIGBUS);
 #endif
@@ -71,8 +71,12 @@ namespace Qv2ray::common::diagnostics
 #ifdef SIGFPE
         signalList.append(SIGFPE);
 #endif
-#endif
         return signalList;
+#else
+        // Preserve Windows Error Reporting/default CRT exception handling rather
+        // than replacing it with a custom signal path that could suppress dumps.
+        return {};
+#endif
     }
 
     inline QVector<int> ControlSignals()
