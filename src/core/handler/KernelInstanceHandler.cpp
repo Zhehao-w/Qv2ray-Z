@@ -186,8 +186,10 @@ namespace Qv2ray::core::handler
                 //
                 if (result.has_value())
                 {
+                    const auto hadCleanupState = isConnected;
                     StopConnection();
-                    PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
+                    if (!hadCleanupState && !isConnected)
+                        PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
                     return result;
                 }
                 else
@@ -249,8 +251,10 @@ namespace Qv2ray::core::handler
                 auto result = vCoreInstance->StartConnection(fullConfig);
                 if (result.has_value())
                 {
-                    PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
+                    const auto hadCleanupState = isConnected;
                     StopConnection();
+                    if (!hadCleanupState && !isConnected)
+                        PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
                     return result;
                 }
                 else
