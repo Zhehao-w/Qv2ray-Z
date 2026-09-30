@@ -22,6 +22,7 @@
 namespace
 {
     constexpr int PROCESS_START_TIMEOUT_MS = 5000;
+    constexpr int PROCESS_STABILITY_GRACE_MS = 200;
     constexpr int VERSION_FINISH_TIMEOUT_MS = 5000;
     constexpr int CONFIG_VALIDATION_TIMEOUT_MS = 10000;
     constexpr int PROCESS_TERMINATE_TIMEOUT_MS = 1500;
@@ -43,8 +44,6 @@ namespace Qv2ray::core::kernel
     std::pair<bool, std::optional<QString>> V2RayKernelInstance::CheckAndSetCoreExecutableState(const QString &vCorePath)
     {
 #ifdef Q_OS_UNIX
-        // For Linux/macOS users: if they cannot execute the core,
-        // then we shall grant the permission to execute it.
         QFile coreFile(vCorePath);
         if (!coreFile.permissions().testFlag(QFileDevice::ExeUser))
         {
@@ -72,7 +71,6 @@ namespace Qv2ray::core::kernel
         }
         return { true, std::nullopt };
 #else
-        // For Windows and other users: just skip this check.
         DEBUG("Skipped check and set core executable state.");
         return { true, tr("Check is skipped") };
 #endif
@@ -86,15 +84,12 @@ namespace Qv2ray::core::kernel
         if (!coreFile.exists())
             return { false, tr("V2Ray core executable not found.") };
 
-        // Use open() here to prevent `executing` a folder, which may have the
-        // same name as the V2Ray core.
         if (!coreFile.open(QFile::ReadOnly))
             return { false, tr("V2Ray core file cannot be opened, please ensure there's a file instead of a folder.") };
 
         coreFile.close();
 
 #if QV2RAY_FEATURE(kernel_check_abi)
-        // Get Core ABI.
         const auto [abi, err] = kernel::abi::deduceKernelABI(corePath);
         if (err)
         {
@@ -103,11 +98,9 @@ namespace Qv2ray::core::kernel
         }
         LOG("Core ABI: " + kernel::abi::abiToString(*abi));
 
-        // Get Compiled ABI
         auto compiledABI = kernel::abi::COMPILED_ABI_TYPE;
         LOG("Host ABI: " + kernel::abi::abiToString(compiledABI));
 
-        // Check ABI Compatibility.
         switch (kernel::abi::checkCompatibility(compiledABI, *abi))
         {
             case kernel::abi::ABI_NOPE:
@@ -133,14 +126,10 @@ namespace Qv2ray::core::kernel
 #endif
 
 #if QV2RAY_FEATURE(kernel_check_permission)
-        // Check executable permissions.
         const auto [isExecutableOk, strExecutableErr] = CheckAndSetCoreExecutableState(corePath);
         if (!isExecutableOk)
             return { false, strExecutableErr.value_or("") };
 #endif
-        //
-        // Check file existance.
-        // From: https://www.v2fly.org/chapter_02/env.html#asset-location
         bool hasGeoIP = FileExistsIn(QDir(assetsPath), "geoip.dat");
         bool hasGeoSite = FileExistsIn(QDir(assetsPath), "geosite.dat");
 
@@ -153,12 +142,9 @@ namespace Qv2ray::core::kernel
         if (!hasGeoSite)
             return { false, tr("No geosite.dat in assets path.") };
 
-        // Check if V2Ray core returns a version number correctly.
         QProcess proc;
         proc.setProcessChannelMode(QProcess::MergedChannels);
 #ifdef Q_OS_WIN32
-        // nativeArguments are required for Windows platform, without a
-        // reason...
         proc.setProgram(corePath);
         proc.setNativeArguments(V2RAY_CORE_VERSION_ARGV);
         proc.start();
@@ -206,11 +192,9 @@ namespace Qv2ray::core::kernel
         if (const auto &[result, msg] = ValidateKernel(kernelPath, assetsPath); result)
         {
             DEBUG("V2Ray version: " + *msg);
-            // Append assets location env.
             auto env = QProcessEnvironment::systemEnvironment();
             env.insert("v2ray.location.asset", assetsPath);
             env.insert("XRAY_LOCATION_ASSET", assetsPath);
-            //
             QProcess process;
             process.setProcessEnvironment(env);
             process.setProcessChannelMode(QProcess::MergedChannels);
@@ -257,8 +241,6 @@ namespace Qv2ray::core::kernel
         connect(vProcess, &QProcess::stateChanged, this, [this](QProcess::ProcessState state) {
             DEBUG("V2Ray kernel process status changed: " + QVariant::fromValue(state).toString());
 
-            // If V2Ray exits AFTER we successfully started it and this was not
-            // an intentional StopConnection transition, treat it as an error.
             if (kernelStarted && state == QProcess::NotRunning)
             {
                 QString message;
@@ -295,17 +277,15 @@ namespace Qv2ray::core::kernel
         apiEnabled = false;
         const auto json = JsonToString(root);
         if (!StringToFile(json, QV2RAY_GENERATED_FILE_PATH))
-        {
             return tr("Failed to write the generated Xray configuration. The previous generated config will not be reused.");
-        }
-        //
-        auto filePath = QV2RAY_GENERATED_FILE_PATH;
 
+        auto filePath = QV2RAY_GENERATED_FILE_PATH;
         if (const auto &result = ValidateConfig(filePath); result)
         {
             kernelStarted = false;
             return tr("V2Ray kernel failed to start: ") + *result;
         }
+
         const auto paths = EffectiveKernelPaths(GlobalConfig.kernelConfig.KernelPath(), GlobalConfig.kernelConfig.AssetsPath());
         auto env = QProcessEnvironment::systemEnvironment();
         env.insert("v2ray.location.asset", paths.assets);
@@ -325,6 +305,13 @@ namespace Qv2ray::core::kernel
             }
             kernelStarted = vProcess->state() != QProcess::NotRunning;
             return tr("V2Ray kernel failed to start: %1").arg(startError);
+        }
+
+        QString stabilityError;
+        if (!ConfirmProcessStable(*vProcess, PROCESS_STABILITY_GRACE_MS, &stabilityError))
+        {
+            kernelStarted = false;
+            return tr("V2Ray kernel exited during startup: %1").arg(stabilityError);
         }
 
         kernelStarted = true;
@@ -376,8 +363,6 @@ namespace Qv2ray::core::kernel
             apiEnabled = false;
         }
 
-        // Set this to false before asking the process to stop so the stateChanged
-        // callback can distinguish an intentional shutdown from a crash.
         kernelStarted = false;
         QString stopError;
         const auto stopResult = StopProcessBounded(*vProcess, PROCESS_TERMINATE_TIMEOUT_MS, PROCESS_KILL_TIMEOUT_MS, &stopError);
@@ -397,9 +382,7 @@ namespace Qv2ray::core::kernel
     V2RayKernelInstance::~V2RayKernelInstance()
     {
         if (kernelStarted || vProcess->state() != QProcess::NotRunning)
-        {
             StopConnection();
-        }
 
         delete apiWorker;
         delete vProcess;
