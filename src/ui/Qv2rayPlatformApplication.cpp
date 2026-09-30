@@ -1,6 +1,7 @@
 #include "Qv2rayPlatformApplication.hpp"
 
 #include "components/proxy/QvProxyConfigurator.hpp"
+#include "components/proxy/ProxyStateSafety.hpp"
 #include "core/settings/SettingsBackend.hpp"
 #include "utils/WindowsCommandLine.hpp"
 
@@ -8,6 +9,7 @@
 #include <QSessionManager>
 #endif
 
+#include <QFile>
 #include <QSslSocket>
 #define QV_MODULE_NAME "PlatformApplication"
 
@@ -117,8 +119,65 @@ bool Qv2rayPlatformApplication::Initialize()
     //
     LocateConfiguration();
 #ifdef Q_OS_WIN
-    if (!RecoverSystemProxyIfNeeded())
-        LOG("Windows system proxy recovery remains unresolved; Qv2ray will not overwrite unverified proxy state.");
+    using namespace Qv2ray::components::proxy::safety;
+    SetProxyAccessAllowed(false);
+    if (!EnsureProxyProcessLock())
+    {
+        LOG("Another Qv2ray process owns Windows system-proxy recovery; this process will not recover or modify system proxy state.");
+    }
+    else
+    {
+        const auto currentConfigPath = QvCoreApplication->ConfigPath;
+        QString previousConfigPath;
+        const auto previousStatus = ReadPreviousProxyConfigPath(&previousConfigPath);
+        if (previousStatus == ConfigPathRecordStatus::Error)
+        {
+            LOG("Windows system-proxy recovery location metadata is unreadable; proxy changes are blocked for this process.");
+        }
+        else
+        {
+            const auto currentRecoveryPath = ProxyRecoveryRecordPathForConfig(currentConfigPath);
+            const auto previousRecoveryPath =
+                previousStatus == ConfigPathRecordStatus::Loaded && previousConfigPath != currentConfigPath
+                    ? ProxyRecoveryRecordPathForConfig(previousConfigPath)
+                    : QString();
+            const auto currentRecoveryExists = !currentRecoveryPath.isEmpty() && QFile::exists(currentRecoveryPath);
+            const auto previousRecoveryExists = !previousRecoveryPath.isEmpty() && QFile::exists(previousRecoveryPath);
+
+            bool recoverySucceeded = false;
+            if (currentRecoveryExists && previousRecoveryExists)
+            {
+                LOG("Windows system-proxy recovery records exist in both the current and previous configuration locations; refusing ambiguous recovery.");
+            }
+            else
+            {
+                if (previousRecoveryExists)
+                {
+                    LOG("Recovering Windows system proxy from the previous configuration location before using the current profile.");
+                    QvCoreApplication->ConfigPath = previousConfigPath;
+                    recoverySucceeded = RecoverSystemProxyIfNeeded();
+                    QvCoreApplication->ConfigPath = currentConfigPath;
+                }
+                else
+                {
+                    recoverySucceeded = RecoverSystemProxyIfNeeded();
+                }
+
+                if (!recoverySucceeded)
+                {
+                    LOG("Windows system proxy recovery remains unresolved; Qv2ray will not overwrite unverified proxy state.");
+                }
+                else if (!RememberProxyConfigPath(currentConfigPath))
+                {
+                    LOG("Could not persist the stable Windows proxy recovery location; system proxy changes are blocked for this process.");
+                }
+                else
+                {
+                    SetProxyAccessAllowed(true);
+                }
+            }
+        }
+    }
 #endif
     if (!allTranslations.contains(GlobalConfig.uiConfig.language))
     {
@@ -248,7 +307,7 @@ bool Qv2rayPlatformApplication::parseCommandLine(QString *errorMessage, bool *ca
 
     if (parser.isSet(reconnectOption))
     {
-        DEBUG("disconnectOption is set.");
+        DEBUG("reconnectOption is set.");
         StartupArguments.arguments << Qv2rayStartupArguments::RECONNECT;
     }
 
