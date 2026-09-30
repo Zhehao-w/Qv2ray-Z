@@ -56,6 +56,12 @@ namespace
         return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
     }
 
+    bool setCloseOnExec(int fd)
+    {
+        const auto flags = ::fcntl(fd, F_GETFD, 0);
+        return flags >= 0 && ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+    }
+
     bool installSignalAction(int signum, void (*handler)(int))
     {
         struct sigaction action
@@ -97,7 +103,8 @@ namespace
     {
         if (::pipe(controlSignalPipe) != 0)
             return false;
-        if (!setNonBlocking(controlSignalPipe[0]) || !setNonBlocking(controlSignalPipe[1]))
+        if (!setNonBlocking(controlSignalPipe[0]) || !setNonBlocking(controlSignalPipe[1]) || !setCloseOnExec(controlSignalPipe[0]) ||
+            !setCloseOnExec(controlSignalPipe[1]))
         {
             ::close(controlSignalPipe[0]);
             ::close(controlSignalPipe[1]);
