@@ -2,6 +2,7 @@
 
 #include <QJsonObject>
 #include <QString>
+#include <QStringList>
 #include <QtGlobal>
 
 namespace Qv2ray::components::proxy::safety
@@ -52,6 +53,19 @@ namespace Qv2ray::components::proxy::safety
       private:
         bool blocked = false;
     };
+
+    inline bool OwnsExactlyTargets(const QStringList &currentTargets, const QStringList &ownedTargets)
+    {
+        if (currentTargets.size() != ownedTargets.size())
+            return false;
+
+        for (const auto &target : currentTargets)
+        {
+            if (!ownedTargets.contains(target))
+                return false;
+        }
+        return true;
+    }
 
     inline SystemProxyState MakeOwnedManualProxyState(const SystemProxyState &baseline, quint32 ownedFlags, const QString &proxyServer)
     {
