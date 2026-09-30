@@ -11,6 +11,7 @@ namespace Qv2ray::components::latency
         qRegisterMetaType<LatencyTestResult>();
         totalTestCount = defaultCount;
         latencyThread = new LatencyTestThread(this);
+        latencyThread->prepareLatencyTest();
         latencyThread->start();
     }
 
@@ -24,6 +25,7 @@ namespace Qv2ray::components::latency
     {
         latencyThread->stopLatencyTest();
         latencyThread->wait();
+        latencyThread->prepareLatencyTest();
         latencyThread->start();
     }
 
