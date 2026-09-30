@@ -1,5 +1,6 @@
 #include "Qv2rayPlatformApplication.hpp"
 
+#include "components/proxy/QvProxyConfigurator.hpp"
 #include "core/settings/SettingsBackend.hpp"
 #include "utils/WindowsCommandLine.hpp"
 
@@ -115,6 +116,10 @@ bool Qv2rayPlatformApplication::Initialize()
     const auto osLanguage = QLocale::system().name();
     //
     LocateConfiguration();
+#ifdef Q_OS_WIN
+    if (!RecoverSystemProxyIfNeeded())
+        LOG("Windows system proxy recovery remains unresolved; Qv2ray will not overwrite unverified proxy state.");
+#endif
     if (!allTranslations.contains(GlobalConfig.uiConfig.language))
     {
         // If we need to reset the language.
