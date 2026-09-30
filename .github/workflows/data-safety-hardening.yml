@@ -60,11 +60,12 @@ jobs:
             -DQV2RAY_QT6=OFF \
             -DQV2RAY_USE_V5_CORE=ON
 
-      - name: Build supported regression targets
+      - name: Build application and supported regression targets
         shell: bash
         run: |
           set -o pipefail
           cmake --build build --target \
+            qv2ray \
             parse_ss_url \
             parse_vmess_url \
             parse_vless_url \
