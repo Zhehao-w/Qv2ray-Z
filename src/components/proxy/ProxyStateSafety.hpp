@@ -64,8 +64,13 @@ namespace Qv2ray::components::proxy::safety
         if (flags < 0 || flags > 4294967295.0 || autodiscoveryFlags < 0 || autodiscoveryFlags > 4294967295.0)
             return false;
 
-        state->flags = static_cast<quint32>(flags);
-        state->autodiscoveryFlags = static_cast<quint32>(autodiscoveryFlags);
+        const auto parsedFlags = static_cast<quint32>(flags);
+        const auto parsedAutodiscoveryFlags = static_cast<quint32>(autodiscoveryFlags);
+        if (static_cast<double>(parsedFlags) != flags || static_cast<double>(parsedAutodiscoveryFlags) != autodiscoveryFlags)
+            return false;
+
+        state->flags = parsedFlags;
+        state->autodiscoveryFlags = parsedAutodiscoveryFlags;
         state->autoConfigUrl = json[QStringLiteral("auto_config_url")].toString();
         state->proxyServer = json[QStringLiteral("proxy_server")].toString();
         state->proxyBypass = json[QStringLiteral("proxy_bypass")].toString();
