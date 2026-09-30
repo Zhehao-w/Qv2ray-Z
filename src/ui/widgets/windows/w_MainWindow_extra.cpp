@@ -1,4 +1,5 @@
 #include "components/proxy/QvProxyConfigurator.hpp"
+#include "components/proxy/ProxyStateSafety.hpp"
 #include "ui/widgets/Qv2rayWidgetApplication.hpp"
 #include "ui/widgets/common/WidgetUIBase.hpp"
 #include "utils/QvHelpers.hpp"
@@ -60,6 +61,32 @@ void MainWindow::MWHideWindow()
 
 void MainWindow::MWSetSystemProxy()
 {
+    const auto explicitEnable = sender() == tray_action_SetSystemProxy;
+#ifdef Q_OS_WIN
+    if (!Qv2ray::components::proxy::safety::CanManageSystemProxy())
+    {
+        LOG("Windows system proxy cannot be changed by this process because it does not hold verified proxy ownership.");
+        if (explicitEnable && !GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy is managed by another Qv2ray instance or has unresolved recovery state."));
+        return;
+    }
+
+    if (!Qv2ray::components::proxy::safety::RememberProxyConfigPath(QvCoreApplication->ConfigPath))
+    {
+        LOG("Windows system proxy cannot be acquired because the stable recovery location could not be refreshed.");
+        if (explicitEnable && !GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy cannot be enabled because its recovery state could not be persisted safely."));
+        return;
+    }
+#endif
+    if (explicitEnable && !AllowSystemProxyReacquire())
+    {
+        LOG("Explicit system proxy enable was refused because remaining ownership could not be resolved safely.");
+        if (!GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy cannot be enabled until the previous proxy state can be resolved safely."));
+        return;
+    }
+
     const auto inboundInfo = KernelInstance->GetCurrentConnectionInboundInfo();
     bool httpEnabled = false;
     bool socksEnabled = false;
@@ -101,11 +128,25 @@ void MainWindow::MWSetSystemProxy()
         LOG("ProxyAddress: " + proxyAddress);
         LOG("HTTP Port: " + QSTRN(httpPort));
         LOG("SOCKS Port: " + QSTRN(socksPort));
-        SetSystemProxy(proxyAddress, httpPort, socksPort);
-        qvAppTrayIcon->setIcon(Q_TRAYICON("tray-systemproxy"));
-        if (!GlobalConfig.uiConfig.quietMode)
+
+        auto proxySet = SetSystemProxy(proxyAddress, httpPort, socksPort);
+        if (!proxySet && explicitEnable && AllowSystemProxyReacquire())
         {
-            QvWidgetApplication->ShowTrayMessage(tr("System proxy configured."));
+            LOG("Retrying explicit system proxy enable after resolving a newly detected external takeover.");
+            proxySet = SetSystemProxy(proxyAddress, httpPort, socksPort);
+        }
+
+        if (proxySet)
+        {
+            qvAppTrayIcon->setIcon(Q_TRAYICON("tray-systemproxy"));
+            if (!GlobalConfig.uiConfig.quietMode)
+                QvWidgetApplication->ShowTrayMessage(tr("System proxy configured."));
+        }
+        else
+        {
+            LOG("System proxy was not changed because the operation could not be completed safely.");
+            if (!GlobalConfig.uiConfig.quietMode)
+                QvWidgetApplication->ShowTrayMessage(tr("System proxy was not changed because the current settings could not be updated safely."));
         }
     }
     else
@@ -117,11 +158,27 @@ void MainWindow::MWSetSystemProxy()
 
 void MainWindow::MWClearSystemProxy()
 {
-    ClearSystemProxy();
-    qvAppTrayIcon->setIcon(KernelInstance->CurrentConnection().isEmpty() ? Q_TRAYICON("tray") : Q_TRAYICON("tray-connected"));
-    if (!GlobalConfig.uiConfig.quietMode)
+#ifdef Q_OS_WIN
+    const auto explicitClear = sender() == tray_action_ClearSystemProxy;
+    if (!Qv2ray::components::proxy::safety::CanManageSystemProxy())
     {
-        QvWidgetApplication->ShowTrayMessage(tr("System proxy removed."));
+        LOG("Windows system proxy cannot be cleared by this process because it does not hold verified proxy ownership.");
+        if (explicitClear && !GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy is managed by another Qv2ray instance or has unresolved recovery state."));
+        return;
+    }
+#endif
+    if (ClearSystemProxy())
+    {
+        qvAppTrayIcon->setIcon(KernelInstance->CurrentConnection().isEmpty() ? Q_TRAYICON("tray") : Q_TRAYICON("tray-connected"));
+        if (!GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy removed."));
+    }
+    else
+    {
+        LOG("System proxy could not be fully restored; Qv2ray retained ownership only for targets that are safe to retry.");
+        if (!GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy could not be fully restored. Qv2ray will avoid overwriting externally changed settings."));
     }
 }
 
