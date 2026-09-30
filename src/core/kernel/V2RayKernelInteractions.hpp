@@ -37,7 +37,7 @@ namespace Qv2ray::core::kernel
       private:
         APIWorker *apiWorker;
         QProcess *vProcess;
-        bool apiEnabled;
+        bool apiEnabled = false;
         bool kernelStarted = false;
     };
 } // namespace Qv2ray::core::kernel
