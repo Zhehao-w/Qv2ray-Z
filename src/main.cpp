@@ -112,7 +112,7 @@ namespace
                 const auto count = ::read(controlSignalPipe[0], pendingSignals, sizeof(pendingSignals));
                 if (count <= 0)
                     break;
-                for (decltype(count) i = 0; i < count; ++i)
+                for (ssize_t i = 0; i < count; ++i)
                     dispatchControlSignal(static_cast<int>(pendingSignals[i]));
             }
             notifier->setEnabled(true);
