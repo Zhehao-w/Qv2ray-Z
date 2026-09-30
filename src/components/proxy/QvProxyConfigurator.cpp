@@ -5,7 +5,9 @@
 #include "components/proxy/ProxyStateSafety.hpp"
 #include "utils/QvHelpers.hpp"
 #ifdef Q_OS_WIN
+//
 #include <Windows.h>
+//
 #include <WinInet.h>
 #include <ras.h>
 #include <raserror.h>
@@ -16,8 +18,8 @@
 
 namespace Qv2ray::components::proxy
 {
-    using ProcessArgument = QPair<QString, QStringList>;
 
+    using ProcessArgument = QPair<QString, QStringList>;
 #ifdef Q_OS_MACOS
     QStringList macOSgetNetworkServices()
     {
@@ -37,14 +39,15 @@ namespace Qv2ray::components::proxy
         {
             // * means disabled.
             if (!lines[i].contains("*"))
+            {
                 result << lines[i];
+            }
         }
 
         LOG("Found " + QSTRN(result.size()) + " network services: " + result.join(";"));
         return result;
     }
 #endif
-
 #ifdef Q_OS_WIN
     namespace
     {
@@ -58,12 +61,6 @@ namespace Qv2ray::components::proxy
             bool active() const
             {
                 return !expected.isEmpty();
-            }
-
-            void clear()
-            {
-                original.clear();
-                expected.clear();
             }
         };
 
@@ -109,7 +106,11 @@ namespace Qv2ray::components::proxy
             INTERNET_PER_CONN_OPTION options[5]{};
             options[0].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
             options[1].dwOption = INTERNET_PER_CONN_AUTODISCOVERY_FLAGS;
+#ifdef INTERNET_PER_CONN_FLAGS_UI
+            options[2].dwOption = INTERNET_PER_CONN_FLAGS_UI;
+#else
             options[2].dwOption = INTERNET_PER_CONN_FLAGS;
+#endif
             options[3].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
             options[4].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
 
@@ -123,10 +124,29 @@ namespace Qv2ray::components::proxy
             DWORD size = sizeof(list);
             if (!InternetQueryOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, &size))
             {
+#ifdef INTERNET_PER_CONN_FLAGS_UI
+                const auto firstError = GetLastError();
+                FreeWinInetStrings(options);
+                options[0].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
+                options[1].dwOption = INTERNET_PER_CONN_AUTODISCOVERY_FLAGS;
+                options[2].dwOption = INTERNET_PER_CONN_FLAGS;
+                options[3].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
+                options[4].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+                size = sizeof(list);
+                if (!InternetQueryOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, &size))
+                {
+                    const auto error = GetLastError();
+                    FreeWinInetStrings(options);
+                    LOG("InternetQueryOption failed for " + ProxyTargetName(target) + ", GLE=" + QSTRN(error) +
+                        ", FLAGS_UI GLE=" + QSTRN(firstError));
+                    return false;
+                }
+#else
                 const auto error = GetLastError();
                 FreeWinInetStrings(options);
                 LOG("InternetQueryOption failed for " + ProxyTargetName(target) + ", GLE=" + QSTRN(error));
                 return false;
+#endif
             }
 
             state->flags = options[2].Value.dwValue;
@@ -142,21 +162,13 @@ namespace Qv2ray::components::proxy
             targets->clear();
             targets->append(QString()); // Empty target means the LAN settings.
 
-            RASENTRYNAME entry{};
-            entry.dwSize = sizeof(entry);
-            DWORD size = sizeof(entry);
+            DWORD size = 0;
             DWORD count = 0;
-            auto ret = RasEnumEntries(nullptr, nullptr, &entry, &size, &count);
-
+            auto ret = RasEnumEntries(nullptr, nullptr, nullptr, &size, &count);
             if (ret == ERROR_SUCCESS)
-            {
-                if (count > 0)
-                    targets->append(QString::fromWCharArray(entry.szEntryName));
-                targets->removeDuplicates();
                 return true;
-            }
 
-            if (ret != ERROR_BUFFER_TOO_SMALL)
+            if (ret != ERROR_BUFFER_TOO_SMALL || size < sizeof(RASENTRYNAME))
             {
                 LOG("Failed to enumerate RAS entries, error=" + QSTRN(ret));
                 return false;
@@ -257,11 +269,7 @@ namespace Qv2ray::components::proxy
             {
                 SystemProxyState current;
                 if (!QueryWinInetProxyState(target, &current))
-                {
-                    proxyOwnership.original.remove(target);
-                    proxyOwnership.expected.remove(target);
                     continue;
-                }
 
                 if (intendedStates.contains(target) && safety::IsStillOwned(intendedStates[target], current))
                 {
@@ -305,9 +313,7 @@ namespace Qv2ray::components::proxy
                 SystemProxyState current;
                 if (!QueryWinInetProxyState(target, &current))
                 {
-                    LOG("Cannot verify existing proxy ownership for " + ProxyTargetName(target) + "; leaving it untouched.");
-                    proxyOwnership.original.remove(target);
-                    proxyOwnership.expected.remove(target);
+                    LOG("Cannot verify existing proxy ownership for " + ProxyTargetName(target) + "; keeping ownership and aborting the update.");
                     lostOwnership = true;
                     continue;
                 }
@@ -328,7 +334,7 @@ namespace Qv2ray::components::proxy
             const auto previousOwnership = proxyOwnership;
             if (proxyOwnership.active() && !VerifyExistingOwnership())
             {
-                LOG("System proxy ownership changed externally; refusing to reassert Qv2ray proxy settings automatically.");
+                LOG("System proxy ownership could not be verified unchanged; refusing to reassert Qv2ray proxy settings automatically.");
                 return false;
             }
 
@@ -445,7 +451,10 @@ namespace Qv2ray::components::proxy
             LOG("No valid HTTP inbound is available for the Windows system proxy.");
             return false;
         }
-        LOG("Qv2ray will set system proxy to use HTTP");
+        else
+        {
+            LOG("Qv2ray will set system proxy to use HTTP");
+        }
 #else
         if (!hasHTTP && !hasSOCKS)
         {
@@ -454,9 +463,14 @@ namespace Qv2ray::components::proxy
         }
 
         if (hasHTTP)
+        {
             LOG("Qv2ray will set system proxy to use HTTP");
+        }
+
         if (hasSOCKS)
+        {
             LOG("Qv2ray will set system proxy to use SOCKS");
+        }
 #endif
 
         bool proxySet = true;
@@ -466,7 +480,8 @@ namespace Qv2ray::components::proxy
         const auto type = ha.protocol();
         if (type == QAbstractSocket::IPv6Protocol)
         {
-            const auto str = ha.toString();
+            // many software do not recognize IPv6 proxy server string though
+            const auto str = ha.toString(); // RFC5952
             proxyAddress = "[" + str + "]:" + QSTRN(httpPort);
         }
         else
@@ -477,84 +492,130 @@ namespace Qv2ray::components::proxy
         LOG("Windows proxy string: " + proxyAddress);
         proxySet = SetOwnedWindowsSystemProxy(proxyAddress);
         if (!proxySet)
+        {
             LOG("Windows system proxy was not changed because ownership could not be established safely.");
+        }
 #elif defined(Q_OS_LINUX)
         QList<ProcessArgument> actions;
         actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "manual" } };
+        //
         bool isKDE = qEnvironmentVariable("XDG_SESSION_DESKTOP") == "KDE" || qEnvironmentVariable("XDG_SESSION_DESKTOP") == "plasma";
         const auto configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
 
+        //
+        // Configure HTTP Proxies for HTTP, FTP and HTTPS
         if (hasHTTP)
         {
+            // iterate over protocols...
             for (const auto &protocol : QStringList{ "http", "ftp", "https" })
             {
-                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "host", address } };
-                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "port", QSTRN(httpPort) } };
+                // for GNOME:
+                {
+                    actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "host", address } };
+                    actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy." + protocol, "port", QSTRN(httpPort) } };
+                }
 
+                // for KDE:
                 if (isKDE)
                 {
                     actions << ProcessArgument{ "kwriteconfig5",
-                                                { "--file", configPath + "/kioslaverc", "--group", "Proxy Settings", "--key",
-                                                  protocol + "Proxy", "http://" + address + " " + QSTRN(httpPort) } };
+                                                { "--file", configPath + "/kioslaverc", //
+                                                  "--group", "Proxy Settings",          //
+                                                  "--key", protocol + "Proxy",          //
+                                                  "http://" + address + " " + QSTRN(httpPort) } };
                 }
             }
         }
 
+        // Configure SOCKS5 Proxies
         if (hasSOCKS)
         {
-            actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "host", address } };
-            actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "port", QSTRN(socksPort) } };
+            // for GNOME:
+            {
+                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "host", address } };
+                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy.socks", "port", QSTRN(socksPort) } };
 
+                // for KDE:
+                if (isKDE)
+                {
+                    actions << ProcessArgument{ "kwriteconfig5",
+                                                { "--file", configPath + "/kioslaverc", //
+                                                  "--group", "Proxy Settings",          //
+                                                  "--key", "socksProxy",                //
+                                                  "socks://" + address + " " + QSTRN(socksPort) } };
+                }
+            }
+        }
+        // Setting Proxy Mode to Manual
+        {
+            // for GNOME:
+            {
+                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "manual" } };
+            }
+
+            // for KDE:
             if (isKDE)
             {
                 actions << ProcessArgument{ "kwriteconfig5",
-                                            { "--file", configPath + "/kioslaverc", "--group", "Proxy Settings", "--key", "socksProxy",
-                                              "socks://" + address + " " + QSTRN(socksPort) } };
+                                            { "--file", configPath + "/kioslaverc", //
+                                              "--group", "Proxy Settings",          //
+                                              "--key", "ProxyType", "1" } };
             }
         }
 
-        actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "manual" } };
+        // Notify kioslaves to reload system proxy configuration.
         if (isKDE)
         {
-            actions << ProcessArgument{ "kwriteconfig5",
-                                        { "--file", configPath + "/kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "1" } };
             actions << ProcessArgument{ "dbus-send",
-                                        { "--type=signal", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "string:''" } };
+                                        { "--type=signal", "/KIO/Scheduler",                 //
+                                          "org.kde.KIO.Scheduler.reparseSlaveConfiguration", //
+                                          "string:''" } };
         }
-
+        // Execute them all!
+        //
+        // note: do not use std::all_of / any_of / none_of,
+        // because those are short-circuit and cannot guarantee atomicity.
         QList<bool> results;
         for (const auto &action : actions)
         {
+            // execute and get the code
             const auto returnCode = QProcess::execute(action.first, action.second);
+            // print out the commands and result codes
             DEBUG(QString("[%1] Program: %2, Args: %3").arg(returnCode).arg(action.first).arg(action.second.join(";")));
-            results << (returnCode == 0);
+            // give the code back
+            results << (returnCode == QProcess::NormalExit);
         }
-        proxySet = results.count(true) == actions.size();
-        if (!proxySet)
+
+        if (results.count(true) != actions.size())
+        {
             LOG("Something wrong when setting proxies.");
+        }
 #else
+
         for (const auto &service : macOSgetNetworkServices())
         {
             LOG("Setting proxy for interface: " + service);
             if (hasHTTP)
             {
-                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "on" }) == 0) && proxySet;
-                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "on" }) == 0) && proxySet;
-                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setwebproxy", service, address, QSTRN(httpPort) }) == 0) && proxySet;
-                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxy", service, address, QSTRN(httpPort) }) == 0) && proxySet;
+                QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "on" });
+                QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "on" });
+                QProcess::execute("/usr/sbin/networksetup", { "-setwebproxy", service, address, QSTRN(httpPort) });
+                QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxy", service, address, QSTRN(httpPort) });
             }
 
             if (hasSOCKS)
             {
-                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "on" }) == 0) && proxySet;
-                proxySet = (QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxy", service, address, QSTRN(socksPort) }) == 0) && proxySet;
+                QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "on" });
+                QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxy", service, address, QSTRN(socksPort) });
             }
         }
-#endif
 
+#endif
         if (!proxySet)
             return false;
 
+        //
+        // Trigger plugin events
         QMap<Events::SystemProxy::SystemProxyType, int> portSettings;
         if (hasHTTP)
             portSettings.insert(Events::SystemProxy::SystemProxyType::SystemProxy_HTTP, httpPort);
@@ -572,40 +633,66 @@ namespace Qv2ray::components::proxy
 #ifdef Q_OS_WIN
         proxyCleared = ClearOwnedWindowsSystemProxy();
         if (!proxyCleared)
+        {
             LOG("Some Windows proxy targets remain owned because their original state could not be restored safely.");
+        }
 #elif defined(Q_OS_LINUX)
         QList<ProcessArgument> actions;
         const bool isKDE = qEnvironmentVariable("XDG_SESSION_DESKTOP") == "KDE" || qEnvironmentVariable("XDG_SESSION_DESKTOP") == "plasma";
         const auto configRoot = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
 
-        actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "none" } };
-        if (isKDE)
+        // Setting System Proxy Mode to: None
         {
-            actions << ProcessArgument{ "kwriteconfig5",
-                                        { "--file", configRoot + "/kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "0" } };
-            actions << ProcessArgument{ "dbus-send",
-                                        { "--type=signal", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "string:''" } };
+            // for GNOME:
+            {
+                actions << ProcessArgument{ "gsettings", { "set", "org.gnome.system.proxy", "mode", "none" } };
+            }
+
+            // for KDE:
+            if (isKDE)
+            {
+                actions << ProcessArgument{ "kwriteconfig5",
+                                            { "--file", configRoot + "/kioslaverc", //
+                                              "--group", "Proxy Settings",          //
+                                              "--key", "ProxyType", "0" } };
+            }
         }
 
+        // Notify kioslaves to reload system proxy configuration.
+        if (isKDE)
+        {
+            actions << ProcessArgument{ "dbus-send",
+                                        { "--type=signal", "/KIO/Scheduler",                 //
+                                          "org.kde.KIO.Scheduler.reparseSlaveConfiguration", //
+                                          "string:''" } };
+        }
+
+        // Execute the Actions
         for (const auto &action : actions)
         {
+            // execute and get the code
             const auto returnCode = QProcess::execute(action.first, action.second);
+            // print out the commands and result codes
             DEBUG(QString("[%1] Program: %2, Args: %3").arg(returnCode).arg(action.first).arg(action.second.join(";")));
-            proxyCleared = (returnCode == 0) && proxyCleared;
         }
+
 #else
         for (const auto &service : macOSgetNetworkServices())
         {
             LOG("Clearing proxy for interface: " + service);
-            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setautoproxystate", service, "off" }) == 0) && proxyCleared;
-            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "off" }) == 0) && proxyCleared;
-            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "off" }) == 0) && proxyCleared;
-            proxyCleared = (QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "off" }) == 0) && proxyCleared;
+            QProcess::execute("/usr/sbin/networksetup", { "-setautoproxystate", service, "off" });
+            QProcess::execute("/usr/sbin/networksetup", { "-setwebproxystate", service, "off" });
+            QProcess::execute("/usr/sbin/networksetup", { "-setsecurewebproxystate", service, "off" });
+            QProcess::execute("/usr/sbin/networksetup", { "-setsocksfirewallproxystate", service, "off" });
         }
-#endif
 
+#endif
         if (proxyCleared)
+        {
+            //
+            // Trigger plugin events
             PluginHost->SendEvent(Events::SystemProxy::EventObject{ {}, Events::SystemProxy::SystemProxyStateType::ClearProxy });
+        }
         return proxyCleared;
     }
 } // namespace Qv2ray::components::proxy
