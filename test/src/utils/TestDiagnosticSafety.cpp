@@ -73,22 +73,18 @@ TEST_CASE("HTTP header diagnostics redact every value")
     REQUIRE(SafeHttpHeaderValueForLog("Content-Type", "application/json") == QByteArray("<redacted>"));
 }
 
-TEST_CASE("Signal classification excludes uncatchable signals and queues control actions")
+TEST_CASE("Only non-fatal POSIX control signals are routed through the application")
 {
 #ifndef Q_OS_WIN
-    const auto fatalSignals = FatalSignals();
-    REQUIRE(fatalSignals.contains(SIGABRT));
-    REQUIRE(fatalSignals.contains(SIGSEGV));
-
     const auto controlSignals = ControlSignals();
     REQUIRE(controlSignals.contains(SIGTERM));
     REQUIRE(controlSignals.contains(SIGHUP));
     REQUIRE(controlSignals.contains(SIGUSR1));
     REQUIRE(controlSignals.contains(SIGUSR2));
-    REQUIRE_FALSE(fatalSignals.contains(SIGKILL));
+    REQUIRE_FALSE(controlSignals.contains(SIGABRT));
+    REQUIRE_FALSE(controlSignals.contains(SIGSEGV));
     REQUIRE_FALSE(controlSignals.contains(SIGKILL));
 #else
-    REQUIRE(FatalSignals().isEmpty());
     REQUIRE(ControlSignals().isEmpty());
 #endif
 }
