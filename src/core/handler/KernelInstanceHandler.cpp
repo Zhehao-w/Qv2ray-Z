@@ -75,6 +75,12 @@ namespace Qv2ray::core::handler
     std::optional<QString> KernelInstanceHandler::StartConnection(const ConnectionGroupPair &id, CONFIGROOT fullConfig)
     {
         StopConnection();
+        if (isConnected)
+        {
+            LOG("Cannot start a new connection because the previous kernel is still running.");
+            return tr("The previous connection could not be stopped. Please retry disconnecting it before starting another connection.");
+        }
+
         inboundInfo = GetInboundInfo(fullConfig);
         //
         const auto inboundPorts = GetInboundPorts();
