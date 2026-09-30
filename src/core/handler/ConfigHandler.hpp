@@ -77,7 +77,7 @@ namespace Qv2ray::core::handler
                 groups[group].lastUpdatedDate = system_clock::to_time_t(system_clock::now());
         }
 
-        void SaveConnectionConfig();
+        bool SaveConnectionConfig();
         const QList<GroupId> Subscriptions() const;
         const QList<GroupId> GetConnectionContainedIn(const ConnectionId &connId) const;
         //
@@ -167,6 +167,7 @@ namespace Qv2ray::core::handler
         int saveTimerId;
         int pingAllTimerId;
         int pingConnectionTimerId;
+        bool metadataPersistenceEnabled = true;
         QHash<GroupId, GroupObject> groups;
         QHash<ConnectionId, ConnectionObject> connections;
         QHash<ConnectionId, CONFIGROOT> connectionRootCache;

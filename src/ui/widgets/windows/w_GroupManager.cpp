@@ -281,7 +281,12 @@ GroupManager::~GroupManager(){};
 void GroupManager::on_addGroupButton_clicked()
 {
     auto const key = tr("New Group") + " - " + GenerateRandomString(5);
-    auto id = ConnectionManager->CreateGroup(key, false);
+    const auto id = ConnectionManager->CreateGroup(key, false);
+    if (id == NullGroupId)
+    {
+        QvMessageBoxWarn(this, tr("Create Group"), tr("The group could not be saved. No group was created."));
+        return;
+    }
     //
     auto item = new QListWidgetItem(key);
     item->setData(Qt::UserRole, id.toString());
@@ -316,7 +321,12 @@ void GroupManager::on_removeGroupButton_clicked()
 {
     if (QvMessageBoxAsk(this, tr("Remove a Group"), tr("All connections will be moved to default group, do you want to continue?")) == Yes)
     {
-        ConnectionManager->DeleteGroup(currentGroupId);
+        if (const auto error = ConnectionManager->DeleteGroup(currentGroupId))
+        {
+            QvMessageBoxWarn(this, tr("Remove Group"), *error);
+            return;
+        }
+
         auto item = groupList->currentItem();
         int index = groupList->row(item);
         groupList->removeItemWidget(item);

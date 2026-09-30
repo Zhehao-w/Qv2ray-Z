@@ -1,7 +1,8 @@
 #include "base/Qv2rayBaseApplication.hpp"
 using namespace Qv2ray;
-int fakeArgc = 0;
-char *fakeArgv[]{};
+int fakeArgc = 1;
+char fakeArgv0[] = "qv2ray-test";
+char *fakeArgv[]{ fakeArgv0, nullptr };
 
 class QvTestApplication
     : public QCoreApplication

@@ -17,6 +17,20 @@
 
 namespace Qv2ray::common
 {
+    enum class JsonObjectFileStatus
+    {
+        Missing,
+        Valid,
+        Invalid
+    };
+
+    struct JsonObjectFileResult
+    {
+        JsonObjectFileStatus status = JsonObjectFileStatus::Missing;
+        QJsonObject object;
+        QString error;
+    };
+
     QString SafeBase64Decode(QString string);
     QString SafeBase64Encode(const QString &string, bool trim);
     QString Base64Encode(const QString &string);
@@ -27,6 +41,7 @@ namespace Qv2ray::common
     QString JsonToString(const QJsonObject &json, QJsonDocument::JsonFormat format = QJsonDocument::JsonFormat::Indented);
     QString JsonToString(const QJsonArray &array, QJsonDocument::JsonFormat format = QJsonDocument::JsonFormat::Indented);
     QString VerifyJsonString(const QString &source);
+    JsonObjectFileResult ReadJsonObjectFile(const QString &filePath);
     //
     //
     QStringList SplitLines(const QString &str);

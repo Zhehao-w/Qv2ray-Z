@@ -65,19 +65,57 @@ namespace Qv2ray::common
 
     bool StringToFile(const QString &text, const QString &targetpath)
     {
-        bool override = false;
+        QFileInfo info(targetpath);
+        if (!info.dir().exists() && !info.dir().mkpath(info.dir().path()))
         {
-            QFileInfo info(targetpath);
-            override = info.exists();
-            if (!override && !info.dir().exists())
-                info.dir().mkpath(info.dir().path());
+            LOG("Cannot create parent directory for: " + targetpath);
+            return false;
         }
+
         QSaveFile f{ targetpath };
-        f.open(QIODevice::WriteOnly);
-        f.write(text.toUtf8());
-        f.commit();
-        return override;
+        if (!f.open(QIODevice::WriteOnly))
+        {
+            LOG("Cannot open file for writing: " + targetpath + ": " + f.errorString());
+            return false;
+        }
+
+        const auto bytes = text.toUtf8();
+        if (f.write(bytes) != bytes.size())
+        {
+            LOG("Incomplete write for: " + targetpath + ": " + f.errorString());
+            f.cancelWriting();
+            return false;
+        }
+
+        if (!f.commit())
+        {
+            LOG("Cannot commit file: " + targetpath + ": " + f.errorString());
+            return false;
+        }
+
+        return true;
     }
+
+    JsonObjectFileResult ReadJsonObjectFile(const QString &filePath)
+    {
+        QFile file(filePath);
+        if (!file.exists())
+            return { JsonObjectFileStatus::Missing, {}, {} };
+
+        if (!file.open(QIODevice::ReadOnly))
+            return { JsonObjectFileStatus::Invalid, {}, file.errorString() };
+
+        QJsonParseError parseError;
+        const auto document = QJsonDocument::fromJson(file.readAll(), &parseError);
+        if (parseError.error != QJsonParseError::NoError)
+            return { JsonObjectFileStatus::Invalid, {}, parseError.errorString() };
+
+        if (!document.isObject())
+            return { JsonObjectFileStatus::Invalid, {}, QStringLiteral("JSON root is not an object") };
+
+        return { JsonObjectFileStatus::Valid, document.object(), {} };
+    }
+
     QString JsonToString(const QJsonObject &json, QJsonDocument::JsonFormat format)
     {
         QJsonDocument doc;

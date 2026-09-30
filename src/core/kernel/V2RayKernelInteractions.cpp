@@ -256,7 +256,10 @@ namespace Qv2ray::core::kernel
         }
 
         const auto json = JsonToString(root);
-        StringToFile(json, QV2RAY_GENERATED_FILE_PATH);
+        if (!StringToFile(json, QV2RAY_GENERATED_FILE_PATH))
+        {
+            return tr("Failed to write the generated Xray configuration. The previous generated config will not be reused.");
+        }
         //
         auto filePath = QV2RAY_GENERATED_FILE_PATH;
 

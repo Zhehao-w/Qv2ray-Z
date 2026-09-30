@@ -94,7 +94,13 @@ int ImportConfigWindow::PerformImportConnection()
     for (const auto &groupObject : connectionsToNewGroup)
     {
         const auto groupName = connectionsToNewGroup.key(groupObject);
-        GroupId groupId = ConnectionManager->CreateGroup(groupName, false);
+        const auto groupId = ConnectionManager->CreateGroup(groupName, false);
+        if (groupId == NullGroupId)
+        {
+            LOG("Failed to create group while importing: " + groupName);
+            continue;
+        }
+
         for (const auto &connConf : groupObject)
         {
             auto connName = groupObject.key(connConf);
@@ -104,7 +110,8 @@ int ImportConfigWindow::PerformImportConnection()
             {
                 connName = protocol + "/" + host + ":" + QSTRN(port) + "-" + GenerateRandomString(5);
             }
-            ConnectionManager->CreateConnection(connConf, connName, groupId, true);
+            if (!ConnectionManager->CreateConnection(connConf, connName, groupId).isEmpty())
+                count++;
         }
     }
 
@@ -119,7 +126,8 @@ int ImportConfigWindow::PerformImportConnection()
             {
                 connName = protocol + "/" + host + ":" + QSTRN(port) + "-" + GenerateRandomString(5);
             }
-            ConnectionManager->CreateConnection(connConf, connName, groupId, true);
+            if (!ConnectionManager->CreateConnection(connConf, connName, groupId).isEmpty())
+                count++;
         }
     }
 

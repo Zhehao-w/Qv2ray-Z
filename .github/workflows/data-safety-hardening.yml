@@ -1,0 +1,175 @@
+name: Data safety hardening
+
+on:
+  push:
+    branches:
+      - "hardening/**"
+    paths:
+      - ".github/workflows/data-safety-hardening.yml"
+      - "src/**"
+      - "test/**"
+      - "libs/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-tests:
+    name: Qt5 supported regression tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out source and recursive submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Qt5 and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            libcurl4-openssl-dev \
+            libgrpc++-dev \
+            libprotobuf-dev \
+            libqt5svg5-dev \
+            ninja-build \
+            pkg-config \
+            protobuf-compiler \
+            protobuf-compiler-grpc \
+            qtbase5-dev \
+            qttools5-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -GNinja \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DQV2RAY_AUTO_DEPLOY=OFF \
+            -DQV2RAY_HAS_BUILTIN_THEMES=OFF \
+            -DQV2RAY_HAS_SINGLEAPPLICATION=OFF \
+            -DQV2RAY_QT6=OFF \
+            -DQV2RAY_USE_V5_CORE=ON
+
+      - name: Build supported regression targets
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build --target \
+            parse_ss_url \
+            parse_vmess_url \
+            parse_vless_url \
+            generation \
+            qjsonio \
+            kernel_path_resolver \
+            data_safety \
+            --parallel 2 2>&1 | tee build.log
+
+      - name: Upload Linux build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-safety-linux-build-log
+          path: build.log
+          if-no-files-found: error
+
+      - name: Run supported regression tests
+        run: >-
+          ctest --test-dir build --output-on-failure
+          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|data_safety)'
+
+      - name: Check committed whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            git diff --check "${{ github.event.before }}" "${{ github.sha }}"
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            git diff-tree --check --root HEAD
+          fi
+
+  windows-build:
+    name: Qt 5.15.2 / MSVC 14.2 app and regression tests
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Check out source and recursive submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install MSVC 14.2 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          toolset: 14.2
+          arch: x64
+
+      - name: Install Qt 5.15.2
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: 5.15.2
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Download historical Qv2ray Windows dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd libs
+          ./setup-libs.sh windows x64
+
+      - name: Locate CURL in the Windows dependency bundle
+        shell: pwsh
+        run: |
+          $prefix = (Resolve-Path "libs/x64-windows").Path
+          $header = Get-ChildItem $prefix -Recurse -File -Filter curl.h |
+            Where-Object { $_.FullName -match '[\\/]curl[\\/]curl\.h$' } |
+            Select-Object -First 1
+          $library = Get-ChildItem $prefix -Recurse -File |
+            Where-Object { $_.Name -in @('libcurl.lib', 'curl.lib') -and $_.FullName -notmatch '[\\/]debug[\\/]' } |
+            Select-Object -First 1
+
+          if (-not $header) { throw "CURL header was not found below $prefix" }
+          if (-not $library) { throw "CURL import library was not found below $prefix" }
+
+          $include = Split-Path (Split-Path $header.FullName -Parent) -Parent
+          "CURL_INCLUDE_DIR=$include" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "CURL_LIBRARY=$($library.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure Qv2ray-Z
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DBUILD_TESTING=ON `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DQV2RAY_AUTO_DEPLOY=OFF `
+            -DQV2RAY_USE_V5_CORE=ON `
+            -DQV2RAY_HAS_BUILTIN_PLUGINS=ON `
+            -DCURL_INCLUDE_DIR="$env:CURL_INCLUDE_DIR" `
+            -DCURL_LIBRARY="$env:CURL_LIBRARY"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build application and supported regression targets
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver data_safety --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run supported regression tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|data_safety)'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
