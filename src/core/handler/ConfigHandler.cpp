@@ -257,7 +257,7 @@ namespace Qv2ray::core::handler
             return tr("Failed to save connection metadata.");
         }
         emit OnConnectionRenamed(id, originalName, newName);
-        PluginHost->SendEvent({ Events::ConnectionEntry::Renamed, newName, originalName });
+        PluginHost->SendEvent({ Events::ConnectionEntry::Renamed, newName, oldName });
         return {};
     }
 
@@ -349,8 +349,6 @@ namespace Qv2ray::core::handler
         CheckValidId(id, false);
         CheckValidId(targetGid, false);
         CheckValidId(sourceGid, false);
-        if (!metadataPersistenceEnabled)
-            return false;
         if (sourceGid == targetGid)
             return true;
         if (!groups[sourceGid].connections.contains(id))
@@ -700,10 +698,17 @@ namespace Qv2ray::core::handler
         CheckValidId(id, nothing);
         if (!groups[id].isSubscription)
             return;
-        NetworkRequestHelper::AsyncHttpGet(groups[id].subscriptionOption.address, [=](const QByteArray &d) {
-            p_CHUpdateSubscription(id, d);
-            emit OnSubscriptionAsyncUpdateFinished(id);
-        });
+        NetworkRequestHelper::AsyncHttpGetResult(
+            groups[id].subscriptionOption.address, this, [this, id](const NetworkRequestResult &result) {
+                if (!result.ok())
+                {
+                    QvMessageBoxWarn(nullptr, tr("Cannot Update Subscription"),
+                                     tr("Failed to download the subscription: %1").arg(result.errorString));
+                    return;
+                }
+                if (p_CHUpdateSubscription(id, result.body))
+                    emit OnSubscriptionAsyncUpdateFinished(id);
+            });
     }
 
     bool QvConfigHandler::UpdateSubscription(const GroupId &id)
@@ -711,8 +716,14 @@ namespace Qv2ray::core::handler
         CheckValidId(id, false);
         if (!groups[id].isSubscription)
             return false;
-        const auto data = NetworkRequestHelper::HttpGet(groups[id].subscriptionOption.address);
-        return p_CHUpdateSubscription(id, data);
+        const auto result = NetworkRequestHelper::HttpGetResult(QUrl(groups[id].subscriptionOption.address));
+        if (!result.ok())
+        {
+            QvMessageBoxWarn(nullptr, tr("Cannot Update Subscription"),
+                             tr("Failed to download the subscription: %1").arg(result.errorString));
+            return false;
+        }
+        return p_CHUpdateSubscription(id, result.body);
     }
 
     bool QvConfigHandler::p_CHUpdateSubscription(const GroupId &id, const QByteArray &data)
