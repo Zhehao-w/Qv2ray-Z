@@ -25,6 +25,10 @@ else()
     set(QV2RAY_BACKEND_LIBRARY gRPC::gpr gRPC::grpc gRPC::grpc++ gRPC::grpc++_alts)
 endif()
 
+# qv2ray_baselib contains generated protobuf objects, so every static-library
+# consumer needs the protobuf runtime alongside gRPC.
+list(APPEND QV2RAY_BACKEND_LIBRARY ${Protobuf_LIBRARIES})
+
 set(API_PROTO "${CMAKE_SOURCE_DIR}/assets/v2ray_api.proto")
 set(API_PROTO_PATH "${CMAKE_SOURCE_DIR}/assets")
 set(API_PROTO_SRCS "${CMAKE_CURRENT_BINARY_DIR}/v2ray_api.pb.cc")
