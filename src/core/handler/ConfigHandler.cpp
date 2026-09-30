@@ -257,7 +257,7 @@ namespace Qv2ray::core::handler
             return tr("Failed to save connection metadata.");
         }
         emit OnConnectionRenamed(id, originalName, newName);
-        PluginHost->SendEvent({ Events::ConnectionEntry::Renamed, newName, oldName });
+        PluginHost->SendEvent({ Events::ConnectionEntry::Renamed, newName, originalName });
         return {};
     }
 
@@ -349,6 +349,8 @@ namespace Qv2ray::core::handler
         CheckValidId(id, false);
         CheckValidId(targetGid, false);
         CheckValidId(sourceGid, false);
+        if (!metadataPersistenceEnabled)
+            return false;
         if (sourceGid == targetGid)
             return true;
         if (!groups[sourceGid].connections.contains(id))
@@ -633,7 +635,7 @@ namespace Qv2ray::core::handler
         for (const auto &keyword : keywords)
         {
             if (!keyword.trimmed().isEmpty())
-                groups[id].subscriptionOption.IncludeKeywords.push_back(keyword);
+                groups[id].subscriptionOption.IncludeKeywords.push_back(keyword.trimmed());
         }
         if (!SaveConnectionConfig())
         {
@@ -1071,6 +1073,7 @@ namespace Qv2ray::core::handler
 
         groups[groupId].connections << newId;
         connections[newId].creationDate = system_clock::to_time_t(system_clock::now());
+        connections[newId].lastUpdatedDate = system_clock::to_time_t(system_clock::now());
         connections[newId].lastConnected = 0;
         connections[newId].displayName = displayName;
         connections[newId].__qvConnectionRefCount = 1;
