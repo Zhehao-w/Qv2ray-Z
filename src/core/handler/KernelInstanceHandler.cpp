@@ -151,6 +151,9 @@ namespace Qv2ray::core::handler
             if (portResult)
             {
                 LOG(*portResult);
+                activeKernels.clear();
+                pluginLogPrefixPadding = 0;
+                PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
                 return portResult;
             }
             auto firstOutbound = fullConfig["outbounds"].toArray().first().toObject();
@@ -240,8 +243,8 @@ namespace Qv2ray::core::handler
                 }
                 else
                 {
-                    return tr("A plugin kernel failed to start. Please check the outbound settings.");
                     StopConnection();
+                    return tr("A plugin kernel failed to start. Please check the outbound settings.");
                 }
             }
             else
