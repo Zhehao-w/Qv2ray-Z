@@ -49,13 +49,14 @@ TEST_CASE("Diagnostic reports contain only allowlisted configuration metadata")
     REQUIRE(info.value(QStringLiteral("pluginCount")).toInt() == 3);
 }
 
-TEST_CASE("HTTP header diagnostics redact values by default")
+TEST_CASE("HTTP header diagnostics redact every value")
 {
     REQUIRE(SafeHttpHeaderValueForLog("Authorization", "Bearer secret") == QByteArray("<redacted>"));
     REQUIRE(SafeHttpHeaderValueForLog("Proxy-Authorization", "Basic secret") == QByteArray("<redacted>"));
     REQUIRE(SafeHttpHeaderValueForLog("Cookie", "session=secret") == QByteArray("<redacted>"));
     REQUIRE(SafeHttpHeaderValueForLog("Host", "private.example") == QByteArray("<redacted>"));
-    REQUIRE(SafeHttpHeaderValueForLog("User-Agent", "Qv2ray-Z test") == QByteArray("Qv2ray-Z test"));
+    REQUIRE(SafeHttpHeaderValueForLog("User-Agent", "Qv2ray-Z test") == QByteArray("<redacted>"));
+    REQUIRE(SafeHttpHeaderValueForLog("Content-Type", "application/json") == QByteArray("<redacted>"));
 }
 
 TEST_CASE("Signal classification excludes uncatchable signals and queues control actions")
