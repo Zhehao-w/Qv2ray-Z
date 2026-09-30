@@ -1,4 +1,5 @@
 #include "components/proxy/QvProxyConfigurator.hpp"
+#include "components/proxy/ProxyStateSafety.hpp"
 #include "ui/widgets/Qv2rayWidgetApplication.hpp"
 #include "ui/widgets/common/WidgetUIBase.hpp"
 #include "utils/QvHelpers.hpp"
@@ -61,6 +62,15 @@ void MainWindow::MWHideWindow()
 void MainWindow::MWSetSystemProxy()
 {
     const auto explicitEnable = sender() == tray_action_SetSystemProxy;
+#ifdef Q_OS_WIN
+    if (!Qv2ray::components::proxy::safety::CanManageSystemProxy())
+    {
+        LOG("Windows system proxy cannot be changed by this process because it does not hold verified proxy ownership.");
+        if (explicitEnable && !GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy is managed by another Qv2ray instance or has unresolved recovery state."));
+        return;
+    }
+#endif
     if (explicitEnable && !AllowSystemProxyReacquire())
     {
         LOG("Explicit system proxy enable was refused because remaining ownership could not be resolved safely.");
@@ -140,6 +150,16 @@ void MainWindow::MWSetSystemProxy()
 
 void MainWindow::MWClearSystemProxy()
 {
+#ifdef Q_OS_WIN
+    const auto explicitClear = sender() == tray_action_ClearSystemProxy;
+    if (!Qv2ray::components::proxy::safety::CanManageSystemProxy())
+    {
+        LOG("Windows system proxy cannot be cleared by this process because it does not hold verified proxy ownership.");
+        if (explicitClear && !GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy is managed by another Qv2ray instance or has unresolved recovery state."));
+        return;
+    }
+#endif
     if (ClearSystemProxy())
     {
         qvAppTrayIcon->setIcon(KernelInstance->CurrentConnection().isEmpty() ? Q_TRAYICON("tray") : Q_TRAYICON("tray-connected"));
@@ -233,7 +253,7 @@ void MainWindow::updateColorScheme()
     action_RCM_Edit->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("edit")));
     action_RCM_EditJson->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("code")));
     action_RCM_EditComplex->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("edit")));
-    action_RCM_DuplicateConnection->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("copy")));
+    action_RCM_Duplicate->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("copy")));
     action_RCM_DeleteConnection->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ashbin")));
     action_RCM_ResetStats->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ashbin")));
     action_RCM_TestLatency->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ping_gauge")));
@@ -272,7 +292,7 @@ void MainWindow::UpdateActionTranslations()
     action_RCM_EditComplex->setText(tr("Edit as Complex Config"));
     action_RCM_RenameConnection->setText(tr("Rename"));
     action_RCM_Edit->setText(tr("Edit"));
-    action_RCM_DuplicateConnection->setText(tr("Duplicate to the Same Group"));
+    action_RCM_Duplicate->setText(tr("Duplicate to the Same Group"));
     action_RCM_TestLatency->setText(tr("Test Latency"));
     action_RCM_RealLatencyTest->setText(tr("Test Real Latency"));
     action_RCM_ResetStats->setText(tr("Clear Usage Data"));
