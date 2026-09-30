@@ -576,6 +576,16 @@ namespace Qv2ray::components::proxy
 
             for (const auto &target : targets)
             {
+                SystemProxyState current;
+                if (!QueryWinInetProxyState(target, &current) || current != beforeStates[target])
+                {
+                    LOG("Windows proxy state changed after it was snapshotted for " + ProxyTargetName(target) +
+                        "; refusing to overwrite the newer value.");
+                    proxyTakeoverLatch.MarkExternalTakeover();
+                    ResolveFailedSet(beforeStates);
+                    return false;
+                }
+
                 if (!ApplyOwnedManualProxyState(target, proxyOwnership.expected[target]))
                 {
                     ResolveFailedSet(beforeStates);
