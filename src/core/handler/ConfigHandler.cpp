@@ -635,7 +635,7 @@ namespace Qv2ray::core::handler
         for (const auto &keyword : keywords)
         {
             if (!keyword.trimmed().isEmpty())
-                groups[id].subscriptionOption.IncludeKeywords.push_back(keyword.trimmed());
+                groups[id].subscriptionOption.IncludeKeywords.push_back(keyword);
         }
         if (!SaveConnectionConfig())
         {
@@ -1073,7 +1073,6 @@ namespace Qv2ray::core::handler
 
         groups[groupId].connections << newId;
         connections[newId].creationDate = system_clock::to_time_t(system_clock::now());
-        connections[newId].lastUpdatedDate = system_clock::to_time_t(system_clock::now());
         connections[newId].lastConnected = 0;
         connections[newId].displayName = displayName;
         connections[newId].__qvConnectionRefCount = 1;
