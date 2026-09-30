@@ -1,0 +1,130 @@
+#include "KernelProcessLifecycle.hpp"
+
+#include <QProcess>
+#include <QStringList>
+#include <QtGlobal>
+
+namespace Qv2ray::core::kernel
+{
+    QString TakeProcessDiagnostics(QProcess &process)
+    {
+        QStringList details;
+        // A successful stability probe intentionally lets waitForFinished()
+        // time out while the process remains running. Do not surface that
+        // expected probe timeout later as a kernel failure diagnostic.
+        if (process.error() != QProcess::Timedout)
+        {
+            const auto processError = process.errorString().trimmed();
+            if (!processError.isEmpty() && processError.compare(QStringLiteral("Unknown error"), Qt::CaseInsensitive) != 0)
+                details << processError;
+        }
+
+        const auto standardError = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
+        if (!standardError.isEmpty())
+            details << standardError;
+
+        return details.join(QStringLiteral(" | "));
+    }
+
+    bool StartProcessBounded(QProcess &process, int timeoutMs, QString *error)
+    {
+        const auto started = process.waitForStarted(timeoutMs);
+        if (started && process.state() == QProcess::Running)
+            return true;
+
+        bool stopped = process.state() == QProcess::NotRunning;
+        if (!stopped)
+        {
+            process.kill();
+            stopped = process.waitForFinished(qMax(timeoutMs, 100)) || process.state() == QProcess::NotRunning;
+        }
+
+        if (error)
+        {
+            auto detail = TakeProcessDiagnostics(process);
+            if (detail.isEmpty())
+                detail = QStringLiteral("process did not enter the running state");
+            if (!stopped)
+                detail += QStringLiteral("; failed startup process could not be killed");
+            *error = detail;
+        }
+        return false;
+    }
+
+    bool ConfirmProcessStable(QProcess &process, int graceMs, QString *error)
+    {
+        if (process.state() != QProcess::Running)
+        {
+            if (error)
+            {
+                auto detail = TakeProcessDiagnostics(process);
+                if (detail.isEmpty())
+                    detail = QStringLiteral("process exited before startup was confirmed");
+                *error = detail;
+            }
+            return false;
+        }
+
+        // Deliberately use QProcess's blocking wait rather than a nested Qt
+        // event loop. A nested loop would dispatch unrelated queued events
+        // (for example a plugin-kernel crash) while the outer connection start
+        // is still on the stack, allowing reentrant mutation of startup state.
+        const auto finished = process.waitForFinished(qMax(graceMs, 0));
+        if (!finished && process.state() == QProcess::Running)
+            return true;
+
+        if (error)
+        {
+            auto detail = TakeProcessDiagnostics(process);
+            const auto exitDetail = process.exitStatus() == QProcess::CrashExit
+                                        ? QStringLiteral("process crashed during startup")
+                                        : QStringLiteral("process exited during startup with code %1").arg(process.exitCode());
+            *error = detail.isEmpty() ? exitDetail : exitDetail + QStringLiteral(": ") + detail;
+        }
+        return false;
+    }
+
+    bool WaitForProcessFinishedBounded(QProcess &process, int timeoutMs, int killTimeoutMs, QString *error)
+    {
+        if (process.state() == QProcess::NotRunning)
+            return true;
+
+        if (process.waitForFinished(timeoutMs))
+            return true;
+
+        process.kill();
+        const auto killed = process.waitForFinished(killTimeoutMs) || process.state() == QProcess::NotRunning;
+        if (error)
+        {
+            const auto detail = TakeProcessDiagnostics(process);
+            *error = killed ? QStringLiteral("process timed out")
+                            : QStringLiteral("process timed out and could not be killed");
+            if (!detail.isEmpty())
+                *error += QStringLiteral(": ") + detail;
+        }
+        return false;
+    }
+
+    ProcessStopResult StopProcessBounded(QProcess &process, int terminateTimeoutMs, int killTimeoutMs, QString *error)
+    {
+        if (process.state() == QProcess::NotRunning)
+            return ProcessStopResult::AlreadyStopped;
+
+        process.terminate();
+        if (process.waitForFinished(terminateTimeoutMs) || process.state() == QProcess::NotRunning)
+            return ProcessStopResult::Terminated;
+
+        process.kill();
+        if (process.waitForFinished(killTimeoutMs) || process.state() == QProcess::NotRunning)
+            return ProcessStopResult::Killed;
+
+        if (error)
+        {
+            auto detail = TakeProcessDiagnostics(process);
+            if (detail.isEmpty())
+                detail = QStringLiteral("process remained running after terminate and kill");
+            *error = detail;
+        }
+        return ProcessStopResult::Failed;
+    }
+} // namespace Qv2ray::core::kernel

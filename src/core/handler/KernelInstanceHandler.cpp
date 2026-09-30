@@ -75,6 +75,12 @@ namespace Qv2ray::core::handler
     std::optional<QString> KernelInstanceHandler::StartConnection(const ConnectionGroupPair &id, CONFIGROOT fullConfig)
     {
         StopConnection();
+        if (isConnected)
+        {
+            LOG("Cannot start a new connection because the previous kernel is still running.");
+            return tr("The previous connection could not be stopped. Please retry disconnecting it before starting another connection.");
+        }
+
         inboundInfo = GetInboundInfo(fullConfig);
         //
         const auto inboundPorts = GetInboundPorts();
@@ -180,8 +186,10 @@ namespace Qv2ray::core::handler
                 //
                 if (result.has_value())
                 {
+                    const auto hadCleanupState = isConnected;
                     StopConnection();
-                    PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
+                    if (!hadCleanupState && !isConnected)
+                        PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
                     return result;
                 }
                 else
@@ -243,8 +251,10 @@ namespace Qv2ray::core::handler
                 auto result = vCoreInstance->StartConnection(fullConfig);
                 if (result.has_value())
                 {
-                    PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
+                    const auto hadCleanupState = isConnected;
                     StopConnection();
+                    if (!hadCleanupState && !isConnected)
+                        PluginHost->SendEvent({ GetDisplayName(id.connectionId), inboundPorts, Events::Connectivity::Disconnected });
                     return result;
                 }
                 else
@@ -289,6 +299,13 @@ namespace Qv2ray::core::handler
 
     void KernelInstanceHandler::StopConnection()
     {
+        if (stoppingConnection)
+        {
+            LOG("Connection shutdown is already in progress; ignoring reentrant stop request.");
+            return;
+        }
+
+        stoppingConnection = true;
         if (isConnected)
         {
             const auto inboundPorts = GetInboundPorts();
@@ -296,6 +313,12 @@ namespace Qv2ray::core::handler
             if (vCoreInstance->IsKernelRunning())
             {
                 vCoreInstance->StopConnection();
+                if (vCoreInstance->IsKernelRunning())
+                {
+                    LOG("V2Ray kernel is still running after the stop attempt; preserving connection state for a later retry.");
+                    stoppingConnection = false;
+                    return;
+                }
             }
             for (const auto &[kernel, kernelObject] : activeKernels)
             {
@@ -312,6 +335,7 @@ namespace Qv2ray::core::handler
         }
         currentId.clear();
         activeKernels.clear();
+        stoppingConnection = false;
     }
 
     void KernelInstanceHandler::OnV2RayStatsDataRcvd_p(const QMap<StatisticsType, QvStatsSpeed> &data)

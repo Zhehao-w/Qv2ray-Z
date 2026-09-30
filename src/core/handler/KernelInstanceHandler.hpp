@@ -88,6 +88,7 @@ namespace Qv2ray::core::handler
         QMap<QString, ProtocolSettingsInfoObject> inboundInfo;
         V2RayKernelInstance *vCoreInstance = nullptr;
         ConnectionGroupPair currentId = {};
+        bool stoppingConnection = false;
     };
     inline const KernelInstanceHandler *KernelInstance;
 } // namespace Qv2ray::core::handler
