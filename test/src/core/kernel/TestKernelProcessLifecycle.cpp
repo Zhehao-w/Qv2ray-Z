@@ -74,7 +74,7 @@ TEST_CASE("Kernel process lifecycle is bounded")
     SECTION("missing executable is rejected without leaving a process behind")
     {
         QProcess process;
-        process.setProgram(QDir::temp().filePath("qv2ray-z-definitely-missing-kernel"));
+        process.setProgram(QDir(QDir::tempPath()).filePath("qv2ray-z-definitely-missing-kernel"));
         process.start();
 
         QString error;
