@@ -185,6 +185,28 @@ TEST_CASE("Prepared persistence journal rolls back a partially applied multi-fil
     REQUIRE_FALSE(QDir(PersistenceTransactionDirectory(root.path())).exists());
 }
 
+TEST_CASE("Prepared persistence journal removes a newly created target during rollback")
+{
+    QTemporaryDir root;
+    REQUIRE(root.isValid());
+
+    const QStringList targets{ "connections/new-node.json", "connections.json", "groups.json" };
+    const QList<std::optional<QByteArray>> oldPayloads{ std::nullopt, QByteArray("old-connections"), QByteArray("old-groups") };
+    const QList<std::optional<QByteArray>> newPayloads{ QByteArray("new-node"), QByteArray("new-connections"), QByteArray("new-groups") };
+    stageJournal(root.path(), "prepared", targets, oldPayloads, newPayloads);
+
+    writeBytes(QDir(root.path()).filePath(targets[0]), "new-node");
+    writeBytes(QDir(root.path()).filePath(targets[1]), "new-connections");
+    writeBytes(QDir(root.path()).filePath(targets[2]), "old-groups");
+
+    const auto recovery = RecoverPersistenceTransaction(root.path());
+    REQUIRE(recovery.action == PersistenceRecoveryAction::RolledBack);
+    REQUIRE_FALSE(QFile::exists(QDir(root.path()).filePath(targets[0])));
+    REQUIRE(StringFromFile(QDir(root.path()).filePath(targets[1])) == "old-connections");
+    REQUIRE(StringFromFile(QDir(root.path()).filePath(targets[2])) == "old-groups");
+    REQUIRE_FALSE(QDir(PersistenceTransactionDirectory(root.path())).exists());
+}
+
 TEST_CASE("Committed persistence journal rolls forward all targets after a crash before cleanup")
 {
     QTemporaryDir root;
