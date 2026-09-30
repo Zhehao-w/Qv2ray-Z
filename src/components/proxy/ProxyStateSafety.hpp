@@ -26,6 +26,33 @@ namespace Qv2ray::components::proxy::safety
         }
     };
 
+    class ExternalTakeoverLatch
+    {
+      public:
+        bool AllowsAutomaticSet() const
+        {
+            return !blocked;
+        }
+
+        bool IsBlocked() const
+        {
+            return blocked;
+        }
+
+        void MarkExternalTakeover()
+        {
+            blocked = true;
+        }
+
+        void AcknowledgeExplicitEnable()
+        {
+            blocked = false;
+        }
+
+      private:
+        bool blocked = false;
+    };
+
     inline SystemProxyState MakeOwnedManualProxyState(const SystemProxyState &baseline, quint32 ownedFlags, const QString &proxyServer)
     {
         auto result = baseline;
