@@ -144,13 +144,16 @@ jobs:
           $library = Get-ChildItem $prefix -Recurse -File |
             Where-Object { $_.Name -in @('libcurl.lib', 'curl.lib') -and $_.FullName -notmatch '[\\/]debug[\\/]' } |
             Select-Object -First 1
+          $runtime = Join-Path $prefix "bin"
 
           if (-not $header) { throw "CURL header was not found below $prefix" }
           if (-not $library) { throw "CURL import library was not found below $prefix" }
+          if (-not (Test-Path $runtime)) { throw "Windows runtime dependency directory was not found at $runtime" }
 
           $include = Split-Path (Split-Path $header.FullName -Parent) -Parent
           "CURL_INCLUDE_DIR=$include" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "CURL_LIBRARY=$($library.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $runtime | Out-File $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Configure Qv2ray-Z
         shell: pwsh
