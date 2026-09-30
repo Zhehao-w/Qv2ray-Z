@@ -168,8 +168,17 @@ jobs:
       - name: Build application and supported regression targets
         shell: pwsh
         run: |
-          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety --parallel 2
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety --parallel 2 2>&1 | Tee-Object -FilePath build.log
+          $buildExitCode = $LASTEXITCODE
+          if ($buildExitCode -ne 0) { exit $buildExitCode }
+
+      - name: Upload Windows build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-safety-windows-build-log
+          path: build.log
+          if-no-files-found: error
 
       - name: Run supported regression tests
         shell: pwsh
