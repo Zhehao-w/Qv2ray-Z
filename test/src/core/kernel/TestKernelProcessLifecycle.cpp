@@ -3,10 +3,9 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QProcess>
+#include <QThread>
 
-#include <chrono>
 #include <cstdio>
-#include <thread>
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
@@ -45,19 +44,19 @@ int main(int argc, char *argv[])
     {
         if (fixtureMode == "short")
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            QThread::msleep(100);
             return 0;
         }
         if (fixtureMode == "sleep")
         {
-            std::this_thread::sleep_for(std::chrono::seconds(30));
+            QThread::sleep(30);
             return 0;
         }
         if (fixtureMode == "stderr-sleep")
         {
             std::fputs("fixture stderr\n", stderr);
             std::fflush(stderr);
-            std::this_thread::sleep_for(std::chrono::seconds(30));
+            QThread::sleep(30);
             return 0;
         }
         return 9;
