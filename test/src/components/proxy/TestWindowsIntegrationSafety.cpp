@@ -36,6 +36,23 @@ TEST_CASE("System proxy ownership only restores unchanged owned state")
     REQUIRE_FALSE(IsStillOwned(owned, externallyChanged));
 }
 
+TEST_CASE("External proxy takeover blocks automatic reacquisition until explicit enable")
+{
+    using namespace Qv2ray::components::proxy::safety;
+
+    ExternalTakeoverLatch latch;
+    REQUIRE(latch.AllowsAutomaticSet());
+    REQUIRE_FALSE(latch.IsBlocked());
+
+    latch.MarkExternalTakeover();
+    REQUIRE_FALSE(latch.AllowsAutomaticSet());
+    REQUIRE(latch.IsBlocked());
+
+    latch.AcknowledgeExplicitEnable();
+    REQUIRE(latch.AllowsAutomaticSet());
+    REQUIRE_FALSE(latch.IsBlocked());
+}
+
 TEST_CASE("System proxy snapshots round-trip without losing Windows state")
 {
     using namespace Qv2ray::components::proxy::safety;
@@ -53,6 +70,10 @@ TEST_CASE("System proxy snapshots round-trip without losing Windows state")
 
     auto invalid = SystemProxyStateToJson(state);
     invalid.remove(QStringLiteral("proxy_server"));
+    REQUIRE_FALSE(SystemProxyStateFromJson(invalid, &restored));
+
+    invalid = SystemProxyStateToJson(state);
+    invalid[QStringLiteral("flags")] = 1.5;
     REQUIRE_FALSE(SystemProxyStateFromJson(invalid, &restored));
 }
 
