@@ -145,6 +145,22 @@ TEST_CASE("HTTP error body is not exposed as successful subscription data")
     REQUIRE(legacyBody.isEmpty());
 }
 
+TEST_CASE("Legacy async callbacks are suppressed on HTTP failure")
+{
+    LocalHttpServer server;
+    QEventLoop loop;
+    bool callbackCalled = false;
+
+    NetworkRequestHelper::AsyncHttpGet(server.url("/error").toString(), [&](const QByteArray &) {
+        callbackCalled = true;
+        loop.quit();
+    });
+
+    QTimer::singleShot(500, &loop, &QEventLoop::quit);
+    loop.exec();
+    REQUIRE_FALSE(callbackCalled);
+}
+
 TEST_CASE("Safe redirects are followed")
 {
     LocalHttpServer server;
