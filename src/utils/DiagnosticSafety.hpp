@@ -51,28 +51,28 @@ namespace Qv2ray::common::diagnostics
 
     inline QByteArray SafeHttpHeaderValueForLog(const QByteArray &key, const QByteArray &value)
     {
-        const auto normalized = key.trimmed().toLower();
-        if (normalized == "user-agent" || normalized == "accept" || normalized == "accept-encoding" || normalized == "content-type" ||
-            normalized == "content-length")
-            return value;
+        Q_UNUSED(key)
+        Q_UNUSED(value)
+        // Header values are not needed for diagnostics and may contain credentials,
+        // cookies, private hostnames, user-controlled identifiers, or future secrets.
         return QByteArrayLiteral("<redacted>");
     }
 
     inline QVector<int> FatalSignals()
     {
-        QVector<int> signals{ SIGABRT, SIGSEGV };
+        QVector<int> signalList{ SIGABRT, SIGSEGV };
 #ifndef Q_OS_WIN
 #ifdef SIGBUS
-        signals.append(SIGBUS);
+        signalList.append(SIGBUS);
 #endif
 #ifdef SIGILL
-        signals.append(SIGILL);
+        signalList.append(SIGILL);
 #endif
 #ifdef SIGFPE
-        signals.append(SIGFPE);
+        signalList.append(SIGFPE);
 #endif
 #endif
-        return signals;
+        return signalList;
     }
 
     inline QVector<int> ControlSignals()
