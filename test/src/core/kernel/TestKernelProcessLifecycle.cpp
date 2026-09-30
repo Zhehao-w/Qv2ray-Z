@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QProcess>
 #include <QThread>
+#include <QTimer>
 
 #include <cstdio>
 
@@ -88,7 +89,7 @@ TEST_CASE("Kernel process lifecycle is bounded")
         REQUIRE_FALSE(error.isEmpty());
     }
 
-    SECTION("a child that exits immediately is rejected before startup is confirmed")
+    SECTION("a child that exits during the startup grace window is rejected")
     {
         ScopedEnvironment environment("QV2RAY_PROCESS_FIXTURE_MODE", "early-exit");
         QProcess process;
@@ -101,6 +102,28 @@ TEST_CASE("Kernel process lifecycle is bounded")
         REQUIRE(process.state() == QProcess::NotRunning);
         REQUIRE(error.contains("startup", Qt::CaseInsensitive));
         REQUIRE(error.contains("7"));
+    }
+
+    SECTION("startup stability probing does not dispatch unrelated queued events")
+    {
+        ScopedEnvironment environment("QV2RAY_PROCESS_FIXTURE_MODE", "sleep");
+        QProcess process;
+        process.setProgram(fixtureExecutable);
+        process.start();
+
+        QString error;
+        REQUIRE(StartProcessBounded(process, 2000, &error));
+
+        bool queuedEventDelivered = false;
+        QTimer::singleShot(0, [&queuedEventDelivered]() { queuedEventDelivered = true; });
+
+        REQUIRE(ConfirmProcessStable(process, 50, &error));
+        REQUIRE_FALSE(queuedEventDelivered);
+
+        QCoreApplication::processEvents();
+        REQUIRE(queuedEventDelivered);
+
+        REQUIRE(StopProcessBounded(process, 0, 2000, &error) != ProcessStopResult::Failed);
     }
 
     SECTION("a normally starting child can finish within the bound")
