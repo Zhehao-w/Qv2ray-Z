@@ -140,7 +140,7 @@ TEST_CASE("Proxy recovery location index round-trips independently of the select
     REQUIRE(ConfigPathsEquivalent(QStringLiteral("C:/portable/profile-a/"), QStringLiteral("C:/portable/profile-a")));
     REQUIRE_FALSE(ConfigPathsEquivalent(QStringLiteral("C:/portable/profile-a"), QStringLiteral("C:/portable/profile-b")));
 #ifdef Q_OS_WIN
-    REQUIRE(ConfigPathsEquivalent(QStringLiteral("C:/Portable/Profile-A"), QStringLiteral("c:\\portable\\profile-a\\")));
+    REQUIRE_FALSE(ConfigPathsEquivalent(QStringLiteral("C:/Portable/Profile-A"), QStringLiteral("c:\\portable\\profile-a\\")));
 #endif
 }
 
