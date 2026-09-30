@@ -47,6 +47,24 @@ namespace Qv2ray::core::handler::data_safety
             return QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex();
         }
 
+        Qt::CaseSensitivity PathCaseSensitivity()
+        {
+#ifdef Q_OS_WIN
+            return Qt::CaseInsensitive;
+#else
+            return Qt::CaseSensitive;
+#endif
+        }
+
+        QString TargetKey(const QString &relativeTarget)
+        {
+#ifdef Q_OS_WIN
+            return relativeTarget.toCaseFolded();
+#else
+            return relativeTarget;
+#endif
+        }
+
         bool EnsureParentDirectory(const QString &targetPath, QString *error)
         {
             const QFileInfo info(targetPath);
@@ -135,8 +153,10 @@ namespace Qv2ray::core::handler::data_safety
                 return false;
             }
 
-            const QString journalPrefix = QStringLiteral(JOURNAL_DIRECTORY_NAME) + "/";
-            if (relative == JOURNAL_DIRECTORY_NAME || relative.startsWith(journalPrefix))
+            const auto journalName = QString::fromLatin1(JOURNAL_DIRECTORY_NAME);
+            const auto journalPrefix = journalName + "/";
+            const auto caseSensitivity = PathCaseSensitivity();
+            if (relative.compare(journalName, caseSensitivity) == 0 || relative.startsWith(journalPrefix, caseSensitivity))
             {
                 if (error)
                     *error = QStringLiteral("Transaction target overlaps the transaction journal: %1").arg(targetPath);
@@ -249,13 +269,14 @@ namespace Qv2ray::core::handler::data_safety
                 QString relativeTarget;
                 if (!ResolveTarget(rootDirectory, entryObject.value("target").toString(), &relativeTarget, nullptr, error))
                     return false;
-                if (seenTargets.contains(relativeTarget))
+                const auto targetKey = TargetKey(relativeTarget);
+                if (seenTargets.contains(targetKey))
                 {
                     if (error)
                         *error = QStringLiteral("Persistence transaction manifest contains duplicate target: %1").arg(relativeTarget);
                     return false;
                 }
-                seenTargets.insert(relativeTarget);
+                seenTargets.insert(targetKey);
 
                 JournalEntry entry;
                 entry.relativeTarget = relativeTarget;
@@ -369,6 +390,15 @@ namespace Qv2ray::core::handler::data_safety
 
             return { true, false, QStringLiteral("Persistence transaction authority was retired, but staged payload cleanup is pending: %1").arg(journalDirectory) };
         }
+
+        QString JoinErrors(const QString &primary, const QString &secondary)
+        {
+            if (secondary.isEmpty())
+                return primary;
+            if (primary.isEmpty())
+                return secondary;
+            return primary + QStringLiteral("; ") + secondary;
+        }
     } // namespace
 
     QString PersistenceTransactionDirectory(const QString &rootDirectory)
@@ -446,12 +476,13 @@ namespace Qv2ray::core::handler::data_safety
                 const bool cleaned = RemoveJournalDirectory(journalDirectory);
                 return { false, cleaned, error };
             }
-            if (seenTargets.contains(relativeTarget))
+            const auto targetKey = TargetKey(relativeTarget);
+            if (seenTargets.contains(targetKey))
             {
                 const bool cleaned = RemoveJournalDirectory(journalDirectory);
                 return { false, cleaned, QStringLiteral("Persistence transaction contains duplicate target: %1").arg(relativeTarget) };
             }
-            seenTargets.insert(relativeTarget);
+            seenTargets.insert(targetKey);
 
             const QFileInfo targetInfo(absoluteTarget);
             if (targetInfo.exists() && !targetInfo.isFile())
@@ -490,11 +521,17 @@ namespace Qv2ray::core::handler::data_safety
             manifest.entries.append(entry);
         }
 
-        const auto manifestPath = QDir(journalDirectory).filePath(MANIFEST_FILE_NAME);
-        if (!WriteBytesAtomically(manifestPath, QJsonDocument(ManifestToJson(manifest)).toJson(QJsonDocument::Compact), &error))
+        if (!ValidateRecoveryPayloads(journalDirectory, manifest, true, &error) || !ValidateRecoveryPayloads(journalDirectory, manifest, false, &error))
         {
             const bool cleaned = RemoveJournalDirectory(journalDirectory);
             return { false, cleaned, error };
+        }
+
+        const auto manifestPath = QDir(journalDirectory).filePath(MANIFEST_FILE_NAME);
+        if (!WriteBytesAtomically(manifestPath, QJsonDocument(ManifestToJson(manifest)).toJson(QJsonDocument::Compact), &error))
+        {
+            const auto retirement = RetireJournal(journalDirectory);
+            return { false, retirement.authorityRemoved, JoinErrors(error, retirement.error) };
         }
 
         for (const auto &mutation : mutations)
@@ -512,20 +549,23 @@ namespace Qv2ray::core::handler::data_safety
         if (!error.isEmpty())
         {
             const auto recovery = RecoverPersistenceTransaction(rootDirectory);
-            return { false, recovery.ok(), error + (recovery.ok() ? QString() : QStringLiteral("; rollback failed: ") + recovery.error) };
+            const auto recoveryDetail = recovery.ok() ? recovery.error : QStringLiteral("rollback failed: ") + recovery.error;
+            return { false, recovery.ok(), JoinErrors(error, recoveryDetail) };
         }
 
         manifest.phase = "committed";
         if (!WriteBytesAtomically(manifestPath, QJsonDocument(ManifestToJson(manifest)).toJson(QJsonDocument::Compact), &error))
         {
+            const auto markerError = error;
             const auto recovery = RecoverPersistenceTransaction(rootDirectory);
-            return { false, recovery.ok(), error + (recovery.ok() ? QString() : QStringLiteral("; rollback failed: ") + recovery.error) };
+            const auto recoveryDetail = recovery.ok() ? recovery.error : QStringLiteral("commit-state recovery failed: ") + recovery.error;
+            if (recovery.action == PersistenceRecoveryAction::RolledForward)
+                return { true, true, JoinErrors(markerError, recoveryDetail) };
+            return { false, recovery.ok(), JoinErrors(markerError, recoveryDetail) };
         }
 
         const auto retirement = RetireJournal(journalDirectory);
-        if (!retirement.authorityRemoved)
-            return { true, true, retirement.error };
-        if (!retirement.directoryRemoved)
+        if (!retirement.authorityRemoved || !retirement.directoryRemoved)
             return { true, true, retirement.error };
 
         return { true, true, {} };
