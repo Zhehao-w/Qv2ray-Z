@@ -4,6 +4,7 @@
 #include "core/CoreUtils.hpp"
 #include "core/connection/ConnectionIO.hpp"
 #include "core/handler/KernelInstanceHandler.hpp"
+#include "core/handler/PersistenceTransaction.hpp"
 
 namespace Qv2ray::common::network
 {
@@ -162,6 +163,7 @@ namespace Qv2ray::core::handler
 
       private:
         bool p_CHUpdateSubscription(const GroupId &id, const QByteArray &data);
+        bool CommitConnectionConfig(const QList<data_safety::PersistenceFileMutation> &additionalMutations = {});
 
       private:
         int saveTimerId;
