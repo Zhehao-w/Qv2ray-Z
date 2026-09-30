@@ -253,7 +253,7 @@ void MainWindow::updateColorScheme()
     action_RCM_Edit->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("edit")));
     action_RCM_EditJson->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("code")));
     action_RCM_EditComplex->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("edit")));
-    action_RCM_Duplicate->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("copy")));
+    action_RCM_DuplicateConnection->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("copy")));
     action_RCM_DeleteConnection->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ashbin")));
     action_RCM_ResetStats->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ashbin")));
     action_RCM_TestLatency->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ping_gauge")));
@@ -292,7 +292,7 @@ void MainWindow::UpdateActionTranslations()
     action_RCM_EditComplex->setText(tr("Edit as Complex Config"));
     action_RCM_RenameConnection->setText(tr("Rename"));
     action_RCM_Edit->setText(tr("Edit"));
-    action_RCM_Duplicate->setText(tr("Duplicate to the Same Group"));
+    action_RCM_DuplicateConnection->setText(tr("Duplicate to the Same Group"));
     action_RCM_TestLatency->setText(tr("Test Latency"));
     action_RCM_RealLatencyTest->setText(tr("Test Real Latency"));
     action_RCM_ResetStats->setText(tr("Clear Usage Data"));
