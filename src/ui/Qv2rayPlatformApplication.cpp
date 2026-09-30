@@ -1,6 +1,7 @@
 #include "Qv2rayPlatformApplication.hpp"
 
 #include "core/settings/SettingsBackend.hpp"
+#include "utils/WindowsCommandLine.hpp"
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 #include <QSessionManager>
@@ -58,12 +59,12 @@ bool Qv2rayPlatformApplication::Initialize()
     reg.setValue("Default", "Qv2ray");
     reg.setValue("URL Protocol", "");
     reg.beginGroup("DefaultIcon");
-    reg.setValue("Default", QString("%1,1").arg(appPath));
+    reg.setValue("Default", QString("%1,1").arg(Qv2ray::utils::windows::QuoteCommandLineArgument(appPath)));
     reg.endGroup();
     reg.beginGroup("shell");
     reg.beginGroup("open");
     reg.beginGroup("command");
-    reg.setValue("Default", appPath + " %1");
+    reg.setValue("Default", Qv2ray::utils::windows::BuildUrlProtocolCommand(appPath));
 #endif
 
     connect(this, &Qv2rayPlatformApplication::aboutToQuit, this, &Qv2rayPlatformApplication::quitInternal);
@@ -242,7 +243,7 @@ bool Qv2rayPlatformApplication::parseCommandLine(QString *errorMessage, bool *ca
 
     if (parser.isSet(reconnectOption))
     {
-        DEBUG("reconnectOption is set.");
+        DEBUG("disconnectOption is set.");
         StartupArguments.arguments << Qv2rayStartupArguments::RECONNECT;
     }
 
