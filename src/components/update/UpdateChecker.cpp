@@ -30,7 +30,10 @@ namespace Qv2ray::components
             return;
         const auto &updateChannel = GlobalConfig.updateConfig.updateChannel;
         LOG("Start checking update for channel ID: " + QSTRN(updateChannel));
-        requestHelper->AsyncHttpGet(UpdateChannelLink[updateChannel], &QvUpdateChecker::VersionUpdate);
+        NetworkRequestHelper::AsyncHttpGetResult(UpdateChannelLink[updateChannel], this, [](const NetworkRequestResult &result) {
+            if (result.ok())
+                QvUpdateChecker::VersionUpdate(result.body);
+        });
 #endif
     }
 
