@@ -183,5 +183,14 @@ jobs:
       - name: Run supported regression tests
         shell: pwsh
         run: |
-          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety)'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety)' 2>&1 | Tee-Object -FilePath ctest.log
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
+      - name: Upload Windows test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-safety-windows-test-log
+          path: ctest.log
+          if-no-files-found: error
