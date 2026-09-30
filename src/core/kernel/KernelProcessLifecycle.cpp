@@ -2,6 +2,7 @@
 
 #include <QProcess>
 #include <QStringList>
+#include <QtGlobal>
 
 namespace Qv2ray::core::kernel
 {
@@ -25,10 +26,11 @@ namespace Qv2ray::core::kernel
         if (started && process.state() == QProcess::Running)
             return true;
 
-        if (process.state() != QProcess::NotRunning)
+        bool stopped = process.state() == QProcess::NotRunning;
+        if (!stopped)
         {
             process.kill();
-            process.waitForFinished(qMax(timeoutMs, 100));
+            stopped = process.waitForFinished(qMax(timeoutMs, 100)) || process.state() == QProcess::NotRunning;
         }
 
         if (error)
@@ -36,6 +38,8 @@ namespace Qv2ray::core::kernel
             auto detail = TakeProcessDiagnostics(process);
             if (detail.isEmpty())
                 detail = QStringLiteral("process did not enter the running state");
+            if (!stopped)
+                detail += QStringLiteral("; failed startup process could not be killed");
             *error = detail;
         }
         return false;
