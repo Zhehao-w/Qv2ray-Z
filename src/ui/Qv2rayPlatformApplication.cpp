@@ -138,7 +138,7 @@ bool Qv2rayPlatformApplication::Initialize()
         {
             const auto currentRecoveryPath = ProxyRecoveryRecordPathForConfig(currentConfigPath);
             const auto previousRecoveryPath =
-                previousStatus == ConfigPathRecordStatus::Loaded && previousConfigPath != currentConfigPath
+                previousStatus == ConfigPathRecordStatus::Loaded && !ConfigPathsEquivalent(previousConfigPath, currentConfigPath)
                     ? ProxyRecoveryRecordPathForConfig(previousConfigPath)
                     : QString();
             const auto currentRecoveryExists = !currentRecoveryPath.isEmpty() && QFile::exists(currentRecoveryPath);
