@@ -1,9 +1,7 @@
 #include "KernelProcessLifecycle.hpp"
 
-#include <QEventLoop>
 #include <QProcess>
 #include <QStringList>
-#include <QTimer>
 #include <QtGlobal>
 
 namespace Qv2ray::core::kernel
@@ -11,9 +9,15 @@ namespace Qv2ray::core::kernel
     QString TakeProcessDiagnostics(QProcess &process)
     {
         QStringList details;
-        const auto processError = process.errorString().trimmed();
-        if (!processError.isEmpty() && processError.compare(QStringLiteral("Unknown error"), Qt::CaseInsensitive) != 0)
-            details << processError;
+        // A successful stability probe intentionally lets waitForFinished()
+        // time out while the process remains running. Do not surface that
+        // expected probe timeout later as a kernel failure diagnostic.
+        if (process.error() != QProcess::Timedout)
+        {
+            const auto processError = process.errorString().trimmed();
+            if (!processError.isEmpty() && processError.compare(QStringLiteral("Unknown error"), Qt::CaseInsensitive) != 0)
+                details << processError;
+        }
 
         const auto standardError = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
         if (!standardError.isEmpty())
@@ -61,15 +65,12 @@ namespace Qv2ray::core::kernel
             return false;
         }
 
-        QEventLoop loop;
-        QTimer timer;
-        timer.setSingleShot(true);
-        QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-        QObject::connect(&process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), &loop, &QEventLoop::quit);
-        timer.start(qMax(graceMs, 0));
-        loop.exec(QEventLoop::ExcludeUserInputEvents);
-
-        if (process.state() == QProcess::Running)
+        // Deliberately use QProcess's blocking wait rather than a nested Qt
+        // event loop. A nested loop would dispatch unrelated queued events
+        // (for example a plugin-kernel crash) while the outer connection start
+        // is still on the stack, allowing reentrant mutation of startup state.
+        const auto finished = process.waitForFinished(qMax(graceMs, 0));
+        if (!finished && process.state() == QProcess::Running)
             return true;
 
         if (error)
