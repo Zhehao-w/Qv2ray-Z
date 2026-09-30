@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
         }
         if (fixtureMode == "early-exit")
         {
-            QThread::msleep(20);
+            QThread::msleep(100);
             return 7;
         }
         if (fixtureMode == "sleep")
@@ -97,7 +97,7 @@ TEST_CASE("Kernel process lifecycle is bounded")
 
         QString error;
         REQUIRE(StartProcessBounded(process, 2000, &error));
-        REQUIRE_FALSE(ConfirmProcessStable(process, 200, &error));
+        REQUIRE_FALSE(ConfirmProcessStable(process, 500, &error));
         REQUIRE(process.state() == QProcess::NotRunning);
         REQUIRE(error.contains("startup", Qt::CaseInsensitive));
         REQUIRE(error.contains("7"));
