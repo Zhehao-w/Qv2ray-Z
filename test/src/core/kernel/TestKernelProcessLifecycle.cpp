@@ -47,6 +47,11 @@ int main(int argc, char *argv[])
             QThread::msleep(100);
             return 0;
         }
+        if (fixtureMode == "early-exit")
+        {
+            QThread::msleep(20);
+            return 7;
+        }
         if (fixtureMode == "sleep")
         {
             QThread::sleep(30);
@@ -83,6 +88,21 @@ TEST_CASE("Kernel process lifecycle is bounded")
         REQUIRE_FALSE(error.isEmpty());
     }
 
+    SECTION("a child that exits immediately is rejected before startup is confirmed")
+    {
+        ScopedEnvironment environment("QV2RAY_PROCESS_FIXTURE_MODE", "early-exit");
+        QProcess process;
+        process.setProgram(fixtureExecutable);
+        process.start();
+
+        QString error;
+        REQUIRE(StartProcessBounded(process, 2000, &error));
+        REQUIRE_FALSE(ConfirmProcessStable(process, 200, &error));
+        REQUIRE(process.state() == QProcess::NotRunning);
+        REQUIRE(error.contains("startup", Qt::CaseInsensitive));
+        REQUIRE(error.contains("7"));
+    }
+
     SECTION("a normally starting child can finish within the bound")
     {
         ScopedEnvironment environment("QV2RAY_PROCESS_FIXTURE_MODE", "short");
@@ -92,6 +112,7 @@ TEST_CASE("Kernel process lifecycle is bounded")
 
         QString error;
         REQUIRE(StartProcessBounded(process, 2000, &error));
+        REQUIRE(ConfirmProcessStable(process, 25, &error));
         REQUIRE(WaitForProcessFinishedBounded(process, 2000, 1000, &error));
         REQUIRE(process.state() == QProcess::NotRunning);
         REQUIRE(process.exitStatus() == QProcess::NormalExit);
