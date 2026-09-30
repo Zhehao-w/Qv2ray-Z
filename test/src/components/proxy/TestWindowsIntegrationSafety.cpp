@@ -36,6 +36,26 @@ TEST_CASE("System proxy ownership only restores unchanged owned state")
     REQUIRE_FALSE(IsStillOwned(owned, externallyChanged));
 }
 
+TEST_CASE("System proxy snapshots round-trip without losing Windows state")
+{
+    using namespace Qv2ray::components::proxy::safety;
+
+    SystemProxyState state;
+    state.flags = 0xffffffffu;
+    state.autodiscoveryFlags = 0x80000001u;
+    state.autoConfigUrl = QStringLiteral("https://example.test/pac?q=1");
+    state.proxyServer = QStringLiteral("http=127.0.0.1:10809;https=127.0.0.1:10809");
+    state.proxyBypass = QStringLiteral("localhost;<local>;*.example.test");
+
+    SystemProxyState restored;
+    REQUIRE(SystemProxyStateFromJson(SystemProxyStateToJson(state), &restored));
+    REQUIRE(restored == state);
+
+    auto invalid = SystemProxyStateToJson(state);
+    invalid.remove(QStringLiteral("proxy_server"));
+    REQUIRE_FALSE(SystemProxyStateFromJson(invalid, &restored));
+}
+
 TEST_CASE("Windows URL protocol command line quotes every argument")
 {
     using namespace Qv2ray::utils::windows;
