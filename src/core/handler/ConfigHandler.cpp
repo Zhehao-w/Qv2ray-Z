@@ -16,13 +16,22 @@ namespace Qv2ray::core::handler
     {
         DEBUG("ConnectionHandler Constructor.");
 
+        const auto transactionRecovery = data_safety::RecoverPersistenceTransaction(QV2RAY_CONFIG_DIR);
+        const bool transactionRecoveryFailed = !transactionRecovery.ok();
+        if (transactionRecovery.action == data_safety::PersistenceRecoveryAction::RolledBack)
+            LOG("Recovered an interrupted prepared persistence transaction by restoring the previous connection state.");
+        else if (transactionRecovery.action == data_safety::PersistenceRecoveryAction::RolledForward)
+            LOG("Recovered an interrupted committed persistence transaction by completing the new connection state.");
+        else if (transactionRecoveryFailed)
+            LOG("CRITICAL: persistence transaction recovery failed: " + transactionRecovery.error);
+
         const auto connectionsPath = QV2RAY_CONFIG_DIR + "connections.json";
         const auto groupsPath = QV2RAY_CONFIG_DIR + "groups.json";
         const auto connectionFile = ReadJsonObjectFile(connectionsPath);
         const auto groupFile = ReadJsonObjectFile(groupsPath);
         const bool bothMissing = connectionFile.status == JsonObjectFileStatus::Missing && groupFile.status == JsonObjectFileStatus::Missing;
         const bool bothValid = connectionFile.status == JsonObjectFileStatus::Valid && groupFile.status == JsonObjectFileStatus::Valid;
-        metadataPersistenceEnabled = bothMissing || bothValid;
+        metadataPersistenceEnabled = !transactionRecoveryFailed && (bothMissing || bothValid);
 
         const auto connectionJson = connectionFile.status == JsonObjectFileStatus::Valid ? connectionFile.object : QJsonObject{};
         const auto groupJson = groupFile.status == JsonObjectFileStatus::Valid ? groupFile.object : QJsonObject{};
@@ -30,6 +39,8 @@ namespace Qv2ray::core::handler
         if (!metadataPersistenceEnabled)
         {
             LOG("Connection metadata is incomplete or invalid; destructive recovery and metadata persistence are disabled for this session.");
+            if (transactionRecoveryFailed)
+                LOG("transaction recovery error: " + transactionRecovery.error);
             if (connectionFile.status == JsonObjectFileStatus::Invalid)
                 LOG("connections.json error: " + connectionFile.error);
             if (groupFile.status == JsonObjectFileStatus::Invalid)
@@ -102,9 +113,10 @@ namespace Qv2ray::core::handler
         if (!metadataPersistenceEnabled)
         {
             QvMessageBoxWarn(nullptr, tr("Connection data needs recovery"),
-                             tr("Qv2ray-Z found incomplete or corrupted connection metadata. Recoverable entries were kept in memory and no connection files were deleted. ") +
+                             tr("Qv2ray-Z found incomplete or corrupted connection metadata, or could not safely recover an interrupted persistence transaction. ") +
+                                 tr("Recoverable entries were kept in memory and no connection files were deleted. ") +
                                  tr("To avoid overwriting recoverable data, connection/group metadata will remain read-only for this session. ") +
-                                 tr("Restore or repair connections.json, groups.json, and any reported connection files before making persistent changes."));
+                                 tr("Restore or repair the reported connection data before making persistent changes."));
         }
 
         kernelHandler = new KernelInstanceHandler(this);
@@ -123,6 +135,11 @@ namespace Qv2ray::core::handler
 
     bool QvConfigHandler::SaveConnectionConfig()
     {
+        return CommitConnectionConfig();
+    }
+
+    bool QvConfigHandler::CommitConnectionConfig(const QList<data_safety::PersistenceFileMutation> &additionalMutations)
+    {
         if (!metadataPersistenceEnabled)
         {
             LOG("Refusing to overwrite connection metadata while the loaded metadata set is incomplete or corrupted.");
@@ -137,42 +154,24 @@ namespace Qv2ray::core::handler
         for (const auto &key : groups.keys())
             groupObject[key.toString()] = groups[key].toJson();
 
-        const auto connectionsPath = QV2RAY_CONFIG_DIR + "connections.json";
-        const auto groupsPath = QV2RAY_CONFIG_DIR + "groups.json";
-        const bool connectionsExisted = QFile::exists(connectionsPath);
-        QString oldConnections;
-        if (connectionsExisted)
+        auto mutations = additionalMutations;
+        mutations.append(data_safety::PersistenceFileMutation::Write(QV2RAY_CONFIG_DIR + "connections.json", JsonToString(connectionsObject).toUtf8()));
+        mutations.append(data_safety::PersistenceFileMutation::Write(QV2RAY_CONFIG_DIR + "groups.json", JsonToString(groupObject).toUtf8()));
+
+        const auto result = data_safety::CommitPersistenceTransaction(QV2RAY_CONFIG_DIR, mutations);
+        if (!result.committed)
         {
-            QFile oldConnectionsFile(connectionsPath);
-            if (!oldConnectionsFile.open(QIODevice::ReadOnly))
+            LOG("Connection persistence transaction failed: " + result.error);
+            if (!result.recoveryComplete)
             {
                 metadataPersistenceEnabled = false;
-                LOG("Refusing to update connection metadata because the existing connections.json cannot be backed up: " +
-                    oldConnectionsFile.errorString());
-                return false;
-            }
-            oldConnections = QString::fromUtf8(oldConnectionsFile.readAll());
-        }
-
-        if (!StringToFile(JsonToString(connectionsObject), connectionsPath))
-        {
-            LOG("Failed to save connections.json.");
-            return false;
-        }
-
-        if (!StringToFile(JsonToString(groupObject), groupsPath))
-        {
-            LOG("Failed to save groups.json; rolling back connections.json.");
-            const bool rolledBack = connectionsExisted ? StringToFile(oldConnections, connectionsPath)
-                                                       : (!QFile::exists(connectionsPath) || QFile::remove(connectionsPath));
-            if (!rolledBack)
-            {
-                metadataPersistenceEnabled = false;
-                LOG("CRITICAL: failed to roll back connections.json after groups.json write failure; metadata persistence is disabled for this session.");
+                LOG("CRITICAL: persistence transaction rollback could not be completed; metadata persistence is disabled for this session.");
             }
             return false;
         }
 
+        if (!result.error.isEmpty())
+            LOG("Connection persistence transaction committed with cleanup pending: " + result.error);
         return true;
     }
 
@@ -297,7 +296,11 @@ namespace Qv2ray::core::handler
             connectionRootCache.remove(id);
         }
 
-        if (!SaveConnectionConfig())
+        QList<data_safety::PersistenceFileMutation> mutations;
+        if (fullyRemoved)
+            mutations.append(data_safety::PersistenceFileMutation::Delete(QV2RAY_CONNECTIONS_DIR + id.toString() + QV2RAY_CONFIG_FILE_EXTENSION));
+
+        if (!CommitConnectionConfig(mutations))
         {
             groups[gid] = oldGroup;
             connections[id] = oldConnection;
@@ -306,13 +309,6 @@ namespace Qv2ray::core::handler
             GlobalConfig.autoStartId = oldAutoStartId;
             LOG("Connection removal rolled back because metadata could not be saved.");
             return false;
-        }
-
-        if (fullyRemoved)
-        {
-            const auto path = QV2RAY_CONNECTIONS_DIR + id.toString() + QV2RAY_CONFIG_FILE_EXTENSION;
-            if (QFile::exists(path) && !QFile::remove(path))
-                LOG("Failed to remove unreferenced connection config after committing metadata: " + path);
         }
 
         PluginHost->SendEvent({ Events::ConnectionEntry::RemovedFromGroup, displayName, "" });
@@ -854,7 +850,6 @@ namespace Qv2ray::core::handler
             bool isNew = false;
             bool rename = false;
             QString oldName;
-            CONFIGROOT oldRoot;
         };
 
         QList<PlannedConnection> plans;
@@ -909,7 +904,6 @@ namespace Qv2ray::core::handler
                     return false;
                 }
                 plan.oldName = connections[plan.id].displayName;
-                plan.oldRoot = connectionRootCache.value(plan.id);
             }
 
             replacementIds.append(plan.id);
@@ -926,48 +920,9 @@ namespace Qv2ray::core::handler
         }
 
         const auto membership = data_safety::BuildSubscriptionMembership(originalGroupConnections, replacementIds, removeUnmatched);
-        QList<int> writtenPlans;
         const auto connectionPath = [](const ConnectionId &connectionId) {
             return QV2RAY_CONNECTIONS_DIR + connectionId.toString() + QV2RAY_CONFIG_FILE_EXTENSION;
         };
-        const auto rollbackRootWrites = [&]() {
-            bool rollbackFailed = false;
-            for (auto i = writtenPlans.crbegin(); i != writtenPlans.crend(); ++i)
-            {
-                const auto &plan = plans[*i];
-                const auto path = connectionPath(plan.id);
-                if (plan.isNew)
-                {
-                    if (QFile::exists(path) && !QFile::remove(path))
-                    {
-                        rollbackFailed = true;
-                        LOG("Failed to remove staged subscription connection during rollback: " + path);
-                    }
-                }
-                else if (!StringToFile(JsonToString(plan.oldRoot), path))
-                {
-                    rollbackFailed = true;
-                    LOG("CRITICAL: failed to restore connection config during subscription rollback: " + plan.id.toString());
-                }
-            }
-            if (rollbackFailed)
-            {
-                metadataPersistenceEnabled = false;
-                LOG("CRITICAL: subscription rollback was incomplete; metadata persistence is disabled for this session.");
-            }
-        };
-
-        for (int i = 0; i < plans.count(); ++i)
-        {
-            const auto &plan = plans[i];
-            if (!StringToFile(JsonToString(plan.root), connectionPath(plan.id)))
-            {
-                LOG("Subscription update aborted because a connection config could not be written: " + plan.id.toString());
-                rollbackRootWrites();
-                return false;
-            }
-            writtenPlans.append(i);
-        }
 
         const auto oldGroup = groups[id];
         const auto oldConnections = connections;
@@ -1011,22 +966,20 @@ namespace Qv2ray::core::handler
             }
         }
 
-        if (!SaveConnectionConfig())
+        QList<data_safety::PersistenceFileMutation> mutations;
+        for (const auto &plan : plans)
+            mutations.append(data_safety::PersistenceFileMutation::Write(connectionPath(plan.id), JsonToString(plan.root).toUtf8()));
+        for (const auto &connectionId : fullyRemoved)
+            mutations.append(data_safety::PersistenceFileMutation::Delete(connectionPath(connectionId)));
+
+        if (!CommitConnectionConfig(mutations))
         {
             groups[id] = oldGroup;
             connections = oldConnections;
             connectionRootCache = oldRootCache;
-            rollbackRootWrites();
             QvMessageBoxWarn(nullptr, tr("Subscription update failed"),
                              tr("The updated subscription could not be committed safely. The previous connection state was restored."));
             return false;
-        }
-
-        for (const auto &connectionId : fullyRemoved)
-        {
-            const auto path = connectionPath(connectionId);
-            if (QFile::exists(path) && !QFile::remove(path))
-                LOG("Failed to remove an unreferenced connection file after committing subscription update: " + path);
         }
 
         for (const auto &plan : plans)
@@ -1099,7 +1052,7 @@ namespace Qv2ray::core::handler
         } while (connections.contains(newId));
 
         const auto path = QV2RAY_CONNECTIONS_DIR + newId.toString() + QV2RAY_CONFIG_FILE_EXTENSION;
-        if (!StringToFile(JsonToString(root), path))
+        if (skipSaveConfig && !StringToFile(JsonToString(root), path))
         {
             LOG("Failed to persist new connection config: " + displayName);
             return {};
@@ -1112,14 +1065,18 @@ namespace Qv2ray::core::handler
         connections[newId].__qvConnectionRefCount = 1;
         connectionRootCache[newId] = root;
 
-        if (!skipSaveConfig && !SaveConnectionConfig())
+        if (!skipSaveConfig)
         {
-            groups[groupId].connections.removeAll(newId);
-            connections.remove(newId);
-            connectionRootCache.remove(newId);
-            if (QFile::exists(path) && !QFile::remove(path))
-                LOG("Failed to remove new connection file after metadata save failure: " + path);
-            return {};
+            const QList<data_safety::PersistenceFileMutation> mutations{
+                data_safety::PersistenceFileMutation::Write(path, JsonToString(root).toUtf8())
+            };
+            if (!CommitConnectionConfig(mutations))
+            {
+                groups[groupId].connections.removeAll(newId);
+                connections.remove(newId);
+                connectionRootCache.remove(newId);
+                return {};
+            }
         }
 
         emit OnConnectionCreated({ newId, groupId }, displayName);
