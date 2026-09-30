@@ -1,6 +1,7 @@
 #include "V2RayKernelInteractions.hpp"
 
 #include "APIBackend.hpp"
+#include "KernelProcessLifecycle.hpp"
 #include "core/connection/ConnectionIO.hpp"
 #include "utils/QvHelpers.hpp"
 
@@ -17,6 +18,15 @@
 #define V2RAY_CORE_VERSION_ARGV "--version"
 #define V2RAY_CORE_CONFIG_ARGV "--config"
 #endif
+
+namespace
+{
+    constexpr int PROCESS_START_TIMEOUT_MS = 5000;
+    constexpr int VERSION_FINISH_TIMEOUT_MS = 5000;
+    constexpr int CONFIG_VALIDATION_TIMEOUT_MS = 10000;
+    constexpr int PROCESS_TERMINATE_TIMEOUT_MS = 1500;
+    constexpr int PROCESS_KILL_TIMEOUT_MS = 2000;
+} // namespace
 
 namespace Qv2ray::core::kernel
 {
@@ -145,24 +155,41 @@ namespace Qv2ray::core::kernel
 
         // Check if V2Ray core returns a version number correctly.
         QProcess proc;
+        proc.setProcessChannelMode(QProcess::MergedChannels);
 #ifdef Q_OS_WIN32
         // nativeArguments are required for Windows platform, without a
         // reason...
-        proc.setProcessChannelMode(QProcess::MergedChannels);
         proc.setProgram(corePath);
         proc.setNativeArguments(V2RAY_CORE_VERSION_ARGV);
         proc.start();
 #else
         proc.start(corePath, { V2RAY_CORE_VERSION_ARGV });
 #endif
-        proc.waitForStarted();
-        proc.waitForFinished();
-        auto exitCode = proc.exitCode();
 
+        QString startError;
+        if (!StartProcessBounded(proc, PROCESS_START_TIMEOUT_MS, &startError))
+            return { false, tr("Failed to start V2Ray core version check: %1").arg(startError) };
+
+        QString finishError;
+        if (!WaitForProcessFinishedBounded(proc, VERSION_FINISH_TIMEOUT_MS, PROCESS_KILL_TIMEOUT_MS, &finishError))
+            return { false, tr("V2Ray core version check timed out: %1").arg(finishError) };
+
+        const auto output = proc.readAll();
+        const auto outputText = QString::fromLocal8Bit(output).trimmed();
+
+        if (proc.exitStatus() == QProcess::CrashExit)
+        {
+            return { false, outputText.isEmpty() ? tr("V2Ray core version check process crashed.")
+                                                 : tr("V2Ray core version check process crashed: %1").arg(outputText) };
+        }
+
+        const auto exitCode = proc.exitCode();
         if (exitCode != 0)
-            return { false, tr("V2Ray core failed with an exit code: ") + QSTRN(exitCode) };
+        {
+            return { false, outputText.isEmpty() ? tr("V2Ray core failed with an exit code: ") + QSTRN(exitCode)
+                                                 : tr("V2Ray core failed with exit code %1: %2").arg(exitCode).arg(outputText) };
+        }
 
-        const auto output = proc.readAllStandardOutput();
         LOG("V2Ray output: " + SplitLines(output).join(";"));
 
         if (SplitLines(output).isEmpty())
@@ -190,17 +217,15 @@ namespace Qv2ray::core::kernel
             DEBUG("Starting V2Ray core with test options");
             process.start(kernelPath, { "run", "-test", "-c", path }, QIODevice::ReadWrite | QIODevice::Text);
 
-            if (!process.waitForStarted())
-            {
-                return tr("Failed to start Xray configuration validation: %1").arg(process.errorString());
-            }
+            QString startError;
+            if (!StartProcessBounded(process, PROCESS_START_TIMEOUT_MS, &startError))
+                return tr("Failed to start Xray configuration validation: %1").arg(startError);
 
-            if (!process.waitForFinished())
+            QString finishError;
+            if (!WaitForProcessFinishedBounded(process, CONFIG_VALIDATION_TIMEOUT_MS, PROCESS_KILL_TIMEOUT_MS, &finishError))
             {
-                process.kill();
-                process.waitForFinished();
                 const auto output = QString::fromLocal8Bit(process.readAll()).trimmed();
-                return output.isEmpty() ? tr("Xray configuration validation timed out.") : output;
+                return output.isEmpty() ? tr("Xray configuration validation timed out: %1").arg(finishError) : output;
             }
 
             if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0)
@@ -228,23 +253,35 @@ namespace Qv2ray::core::kernel
     {
         vProcess = new QProcess();
         connect(vProcess, &QProcess::readyReadStandardOutput, this,
-                [&]() { emit OnProcessOutputReadyRead(vProcess->readAllStandardOutput().trimmed()); });
-        connect(vProcess, &QProcess::stateChanged, [&](QProcess::ProcessState state) {
+                [this]() { emit OnProcessOutputReadyRead(vProcess->readAllStandardOutput().trimmed()); });
+        connect(vProcess, &QProcess::stateChanged, this, [this](QProcess::ProcessState state) {
             DEBUG("V2Ray kernel process status changed: " + QVariant::fromValue(state).toString());
 
-            // If V2Ray crashed AFTER we start it.
+            // If V2Ray exits AFTER we successfully started it and this was not
+            // an intentional StopConnection transition, treat it as an error.
             if (kernelStarted && state == QProcess::NotRunning)
             {
-                LOG("V2Ray kernel crashed.");
+                QString message;
+                if (vProcess->exitStatus() == QProcess::CrashExit)
+                    message = tr("V2Ray kernel process crashed.");
+                else
+                    message = tr("V2Ray kernel process exited unexpectedly with code %1.").arg(vProcess->exitCode());
+
+                const auto diagnostics = TakeProcessDiagnostics(*vProcess);
+                if (!diagnostics.isEmpty())
+                    message += QStringLiteral(" ") + diagnostics;
+
+                LOG(message);
                 StopConnection();
-                emit OnProcessErrored("V2Ray kernel crashed.");
+                emit OnProcessErrored(message);
             }
         });
+        connect(vProcess, &QProcess::errorOccurred, this,
+                [](QProcess::ProcessError error) { DEBUG("V2Ray kernel process error: " + QSTRN(static_cast<int>(error))); });
         apiWorker = new APIWorker();
         qRegisterMetaType<StatisticsType>();
         qRegisterMetaType<QMap<StatisticsType, QvStatsSpeed>>();
         connect(apiWorker, &APIWorker::onAPIDataReady, this, &V2RayKernelInstance::OnNewStatsDataArrived);
-        kernelStarted = false;
     }
 
     std::optional<QString> V2RayKernelInstance::StartConnection(const CONFIGROOT &root)
@@ -255,6 +292,7 @@ namespace Qv2ray::core::kernel
             return tr("Invalid V2Ray Instance Status.");
         }
 
+        apiEnabled = false;
         const auto json = JsonToString(root);
         if (!StringToFile(json, QV2RAY_GENERATED_FILE_PATH))
         {
@@ -274,7 +312,21 @@ namespace Qv2ray::core::kernel
         env.insert("XRAY_LOCATION_ASSET", paths.assets);
         vProcess->setProcessEnvironment(env);
         vProcess->start(paths.executable, { V2RAY_CORE_CONFIG_ARGV, filePath }, QIODevice::ReadWrite | QIODevice::Text);
-        vProcess->waitForStarted();
+
+        QString startError;
+        if (!StartProcessBounded(*vProcess, PROCESS_START_TIMEOUT_MS, &startError))
+        {
+            if (vProcess->state() != QProcess::NotRunning)
+            {
+                QString cleanupError;
+                StopProcessBounded(*vProcess, 0, PROCESS_KILL_TIMEOUT_MS, &cleanupError);
+                if (!cleanupError.isEmpty())
+                    startError += QStringLiteral("; cleanup failed: ") + cleanupError;
+            }
+            kernelStarted = vProcess->state() != QProcess::NotRunning;
+            return tr("V2Ray kernel failed to start: %1").arg(startError);
+        }
+
         kernelStarted = true;
 
         QMap<bool, QMap<QString, QString>> tagProtocolMap;
@@ -294,7 +346,6 @@ namespace Qv2ray::core::kernel
             }
         }
 
-        apiEnabled = false;
         if (QvCoreApplication->StartupArguments.noAPI)
         {
             LOG("API has been disabled by the command line arguments");
@@ -325,18 +376,27 @@ namespace Qv2ray::core::kernel
             apiEnabled = false;
         }
 
-        // Set this to false BEFORE close the Process, since we need this flag
-        // to capture the real kernel CRASH
+        // Set this to false before asking the process to stop so the stateChanged
+        // callback can distinguish an intentional shutdown from a crash.
         kernelStarted = false;
-        vProcess->close();
-        // Block until V2Ray core exits
-        // Should we use -1 instead of waiting for 30secs?
-        vProcess->waitForFinished();
+        QString stopError;
+        const auto stopResult = StopProcessBounded(*vProcess, PROCESS_TERMINATE_TIMEOUT_MS, PROCESS_KILL_TIMEOUT_MS, &stopError);
+        if (stopResult == ProcessStopResult::Killed)
+        {
+            LOG("V2Ray kernel did not exit after terminate; killed the process.");
+        }
+        else if (stopResult == ProcessStopResult::Failed)
+        {
+            kernelStarted = vProcess->state() != QProcess::NotRunning;
+            const auto message = tr("Failed to stop V2Ray kernel process: %1").arg(stopError);
+            LOG(message);
+            emit OnProcessErrored(message);
+        }
     }
 
     V2RayKernelInstance::~V2RayKernelInstance()
     {
-        if (kernelStarted)
+        if (kernelStarted || vProcess->state() != QProcess::NotRunning)
         {
             StopConnection();
         }
