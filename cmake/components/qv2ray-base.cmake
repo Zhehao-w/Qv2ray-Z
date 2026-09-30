@@ -87,6 +87,8 @@ set(QV2RAY_BASE_SOURCES
     #
     ${QV2RAY_BASEDIR_CORE}/handler/ConfigHandler.cpp
     ${QV2RAY_BASEDIR_CORE}/handler/ConfigHandler.hpp
+    ${QV2RAY_BASEDIR_CORE}/handler/PersistenceTransaction.cpp
+    ${QV2RAY_BASEDIR_CORE}/handler/PersistenceTransaction.hpp
     ${QV2RAY_BASEDIR_CORE}/handler/KernelInstanceHandler.cpp
     ${QV2RAY_BASEDIR_CORE}/handler/KernelInstanceHandler.hpp
     ${QV2RAY_BASEDIR_CORE}/handler/RouteHandler.cpp
