@@ -4,7 +4,7 @@
 
 #include <grpc++/grpc++.h>
 
-// Check 10 times before telling user that API has failed.
+// Check 30 times before telling user that API has failed.
 constexpr auto QV2RAY_API_CALL_FAILEDCHECK_THRESHOLD = 30;
 
 namespace Qv2ray::core::kernel
@@ -18,13 +18,15 @@ namespace Qv2ray::core::kernel
     typedef std::map<QString, APIConfigObject> QvAPITagProtocolConfig;
     typedef std::map<StatisticsType, QStringList> QvAPIDataTypeConfig;
 
+    class APIWorkerBackend;
+
     class APIWorker : public QObject
     {
         Q_OBJECT
 
       public:
         APIWorker();
-        ~APIWorker();
+        ~APIWorker() override;
         void StartAPI(const QMap<bool, QMap<QString, QString>> &tagProtocolPair);
         void StopAPI();
 
@@ -32,18 +34,9 @@ namespace Qv2ray::core::kernel
         void onAPIDataReady(const QMap<StatisticsType, QvStatsSpeed> &data);
         void OnAPIErrored(const QString &err);
 
-      private slots:
-        void process();
-
       private:
-        qint64 CallStatsAPIByName(const QString &name);
-        QvAPITagProtocolConfig tagProtocolConfig;
-        QThread *workThread;
-        //
-        bool started = false;
-        bool running = false;
-        std::shared_ptr<::grpc::Channel> grpc_channel;
-        std::unique_ptr<::v2ray::core::app::stats::command::StatsService::Stub> stats_service_stub;
+        QThread *workThread = nullptr;
+        APIWorkerBackend *backend = nullptr;
     };
 } // namespace Qv2ray::core::kernel
 
