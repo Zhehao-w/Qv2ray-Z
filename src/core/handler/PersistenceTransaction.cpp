@@ -35,6 +35,13 @@ namespace Qv2ray::core::handler::data_safety
             QList<JournalEntry> entries;
         };
 
+        struct JournalRetirementResult
+        {
+            bool authorityRemoved = false;
+            bool directoryRemoved = false;
+            QString error;
+        };
+
         QByteArray Sha256(const QByteArray &data)
         {
             return QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex();
@@ -177,7 +184,8 @@ namespace Qv2ray::core::handler::data_safety
                 return false;
             for (const auto c : value)
             {
-                if (!c.isDigit() && (c < 'a' || c > 'f'))
+                const bool lowerHex = c >= QLatin1Char('a') && c <= QLatin1Char('f');
+                if (!c.isDigit() && !lowerHex)
                     return false;
             }
             return true;
@@ -239,8 +247,7 @@ namespace Qv2ray::core::handler::data_safety
                 }
 
                 QString relativeTarget;
-                QString absoluteTarget;
-                if (!ResolveTarget(rootDirectory, entryObject.value("target").toString(), &relativeTarget, &absoluteTarget, error))
+                if (!ResolveTarget(rootDirectory, entryObject.value("target").toString(), &relativeTarget, nullptr, error))
                     return false;
                 if (seenTargets.contains(relativeTarget))
                 {
@@ -319,9 +326,8 @@ namespace Qv2ray::core::handler::data_safety
             for (int index = 0; index < manifest.entries.size(); ++index)
             {
                 const auto &entry = manifest.entries[index];
-                QString relativeTarget;
                 QString absoluteTarget;
-                if (!ResolveTarget(rootDirectory, entry.relativeTarget, &relativeTarget, &absoluteTarget, error))
+                if (!ResolveTarget(rootDirectory, entry.relativeTarget, nullptr, &absoluteTarget, error))
                     return false;
 
                 const bool shouldExist = restoreOld ? entry.oldExists : entry.newExists;
@@ -345,6 +351,23 @@ namespace Qv2ray::core::handler::data_safety
         {
             QDir journal(journalDirectory);
             return !journal.exists() || journal.removeRecursively();
+        }
+
+        JournalRetirementResult RetireJournal(const QString &journalDirectory)
+        {
+            const auto manifestPath = QDir(journalDirectory).filePath(MANIFEST_FILE_NAME);
+            if (QFile::exists(manifestPath) && !QFile::remove(manifestPath))
+            {
+                return { false, false, QStringLiteral("Cannot retire the persistence transaction manifest: %1").arg(manifestPath) };
+            }
+
+            QDir journal(journalDirectory);
+            if (!journal.exists())
+                return { true, true, {} };
+            if (journal.removeRecursively())
+                return { true, true, {} };
+
+            return { true, false, QStringLiteral("Persistence transaction authority was retired, but staged payload cleanup is pending: %1").arg(journalDirectory) };
         }
     } // namespace
 
@@ -381,10 +404,11 @@ namespace Qv2ray::core::handler::data_safety
         if (!ApplyRecoveryState(rootDirectory, journalDirectory, manifest, restoreOld, &error))
             return { PersistenceRecoveryAction::Failed, error };
 
-        if (!RemoveJournalDirectory(journalDirectory))
-            return { PersistenceRecoveryAction::Failed, QStringLiteral("Persistence transaction state was recovered but the journal could not be removed.") };
-
-        return { restoreOld ? PersistenceRecoveryAction::RolledBack : PersistenceRecoveryAction::RolledForward, {} };
+        const auto action = restoreOld ? PersistenceRecoveryAction::RolledBack : PersistenceRecoveryAction::RolledForward;
+        const auto retirement = RetireJournal(journalDirectory);
+        if (!retirement.authorityRemoved)
+            return { PersistenceRecoveryAction::Failed, retirement.error };
+        return { action, retirement.directoryRemoved ? QString() : retirement.error };
     }
 
     PersistenceTransactionResult CommitPersistenceTransaction(const QString &rootDirectory, const QList<PersistenceFileMutation> &mutations)
@@ -475,9 +499,8 @@ namespace Qv2ray::core::handler::data_safety
 
         for (const auto &mutation : mutations)
         {
-            QString relativeTarget;
             QString absoluteTarget;
-            if (!ResolveTarget(rootDirectory, mutation.targetPath, &relativeTarget, &absoluteTarget, &error))
+            if (!ResolveTarget(rootDirectory, mutation.targetPath, nullptr, &absoluteTarget, &error))
                 break;
 
             const bool applied = mutation.deleteTarget ? RemoveFileIfPresent(absoluteTarget, &error)
@@ -499,10 +522,11 @@ namespace Qv2ray::core::handler::data_safety
             return { false, recovery.ok(), error + (recovery.ok() ? QString() : QStringLiteral("; rollback failed: ") + recovery.error) };
         }
 
-        if (!RemoveJournalDirectory(journalDirectory))
-        {
-            return { true, true, QStringLiteral("Persistence transaction committed, but journal cleanup is pending.") };
-        }
+        const auto retirement = RetireJournal(journalDirectory);
+        if (!retirement.authorityRemoved)
+            return { true, true, retirement.error };
+        if (!retirement.directoryRemoved)
+            return { true, true, retirement.error };
 
         return { true, true, {} };
     }
