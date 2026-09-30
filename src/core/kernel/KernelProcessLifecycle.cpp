@@ -1,7 +1,9 @@
 #include "KernelProcessLifecycle.hpp"
 
+#include <QEventLoop>
 #include <QProcess>
 #include <QStringList>
+#include <QTimer>
 #include <QtGlobal>
 
 namespace Qv2ray::core::kernel
@@ -41,6 +43,42 @@ namespace Qv2ray::core::kernel
             if (!stopped)
                 detail += QStringLiteral("; failed startup process could not be killed");
             *error = detail;
+        }
+        return false;
+    }
+
+    bool ConfirmProcessStable(QProcess &process, int graceMs, QString *error)
+    {
+        if (process.state() != QProcess::Running)
+        {
+            if (error)
+            {
+                auto detail = TakeProcessDiagnostics(process);
+                if (detail.isEmpty())
+                    detail = QStringLiteral("process exited before startup was confirmed");
+                *error = detail;
+            }
+            return false;
+        }
+
+        QEventLoop loop;
+        QTimer timer;
+        timer.setSingleShot(true);
+        QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+        QObject::connect(&process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), &loop, &QEventLoop::quit);
+        timer.start(qMax(graceMs, 0));
+        loop.exec(QEventLoop::ExcludeUserInputEvents);
+
+        if (process.state() == QProcess::Running)
+            return true;
+
+        if (error)
+        {
+            auto detail = TakeProcessDiagnostics(process);
+            const auto exitDetail = process.exitStatus() == QProcess::CrashExit
+                                        ? QStringLiteral("process crashed during startup")
+                                        : QStringLiteral("process exited during startup with code %1").arg(process.exitCode());
+            *error = detail.isEmpty() ? exitDetail : exitDetail + QStringLiteral(": ") + detail;
         }
         return false;
     }
