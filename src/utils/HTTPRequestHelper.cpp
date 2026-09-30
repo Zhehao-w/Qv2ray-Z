@@ -1,6 +1,7 @@
 #include "HTTPRequestHelper.hpp"
 
 #include "base/Qv2rayBase.hpp"
+#include "utils/DiagnosticSafety.hpp"
 
 #include <QByteArray>
 #include <QEventLoop>
@@ -116,7 +117,7 @@ namespace Qv2ray::common::network
 {
     void NetworkRequestHelper::setHeader(QNetworkRequest &request, const QByteArray &key, const QByteArray &value)
     {
-        DEBUG("Adding HTTP request header: " + key + ":" + value);
+        DEBUG("Adding HTTP request header: " + key + ":" + Qv2ray::common::diagnostics::SafeHttpHeaderValueForLog(key, value));
         request.setRawHeader(key, value);
     }
 
