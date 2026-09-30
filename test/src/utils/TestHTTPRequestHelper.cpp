@@ -3,9 +3,12 @@
 
 #include <QCoreApplication>
 #include <QEventLoop>
+#include <QHostAddress>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
+
+#include <memory>
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
