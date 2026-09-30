@@ -267,13 +267,12 @@ namespace Qv2ray::core::kernel
         workThread = nullptr;
     }
 
-    void APIWorker::StartAPI(const QMap<bool, QMap<QString, QString>> &tagProtocolPair)
+    void APIWorker::StartAPI(const QMap<bool, QMap<QString, QString>> &tagProtocolPair, int statsPort)
     {
         if (backend == nullptr)
             return;
 
         auto config = BuildTagProtocolConfig(tagProtocolPair);
-        const auto statsPort = GlobalConfig.kernelConfig.statsPort;
         QMetaObject::invokeMethod(
             backend, [backend = backend, config = std::move(config), statsPort]() mutable { backend->Start(std::move(config), statsPort); },
             Qt::QueuedConnection);

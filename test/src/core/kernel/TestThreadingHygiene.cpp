@@ -23,7 +23,7 @@ TEST_CASE("API worker shutdown stays bounded")
         Qv2ray::core::kernel::APIWorker worker;
         QMap<bool, QMap<QString, QString>> tags;
         tags[false]["threading-test"] = "http";
-        worker.StartAPI(tags);
+        worker.StartAPI(tags, 65535);
         QThread::msleep(25);
         worker.StopAPI();
     }
