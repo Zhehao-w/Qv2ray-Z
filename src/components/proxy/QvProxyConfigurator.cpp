@@ -11,6 +11,10 @@
 #include <WinInet.h>
 #include <ras.h>
 #include <raserror.h>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <vector>
 #endif
 
@@ -52,6 +56,8 @@ namespace Qv2ray::components::proxy
     namespace
     {
         using safety::SystemProxyState;
+        constexpr auto PROXY_RECOVERY_SCHEMA = 1;
+        constexpr auto PROXY_RECOVERY_FILENAME = "windows-proxy-recovery.json";
 
         struct WinInetProxyOwnership
         {
@@ -65,16 +71,146 @@ namespace Qv2ray::components::proxy
         };
 
         WinInetProxyOwnership proxyOwnership;
+        bool proxyOwnershipLoaded = false;
+        bool proxyOwnershipBlocked = false;
 
         QString ProxyTargetName(const QString &target)
         {
             return target.isEmpty() ? QStringLiteral("LAN") : QStringLiteral("RAS:%1").arg(target);
         }
 
+        QString ProxyRecoveryPath()
+        {
+            return QvCoreApplication->ConfigPath + QString::fromLatin1(PROXY_RECOVERY_FILENAME);
+        }
+
         void NotifyWinInetProxyChanged()
         {
             InternetSetOption(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
             InternetSetOption(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
+        }
+
+        bool PersistProxyOwnership()
+        {
+            const auto path = ProxyRecoveryPath();
+            if (!proxyOwnership.active())
+            {
+                if (!QFile::exists(path))
+                    return true;
+                if (!QFile::remove(path))
+                {
+                    LOG("Failed to remove completed Windows proxy recovery record: " + path);
+                    return false;
+                }
+                return true;
+            }
+
+            QJsonArray entries;
+            for (const auto &target : proxyOwnership.expected.keys())
+            {
+                if (!proxyOwnership.original.contains(target))
+                {
+                    LOG("Refusing to persist incomplete Windows proxy ownership for " + ProxyTargetName(target));
+                    return false;
+                }
+
+                QJsonObject entry;
+                entry[QStringLiteral("target")] = target;
+                entry[QStringLiteral("original")] = safety::SystemProxyStateToJson(proxyOwnership.original[target]);
+                entry[QStringLiteral("expected")] = safety::SystemProxyStateToJson(proxyOwnership.expected[target]);
+                entries.append(entry);
+            }
+
+            QJsonObject root;
+            root[QStringLiteral("schema")] = PROXY_RECOVERY_SCHEMA;
+            root[QStringLiteral("entries")] = entries;
+            const auto payload = QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
+            if (!StringToFile(payload, path))
+            {
+                LOG("Failed to persist Windows proxy recovery record: " + path);
+                return false;
+            }
+            return true;
+        }
+
+        bool LoadProxyOwnership()
+        {
+            if (proxyOwnershipLoaded)
+                return !proxyOwnershipBlocked;
+
+            proxyOwnershipLoaded = true;
+            const auto path = ProxyRecoveryPath();
+            if (!QFile::exists(path))
+                return true;
+
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly))
+            {
+                LOG("Failed to read Windows proxy recovery record: " + path);
+                proxyOwnershipBlocked = true;
+                return false;
+            }
+
+            QJsonParseError parseError;
+            const auto document = QJsonDocument::fromJson(file.readAll(), &parseError);
+            file.close();
+            if (parseError.error != QJsonParseError::NoError || !document.isObject())
+            {
+                LOG("Windows proxy recovery record is invalid; system proxy changes are blocked until it is resolved: " + path);
+                proxyOwnershipBlocked = true;
+                return false;
+            }
+
+            const auto root = document.object();
+            if (root[QStringLiteral("schema")].toInt(-1) != PROXY_RECOVERY_SCHEMA || !root[QStringLiteral("entries")].isArray())
+            {
+                LOG("Windows proxy recovery record has an unsupported schema; system proxy changes are blocked: " + path);
+                proxyOwnershipBlocked = true;
+                return false;
+            }
+
+            WinInetProxyOwnership loaded;
+            for (const auto &value : root[QStringLiteral("entries")].toArray())
+            {
+                if (!value.isObject())
+                {
+                    proxyOwnershipBlocked = true;
+                    return false;
+                }
+
+                const auto entry = value.toObject();
+                if (!entry[QStringLiteral("target")].isString() || !entry[QStringLiteral("original")].isObject() ||
+                    !entry[QStringLiteral("expected")].isObject())
+                {
+                    proxyOwnershipBlocked = true;
+                    return false;
+                }
+
+                const auto target = entry[QStringLiteral("target")].toString();
+                if (loaded.expected.contains(target))
+                {
+                    LOG("Windows proxy recovery record contains duplicate targets; refusing unsafe recovery.");
+                    proxyOwnershipBlocked = true;
+                    return false;
+                }
+
+                SystemProxyState original;
+                SystemProxyState expected;
+                if (!safety::SystemProxyStateFromJson(entry[QStringLiteral("original")].toObject(), &original) ||
+                    !safety::SystemProxyStateFromJson(entry[QStringLiteral("expected")].toObject(), &expected))
+                {
+                    LOG("Windows proxy recovery record contains an invalid state for " + ProxyTargetName(target));
+                    proxyOwnershipBlocked = true;
+                    return false;
+                }
+
+                loaded.original[target] = original;
+                loaded.expected[target] = expected;
+            }
+
+            proxyOwnership = loaded;
+            LOG("Loaded Windows proxy recovery record with " + QSTRN(proxyOwnership.expected.size()) + " target(s).");
+            return true;
         }
 
         QString TakeWinInetString(INTERNET_PER_CONN_OPTION &option)
@@ -132,6 +268,7 @@ namespace Qv2ray::components::proxy
                 options[2].dwOption = INTERNET_PER_CONN_FLAGS;
                 options[3].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
                 options[4].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+                list.dwOptionError = 0;
                 size = sizeof(list);
                 if (!InternetQueryOption(nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, &size))
                 {
@@ -262,25 +399,7 @@ namespace Qv2ray::components::proxy
             return true;
         }
 
-        void PreserveKnownOwnershipAfterRollbackFailure(const QStringList &modifiedTargets, const QMap<QString, SystemProxyState> &originalStates,
-                                                        const QMap<QString, SystemProxyState> &intendedStates)
-        {
-            for (const auto &target : modifiedTargets)
-            {
-                SystemProxyState current;
-                if (!QueryWinInetProxyState(target, &current))
-                    continue;
-
-                if (intendedStates.contains(target) && safety::IsStillOwned(intendedStates[target], current))
-                {
-                    proxyOwnership.original[target] = originalStates[target];
-                    proxyOwnership.expected[target] = intendedStates[target];
-                }
-            }
-        }
-
         bool RollBackCurrentSet(const QStringList &modifiedTargets, const QMap<QString, SystemProxyState> &beforeStates,
-                                const QMap<QString, SystemProxyState> &originalStates, const QMap<QString, SystemProxyState> &intendedStates,
                                 const WinInetProxyOwnership &previousOwnership)
         {
             bool rollbackSucceeded = true;
@@ -294,27 +413,29 @@ namespace Qv2ray::components::proxy
                 NotifyWinInetProxyChanged();
 
             if (rollbackSucceeded)
-            {
                 proxyOwnership = previousOwnership;
-                return true;
-            }
 
-            proxyOwnership = previousOwnership;
-            PreserveKnownOwnershipAfterRollbackFailure(modifiedTargets, originalStates, intendedStates);
-            LOG("System proxy rollback was incomplete; only targets still proven to contain Qv2ray's value remain owned.");
-            return false;
+            // If rollback was incomplete, keep the pre-write recovery record in
+            // memory and on disk. A later recovery only restores targets whose
+            // current state still exactly matches Qv2ray's expected state.
+            if (!PersistProxyOwnership())
+                LOG("Windows proxy recovery record could not be updated after rollback.");
+
+            if (!rollbackSucceeded)
+                LOG("System proxy rollback was incomplete; persisted ownership will be resolved conservatively on the next clear/recovery.");
+            return rollbackSucceeded;
         }
 
         bool VerifyExistingOwnership()
         {
-            bool lostOwnership = false;
+            bool unchanged = true;
             for (const auto &target : proxyOwnership.expected.keys())
             {
                 SystemProxyState current;
                 if (!QueryWinInetProxyState(target, &current))
                 {
                     LOG("Cannot verify existing proxy ownership for " + ProxyTargetName(target) + "; keeping ownership and aborting the update.");
-                    lostOwnership = true;
+                    unchanged = false;
                     continue;
                 }
 
@@ -323,18 +444,37 @@ namespace Qv2ray::components::proxy
                     LOG("System proxy changed outside Qv2ray for " + ProxyTargetName(target) + "; relinquishing ownership without overwriting it.");
                     proxyOwnership.original.remove(target);
                     proxyOwnership.expected.remove(target);
-                    lostOwnership = true;
+                    unchanged = false;
                 }
             }
-            return !lostOwnership;
+
+            if (!unchanged && !PersistProxyOwnership())
+                LOG("Failed to persist updated Windows proxy ownership after an external change.");
+            return unchanged;
         }
 
         bool SetOwnedWindowsSystemProxy(const QString &proxyServer)
         {
-            const auto previousOwnership = proxyOwnership;
-            if (proxyOwnership.active() && !VerifyExistingOwnership())
+            if (!LoadProxyOwnership())
+                return false;
+
+            if (proxyOwnership.active())
             {
-                LOG("System proxy ownership could not be verified unchanged; refusing to reassert Qv2ray proxy settings automatically.");
+                if (!VerifyExistingOwnership())
+                {
+                    LOG("System proxy ownership could not be verified unchanged; refusing to reassert Qv2ray proxy settings automatically.");
+                    return false;
+                }
+
+                const auto requiredFlags = static_cast<quint32>(PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY);
+                const auto alreadyConfigured = std::all_of(proxyOwnership.expected.cbegin(), proxyOwnership.expected.cend(),
+                                                           [&](const SystemProxyState &state) {
+                                                               return state.flags == requiredFlags && state.proxyServer == proxyServer;
+                                                           });
+                if (alreadyConfigured)
+                    return true;
+
+                LOG("Qv2ray already owns Windows proxy state with a different endpoint; clear it before changing the owned endpoint.");
                 return false;
             }
 
@@ -346,23 +486,28 @@ namespace Qv2ray::components::proxy
             if (!QueryTargetStates(targets, &beforeStates))
                 return false;
 
-            auto originalStates = proxyOwnership.original;
+            WinInetProxyOwnership intendedOwnership;
+            const auto requiredFlags = static_cast<quint32>(PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY);
             for (const auto &target : targets)
             {
-                if (!originalStates.contains(target))
-                    originalStates[target] = beforeStates[target];
+                intendedOwnership.original[target] = beforeStates[target];
+                intendedOwnership.expected[target] = safety::MakeOwnedManualProxyState(beforeStates[target], requiredFlags, proxyServer);
             }
 
-            auto intendedStates = proxyOwnership.expected;
-            for (const auto &target : targets)
-                intendedStates[target] = safety::MakeOwnedManualProxyState(beforeStates[target], PROXY_TYPE_DIRECT | PROXY_TYPE_PROXY, proxyServer);
+            const auto previousOwnership = proxyOwnership;
+            proxyOwnership = intendedOwnership;
+            if (!PersistProxyOwnership())
+            {
+                proxyOwnership = previousOwnership;
+                return false;
+            }
 
             QStringList modifiedTargets;
             for (const auto &target : targets)
             {
-                if (!ApplyOwnedManualProxyState(target, intendedStates[target]))
+                if (!ApplyOwnedManualProxyState(target, proxyOwnership.expected[target]))
                 {
-                    RollBackCurrentSet(modifiedTargets, beforeStates, originalStates, intendedStates, previousOwnership);
+                    RollBackCurrentSet(modifiedTargets, beforeStates, previousOwnership);
                     return false;
                 }
                 modifiedTargets.append(target);
@@ -372,25 +517,25 @@ namespace Qv2ray::components::proxy
             for (const auto &target : targets)
             {
                 SystemProxyState actual;
-                if (!QueryWinInetProxyState(target, &actual) || !safety::IsStillOwned(intendedStates[target], actual))
+                if (!QueryWinInetProxyState(target, &actual) || !safety::IsStillOwned(proxyOwnership.expected[target], actual))
                 {
                     LOG("Windows proxy write could not be verified for " + ProxyTargetName(target) + "; rolling back this set operation.");
-                    RollBackCurrentSet(modifiedTargets, beforeStates, originalStates, intendedStates, previousOwnership);
+                    RollBackCurrentSet(modifiedTargets, beforeStates, previousOwnership);
                     return false;
                 }
             }
-
-            proxyOwnership.original = originalStates;
-            proxyOwnership.expected = intendedStates;
             return true;
         }
 
         bool ClearOwnedWindowsSystemProxy()
         {
+            if (!LoadProxyOwnership())
+                return false;
+
             if (!proxyOwnership.active())
             {
                 LOG("Qv2ray does not own the current Windows system proxy; ClearSystemProxy is a no-op.");
-                return true;
+                return PersistProxyOwnership();
             }
 
             bool changed = false;
@@ -434,10 +579,27 @@ namespace Qv2ray::components::proxy
             if (changed)
                 NotifyWinInetProxyChanged();
 
-            return !proxyOwnership.active();
+            const auto ownershipReleased = !proxyOwnership.active();
+            const auto recordPersisted = PersistProxyOwnership();
+            return ownershipReleased && recordPersisted;
         }
     } // namespace
 #endif
+
+    bool RecoverSystemProxyIfNeeded()
+    {
+#ifdef Q_OS_WIN
+        if (!LoadProxyOwnership())
+            return false;
+        if (!proxyOwnership.active())
+            return true;
+
+        LOG("Recovering Windows system proxy ownership left by a previous Qv2ray session.");
+        return ClearOwnedWindowsSystemProxy();
+#else
+        return true;
+#endif
+    }
 
     bool SetSystemProxy(const QString &address, int httpPort, int socksPort)
     {
