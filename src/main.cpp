@@ -17,6 +17,8 @@
 
 #ifndef Q_OS_WIN
 #include <QSocketNotifier>
+#include <cerrno>
+#include <csignal>
 #include <fcntl.h>
 #include <unistd.h>
 #endif
@@ -30,14 +32,19 @@ char **globalArgv;
 namespace
 {
     int controlSignalPipe[2] = { -1, -1 };
+    volatile sig_atomic_t controlSignalWriteFd = -1;
 
     void controlSignalHandler(int signum) noexcept
     {
-        if (controlSignalPipe[1] < 0)
-            return;
-        const unsigned char signalByte = static_cast<unsigned char>(signum);
-        const auto ignored = ::write(controlSignalPipe[1], &signalByte, sizeof(signalByte));
-        Q_UNUSED(ignored)
+        const int savedErrno = errno;
+        const auto writeFd = controlSignalWriteFd;
+        if (writeFd >= 0)
+        {
+            const unsigned char signalByte = static_cast<unsigned char>(signum);
+            const auto ignored = ::write(static_cast<int>(writeFd), &signalByte, sizeof(signalByte));
+            Q_UNUSED(ignored)
+        }
+        errno = savedErrno;
     }
 
     bool setNonBlocking(int fd)
@@ -92,6 +99,7 @@ namespace
             ::close(controlSignalPipe[1]);
             controlSignalPipe[0] = -1;
             controlSignalPipe[1] = -1;
+            controlSignalWriteFd = -1;
             return false;
         }
 
@@ -110,6 +118,7 @@ namespace
             notifier->setEnabled(true);
         });
 
+        controlSignalWriteFd = static_cast<sig_atomic_t>(controlSignalPipe[1]);
         bool success = true;
         for (const auto signum : Qv2ray::common::diagnostics::ControlSignals())
             success = installSignalAction(signum, controlSignalHandler) && success;
