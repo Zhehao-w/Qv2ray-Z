@@ -15,6 +15,7 @@ namespace Qv2ray::core::kernel
     };
 
     bool StartProcessBounded(QProcess &process, int timeoutMs, QString *error = nullptr);
+    bool ConfirmProcessStable(QProcess &process, int graceMs, QString *error = nullptr);
     bool WaitForProcessFinishedBounded(QProcess &process, int timeoutMs, int killTimeoutMs, QString *error = nullptr);
     ProcessStopResult StopProcessBounded(QProcess &process, int terminateTimeoutMs, int killTimeoutMs, QString *error = nullptr);
     QString TakeProcessDiagnostics(QProcess &process);
