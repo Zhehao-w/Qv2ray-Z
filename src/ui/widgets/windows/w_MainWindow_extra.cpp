@@ -60,6 +60,15 @@ void MainWindow::MWHideWindow()
 
 void MainWindow::MWSetSystemProxy()
 {
+    const auto explicitEnable = sender() == tray_action_SetSystemProxy;
+    if (explicitEnable && !AllowSystemProxyReacquire())
+    {
+        LOG("Explicit system proxy enable was refused because remaining ownership could not be resolved safely.");
+        if (!GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy cannot be enabled until the previous proxy state can be resolved safely."));
+        return;
+    }
+
     const auto inboundInfo = KernelInstance->GetCurrentConnectionInboundInfo();
     bool httpEnabled = false;
     bool socksEnabled = false;
@@ -217,7 +226,7 @@ void MainWindow::updateColorScheme()
     action_RCM_EditJson->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("code")));
     action_RCM_EditComplex->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("edit")));
     action_RCM_DuplicateConnection->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("copy")));
-    action_RCM_DeleteConnection->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ashbin")));
+    action_RCM_Delete->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ashbin")));
     action_RCM_ResetStats->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ashbin")));
     action_RCM_TestLatency->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ping_gauge")));
     action_RCM_RealLatencyTest->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("ping_gauge")));
@@ -259,7 +268,7 @@ void MainWindow::UpdateActionTranslations()
     action_RCM_TestLatency->setText(tr("Test Latency"));
     action_RCM_RealLatencyTest->setText(tr("Test Real Latency"));
     action_RCM_ResetStats->setText(tr("Clear Usage Data"));
-    action_RCM_DeleteConnection->setText(tr("Delete Connection"));
+    action_RCM_Delete->setText(tr("Delete Connection"));
     //
     sortMenu->setTitle(tr("Sort connection list."));
     sortAction_SortByName_Asc->setText(tr("By connection name, A-Z"));
