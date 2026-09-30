@@ -101,11 +101,17 @@ void MainWindow::MWSetSystemProxy()
         LOG("ProxyAddress: " + proxyAddress);
         LOG("HTTP Port: " + QSTRN(httpPort));
         LOG("SOCKS Port: " + QSTRN(socksPort));
-        SetSystemProxy(proxyAddress, httpPort, socksPort);
-        qvAppTrayIcon->setIcon(Q_TRAYICON("tray-systemproxy"));
-        if (!GlobalConfig.uiConfig.quietMode)
+        if (SetSystemProxy(proxyAddress, httpPort, socksPort))
         {
-            QvWidgetApplication->ShowTrayMessage(tr("System proxy configured."));
+            qvAppTrayIcon->setIcon(Q_TRAYICON("tray-systemproxy"));
+            if (!GlobalConfig.uiConfig.quietMode)
+                QvWidgetApplication->ShowTrayMessage(tr("System proxy configured."));
+        }
+        else
+        {
+            LOG("System proxy was not changed because the operation could not be completed safely.");
+            if (!GlobalConfig.uiConfig.quietMode)
+                QvWidgetApplication->ShowTrayMessage(tr("System proxy was not changed because the current settings could not be updated safely."));
         }
     }
     else
@@ -117,11 +123,17 @@ void MainWindow::MWSetSystemProxy()
 
 void MainWindow::MWClearSystemProxy()
 {
-    ClearSystemProxy();
-    qvAppTrayIcon->setIcon(KernelInstance->CurrentConnection().isEmpty() ? Q_TRAYICON("tray") : Q_TRAYICON("tray-connected"));
-    if (!GlobalConfig.uiConfig.quietMode)
+    if (ClearSystemProxy())
     {
-        QvWidgetApplication->ShowTrayMessage(tr("System proxy removed."));
+        qvAppTrayIcon->setIcon(KernelInstance->CurrentConnection().isEmpty() ? Q_TRAYICON("tray") : Q_TRAYICON("tray-connected"));
+        if (!GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy removed."));
+    }
+    else
+    {
+        LOG("System proxy could not be fully restored; Qv2ray retained ownership only for targets that are safe to retry.");
+        if (!GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy could not be fully restored. Qv2ray will avoid overwriting externally changed settings."));
     }
 }
 
