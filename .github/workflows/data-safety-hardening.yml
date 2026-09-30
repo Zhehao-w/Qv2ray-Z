@@ -72,6 +72,7 @@ jobs:
             qjsonio \
             kernel_path_resolver \
             kernel_process_lifecycle \
+            threading_hygiene \
             windows_integration_safety \
             data_safety \
             --parallel 2 2>&1 | tee build.log
@@ -87,7 +88,7 @@ jobs:
       - name: Run supported regression tests
         run: >-
           ctest --test-dir build --output-on-failure
-          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|windows_integration_safety|data_safety)'
+          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety)'
 
       - name: Check committed whitespace
         shell: bash
@@ -167,11 +168,11 @@ jobs:
       - name: Build application and supported regression targets
         shell: pwsh
         run: |
-          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle windows_integration_safety data_safety --parallel 2
+          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run supported regression tests
         shell: pwsh
         run: |
-          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|windows_integration_safety|data_safety)'
+          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety)'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
