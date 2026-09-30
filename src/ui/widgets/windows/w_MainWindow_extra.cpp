@@ -70,6 +70,14 @@ void MainWindow::MWSetSystemProxy()
             QvWidgetApplication->ShowTrayMessage(tr("System proxy is managed by another Qv2ray instance or has unresolved recovery state."));
         return;
     }
+
+    if (!Qv2ray::components::proxy::safety::RememberProxyConfigPath(QvCoreApplication->ConfigPath))
+    {
+        LOG("Windows system proxy cannot be acquired because the stable recovery location could not be refreshed.");
+        if (explicitEnable && !GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("System proxy cannot be enabled because its recovery state could not be persisted safely."));
+        return;
+    }
 #endif
     if (explicitEnable && !AllowSystemProxyReacquire())
     {
