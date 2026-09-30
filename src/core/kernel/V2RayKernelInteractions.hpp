@@ -16,7 +16,7 @@ namespace Qv2ray::core::kernel
         ~V2RayKernelInstance() override;
         //
         std::optional<QString> StartConnection(const CONFIGROOT &root);
-        void StopConnection();
+        std::optional<QString> StopConnection();
         bool IsKernelRunning() const
         {
             return kernelStarted;
