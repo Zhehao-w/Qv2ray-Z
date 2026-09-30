@@ -2,6 +2,7 @@
 #include "LatencyTest.hpp"
 
 #include <QThread>
+#include <atomic>
 #include <curl/curl.h>
 #include <mutex>
 #include <unordered_set>
@@ -20,7 +21,11 @@ namespace Qv2ray::components::latency
         explicit LatencyTestThread(QObject *parent = nullptr);
         void stopLatencyTest()
         {
-            isStop = true;
+            isStop.store(true, std::memory_order_release);
+        }
+        void prepareLatencyTest()
+        {
+            isStop.store(false, std::memory_order_release);
         }
         void pushRequest(const QList<ConnectionId> &ids, int totalTestCount, Qv2rayLatencyTestingMethod method);
         void pushRequest(const ConnectionId &id, int totalTestCount, Qv2rayLatencyTestingMethod method);
@@ -29,6 +34,11 @@ namespace Qv2ray::components::latency
         void run() override;
 
       private:
+        bool shouldStop() const
+        {
+            return isStop.load(std::memory_order_acquire);
+        }
+
         struct CURLGlobal
         {
             CURLGlobal()
@@ -42,7 +52,7 @@ namespace Qv2ray::components::latency
         };
         std::shared_ptr<uvw::Loop> loop;
         CURLGlobal curlGlobal;
-        bool isStop = false;
+        std::atomic_bool isStop{ false };
         std::shared_ptr<uvw::TimerHandle> stopTimer;
         std::vector<LatencyTestRequest> requests;
         std::mutex m;
