@@ -36,15 +36,6 @@ namespace
         bool wasSet;
         QByteArray previous;
     };
-
-    QProcess StartFixture(const QByteArray &mode)
-    {
-        qputenv("QV2RAY_PROCESS_FIXTURE_MODE", mode);
-        QProcess process;
-        process.setProgram(fixtureExecutable);
-        process.start();
-        return process;
-    }
 } // namespace
 
 int main(int argc, char *argv[])
