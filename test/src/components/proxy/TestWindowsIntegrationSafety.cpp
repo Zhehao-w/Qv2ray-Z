@@ -1,6 +1,9 @@
 #include "src/components/proxy/ProxyStateSafety.hpp"
 #include "src/utils/WindowsCommandLine.hpp"
 
+#include <QFile>
+#include <QTemporaryDir>
+
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
@@ -86,6 +89,54 @@ TEST_CASE("System proxy snapshots round-trip without losing Windows state")
     invalid = SystemProxyStateToJson(state);
     invalid[QStringLiteral("flags")] = 1.5;
     REQUIRE_FALSE(SystemProxyStateFromJson(invalid, &restored));
+}
+
+TEST_CASE("Proxy process ownership lock excludes a second live manager")
+{
+    using namespace Qv2ray::components::proxy::safety;
+
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    const auto lockPath = directory.filePath(QStringLiteral("proxy-owner.lock"));
+
+    {
+        ProcessOwnershipLock first(lockPath);
+        ProcessOwnershipLock second(lockPath);
+        REQUIRE(first.TryAcquire());
+        REQUIRE(first.IsLocked());
+        REQUIRE_FALSE(second.TryAcquire());
+        REQUIRE_FALSE(second.IsLocked());
+    }
+
+    ProcessOwnershipLock afterRelease(lockPath);
+    REQUIRE(afterRelease.TryAcquire());
+    REQUIRE(afterRelease.IsLocked());
+}
+
+TEST_CASE("Proxy recovery location index round-trips independently of the selected config path")
+{
+    using namespace Qv2ray::components::proxy::safety;
+
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    const auto recordPath = directory.filePath(QStringLiteral("proxy-config.json"));
+    const auto configPath = QStringLiteral("C:/portable/profile-a/");
+
+    QString loadedPath;
+    REQUIRE(ReadConfigPathRecord(recordPath, &loadedPath) == ConfigPathRecordStatus::Missing);
+    REQUIRE(WriteConfigPathRecord(recordPath, configPath));
+    REQUIRE(ReadConfigPathRecord(recordPath, &loadedPath) == ConfigPathRecordStatus::Loaded);
+    REQUIRE(loadedPath == configPath);
+
+    QFile corrupt(recordPath);
+    REQUIRE(corrupt.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    REQUIRE(corrupt.write("{broken") == 7);
+    corrupt.close();
+    REQUIRE(ReadConfigPathRecord(recordPath, &loadedPath) == ConfigPathRecordStatus::Error);
+
+    const auto safetyRoot = ProxySafetyDirectoryForBase(QStringLiteral("C:/Users/test/AppData/Local/Qv2ray-Z"));
+    REQUIRE(safetyRoot.endsWith(QStringLiteral("proxy-safety")));
+    REQUIRE(ProxyRecoveryRecordPathForConfig(configPath).endsWith(QString::fromLatin1(PROXY_RECOVERY_RECORD_FILENAME)));
 }
 
 TEST_CASE("Windows URL protocol command line quotes every argument")
