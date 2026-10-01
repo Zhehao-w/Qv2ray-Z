@@ -36,13 +36,11 @@ Qv2rayApplicationInterface::~Qv2rayApplicationInterface()
 
 QStringList Qv2rayApplicationInterface::GetAssetsPaths(const QString &dirName) const
 {
-    // Configuration Path
     QStringList list;
 
     if (qEnvironmentVariableIsSet("QV2RAY_RESOURCES_PATH"))
         list << makeAbs(qEnvironmentVariable("QV2RAY_RESOURCES_PATH") + "/" + dirName);
 
-    // Default behavior on Windows
     list << makeAbs(QCoreApplication::applicationDirPath() + "/" + dirName);
     list << makeAbs(QV2RAY_CONFIG_DIR + dirName);
     list << ":/" + dirName;
@@ -65,11 +63,6 @@ QStringList Qv2rayApplicationInterface::GetAssetsPaths(const QString &dirName) c
     list << makeAbs("/usr/share/qv2ray/" + dirName);
     list << makeAbs("/usr/lib/qv2ray/" + dirName);
     list << makeAbs("/lib/qv2ray/" + dirName);
-#endif
-
-#ifdef Q_OS_MAC
-    // macOS platform directories.
-    list << QDir(QCoreApplication::applicationDirPath() + "/../Resources/" + dirName).absolutePath();
 #endif
 
     list.removeDuplicates();
