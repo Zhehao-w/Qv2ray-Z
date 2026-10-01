@@ -12,22 +12,144 @@
 #include "ui/qml/Qv2rayQMLApplication.hpp"
 #endif
 
+#include "utils/DiagnosticSafety.hpp"
 #include "utils/QvHelpers.hpp"
 
-#include <csignal>
-
 #ifndef Q_OS_WIN
+#include <QSocketNotifier>
+#include <atomic>
+#include <cerrno>
+#include <csignal>
+#include <fcntl.h>
 #include <unistd.h>
-#else
-#include <Windows.h>
-//
-#include <DbgHelp.h>
 #endif
 
 #define QV_MODULE_NAME "Init"
 
 int globalArgc;
 char **globalArgv;
+
+#ifndef Q_OS_WIN
+namespace
+{
+    constexpr unsigned int PendingTerminate = 1u << 0;
+    constexpr unsigned int PendingHangup = 1u << 1;
+    constexpr unsigned int PendingRestart = 1u << 2;
+    constexpr unsigned int PendingStop = 1u << 3;
+    constexpr unsigned int PendingShutdown = PendingTerminate | PendingHangup;
+
+    int controlSignalPipe[2] = { -1, -1 };
+    volatile sig_atomic_t controlSignalWriteFd = -1;
+    std::atomic<unsigned int> pendingControlSignals{ 0 };
+    static_assert(std::atomic<unsigned int>::is_always_lock_free, "POSIX signal pending state must use lock-free atomics.");
+
+    unsigned int controlSignalBit(int signum) noexcept
+    {
+        switch (signum)
+        {
+            case SIGTERM: return PendingTerminate;
+            case SIGHUP: return PendingHangup;
+            case SIGUSR1: return PendingRestart;
+            case SIGUSR2: return PendingStop;
+            default: return 0;
+        }
+    }
+
+    void controlSignalHandler(int signum) noexcept
+    {
+        const int savedErrno = errno;
+        const auto pendingBit = controlSignalBit(signum);
+        if (pendingBit != 0)
+            pendingControlSignals.fetch_or(pendingBit, std::memory_order_relaxed);
+
+        const auto writeFd = controlSignalWriteFd;
+        if (writeFd >= 0)
+        {
+            // The pipe is wakeup-only. If it is full, the lock-free pending mask
+            // still retains the control action until the Qt thread drains it.
+            constexpr unsigned char wakeByte = 1;
+            const auto ignored = ::write(static_cast<int>(writeFd), &wakeByte, sizeof(wakeByte));
+            Q_UNUSED(ignored)
+        }
+        errno = savedErrno;
+    }
+
+    bool setNonBlocking(int fd)
+    {
+        const auto flags = ::fcntl(fd, F_GETFL, 0);
+        return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+    }
+
+    bool setCloseOnExec(int fd)
+    {
+        const auto flags = ::fcntl(fd, F_GETFD, 0);
+        return flags >= 0 && ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+    }
+
+    bool installSignalAction(int signum, void (*handler)(int))
+    {
+        struct sigaction action
+        {
+        };
+        action.sa_handler = handler;
+        ::sigemptyset(&action.sa_mask);
+        action.sa_flags = SA_RESTART;
+        return ::sigaction(signum, &action, nullptr) == 0;
+    }
+
+    void dispatchPendingControlSignals()
+    {
+        const auto pending = pendingControlSignals.exchange(0, std::memory_order_acq_rel);
+        if (pending == 0)
+            return;
+
+        // Shutdown requests take precedence over connection-management actions.
+        if ((pending & PendingShutdown) != 0)
+        {
+            QCoreApplication::quit();
+            return;
+        }
+
+        if ((pending & PendingRestart) != 0 && ConnectionManager)
+            ConnectionManager->RestartConnection();
+        if ((pending & PendingStop) != 0 && ConnectionManager)
+            ConnectionManager->StopConnection();
+    }
+
+    bool installControlSignalBridge(QObject *context)
+    {
+        if (::pipe(controlSignalPipe) != 0)
+            return false;
+        if (!setNonBlocking(controlSignalPipe[0]) || !setNonBlocking(controlSignalPipe[1]) || !setCloseOnExec(controlSignalPipe[0]) ||
+            !setCloseOnExec(controlSignalPipe[1]))
+        {
+            ::close(controlSignalPipe[0]);
+            ::close(controlSignalPipe[1]);
+            controlSignalPipe[0] = -1;
+            controlSignalPipe[1] = -1;
+            controlSignalWriteFd = -1;
+            return false;
+        }
+
+        auto notifier = new QSocketNotifier(controlSignalPipe[0], QSocketNotifier::Read, context);
+        QObject::connect(notifier, &QSocketNotifier::activated, context, [notifier]() {
+            notifier->setEnabled(false);
+            unsigned char wakeBytes[64];
+            while (::read(controlSignalPipe[0], wakeBytes, sizeof(wakeBytes)) > 0)
+            {
+            }
+            dispatchPendingControlSignals();
+            notifier->setEnabled(true);
+        });
+
+        controlSignalWriteFd = static_cast<sig_atomic_t>(controlSignalPipe[1]);
+        bool success = true;
+        for (const auto signum : Qv2ray::common::diagnostics::ControlSignals())
+            success = installSignalAction(signum, controlSignalHandler) && success;
+        return success;
+    }
+} // namespace
+#endif
 
 void BootstrapMessageBox(const QString &title, const QString &text)
 {
@@ -48,159 +170,25 @@ void BootstrapMessageBox(const QString &title, const QString &text)
 
 const QString SayLastWords() noexcept
 {
-    QStringList msg;
-    msg << "------- BEGIN QV2RAY CRASH REPORT -------";
-
-    {
-#ifdef Q_OS_WIN
-        void *stack[1024];
-        HANDLE process = GetCurrentProcess();
-        SymInitialize(process, NULL, TRUE);
-        SymSetOptions(SYMOPT_LOAD_ANYTHING);
-        WORD numberOfFrames = CaptureStackBackTrace(0, 1024, stack, NULL);
-        SYMBOL_INFO *symbol = (SYMBOL_INFO *) malloc(sizeof(SYMBOL_INFO) + (512 - 1) * sizeof(TCHAR));
-        symbol->MaxNameLen = 512;
-        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-        DWORD displacement;
-        IMAGEHLP_LINE64 *line = (IMAGEHLP_LINE64 *) malloc(sizeof(IMAGEHLP_LINE64));
-        line->SizeOfStruct = sizeof(IMAGEHLP_LINE64);
-        //
-        for (int i = 0; i < numberOfFrames; i++)
-        {
-            const auto address = (DWORD64) stack[i];
-            SymFromAddr(process, address, NULL, symbol);
-            if (SymGetLineFromAddr64(process, address, &displacement, line))
-            {
-                msg << QString("[%1]: %2 (%3:%4)").arg(symbol->Address).arg(symbol->Name).arg(line->FileName).arg(line->LineNumber);
-            }
-            else
-            {
-                msg << QString("[%1]: %2 SymGetLineFromAddr64[%3]").arg(symbol->Address).arg(symbol->Name).arg(GetLastError());
-            }
-        }
-#endif
-    }
-
+    int activeKernelCount = 0;
+    int pluginCount = 0;
     if (KernelInstance)
-    {
-        msg << "Active Kernel Instances:";
-        const auto kernels = KernelInstance->GetActiveKernelProtocols();
-        msg << JsonToString(JsonStructHelper::Serialize(static_cast<QList<QString>>(kernels)).toArray(), QJsonDocument::Compact);
-        msg << "Current Connection:";
-        //
-        const auto currentConnection = KernelInstance->CurrentConnection();
-        msg << JsonToString(currentConnection.toJson(), QJsonDocument::Compact);
-        msg << NEWLINE;
-        //
-        if (ConnectionManager && !currentConnection.isEmpty())
-        {
-            msg << "Active Connection Settings:";
-            const auto connection = ConnectionManager->GetConnectionMetaObject(currentConnection.connectionId);
-            auto group = ConnectionManager->GetGroupMetaObject(currentConnection.groupId);
-            //
-            // Do not collect private data.
-            // msg << NEWLINE;
-            // msg << JsonToString(ConnectionManager->GetConnectionRoot(currentConnection.connectionId));
-            group.subscriptionOption.address = "HIDDEN";
-            //
-            msg << JsonToString(connection.toJson(), QJsonDocument::Compact);
-            msg << NEWLINE;
-            msg << "Group:";
-            msg << JsonToString(group.toJson(), QJsonDocument::Compact);
-            msg << NEWLINE;
-        }
-    }
-
+        activeKernelCount = KernelInstance->GetActiveKernelProtocols().count();
     if (PluginHost)
-    {
-        msg << "Plugins:";
-        const auto plugins = PluginHost->AllPlugins();
-        for (const auto &plugin : plugins)
-        {
-            const auto data = PluginHost->GetPlugin(plugin)->metadata;
-            QList<QString> dataList;
-            dataList << data.Name;
-            dataList << data.Author;
-            dataList << data.InternalName;
-            dataList << data.Description;
-            msg << JsonToString(JsonStructHelper::Serialize(dataList).toArray(), QJsonDocument::Compact);
-        }
-        msg << NEWLINE;
-    }
+        pluginCount = PluginHost->AllPlugins().count();
 
-    if (QvCoreApplication)
-    {
-        msg << "GlobalConfig:";
-        msg << JsonToString(GlobalConfig.toJson(), QJsonDocument::Compact);
-    }
-
-    msg << "------- END OF QV2RAY CRASH REPORT -------";
-    return msg.join(NEWLINE);
+    const auto config = QvCoreApplication ? &GlobalConfig : nullptr;
+    return Qv2ray::common::diagnostics::BuildSafeDiagnosticReport(config, activeKernelCount, pluginCount);
 }
-
-void signalHandler(int signum)
-{
-#ifndef Q_OS_WIN
-    if (signum == SIGTRAP)
-    {
-        exit(-99);
-        return;
-    }
-#endif
-    std::cout << "Qv2ray: Interrupt signal (" << signum << ") received." << std::endl;
-
-    if (signum == SIGTERM)
-    {
-        if (qApp)
-            qApp->exit();
-        return;
-    }
-    std::cout << "Collecting StackTrace" << std::endl;
-    const auto msg = "Signal: " + QSTRN(signum) + NEWLINE + SayLastWords();
-    std::cout << msg.toStdString() << std::endl;
-
-    if (qApp && QvCoreApplication)
-    {
-        QDir().mkpath(QV2RAY_CONFIG_DIR + "bugreport/");
-        const auto filePath = QV2RAY_CONFIG_DIR + "bugreport/QvBugReport_" + QSTRN(system_clock::to_time_t(system_clock::now())) + ".stacktrace";
-        StringToFile(msg, filePath);
-        std::cout << "Backtrace saved in: " + filePath.toStdString() << std::endl;
-        const auto message = QObject::tr("Qv2ray has encountered an uncaught exception: ") + NEWLINE +              //
-                             QObject::tr("Please report a bug via Github with the file located here: ") + NEWLINE + //
-                             NEWLINE + filePath;
-        BootstrapMessageBox("UNCAUGHT EXCEPTION", message);
-    }
-
-#if defined Q_OS_WIN || defined QT_DEBUG
-    exit(-99);
-#else
-    kill(getpid(), SIGTRAP);
-#endif
-}
-
-#ifdef Q_OS_WIN
-LONG WINAPI TopLevelExceptionHandler(PEXCEPTION_POINTERS)
-{
-    signalHandler(-1);
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-#endif
 
 int main(int argc, char *argv[])
 {
     globalArgc = argc;
     globalArgv = argv;
-    // Register signal handlers.
-    signal(SIGABRT, signalHandler);
-    signal(SIGSEGV, signalHandler);
-    signal(SIGTERM, signalHandler);
-#ifndef Q_OS_WIN
-    signal(SIGHUP, signalHandler);
-    signal(SIGKILL, signalHandler);
-#else
-    // AddVectoredExceptionHandler(0, TopLevelExceptionHandler);
-#endif
-    //
+
+    // Fatal crashes deliberately retain the platform's native handling so core
+    // dumps / Windows Error Reporting are not replaced by application code.
+
     // This line must be called before any other ones, since we are using these
     // values to identify instances.
     QCoreApplication::setApplicationVersion(QV2RAY_VERSION_STRING);
@@ -243,6 +231,11 @@ int main(int argc, char *argv[])
 #endif
 
     Qv2rayApplication app(argc, argv);
+#ifndef Q_OS_WIN
+    if (!installControlSignalBridge(&app))
+        LOG("Failed to install the POSIX control-signal bridge.");
+#endif
+
     if (const auto list = app.CheckPrerequisites(); !list.isEmpty())
     {
         BootstrapMessageBox("Qv2ray Prerequisites Check Failed", list.join(NEWLINE));
@@ -259,11 +252,6 @@ int main(int argc, char *argv[])
         }
         return reason;
     }
-
-#ifndef Q_OS_WIN
-    signal(SIGUSR1, [](int) { ConnectionManager->RestartConnection(); });
-    signal(SIGUSR2, [](int) { ConnectionManager->StopConnection(); });
-#endif
 
     app.RunQv2ray();
     const auto reason = app.GetExitReason();

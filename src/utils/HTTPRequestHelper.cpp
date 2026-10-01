@@ -1,6 +1,7 @@
 #include "HTTPRequestHelper.hpp"
 
 #include "base/Qv2rayBase.hpp"
+#include "utils/DiagnosticSafety.hpp"
 
 #include <QByteArray>
 #include <QEventLoop>
@@ -105,10 +106,12 @@ namespace
     {
         if (result.ok())
             return;
-        LOG(QString("HTTP request failed: status=%1, networkError=%2, error=%3")
+        // Keep persistent logs structural. QNetworkReply::errorString() can be
+        // backend-generated and may contain a host or request URL with secrets.
+        LOG(QString("HTTP request failed: requestStatus=%1, httpStatus=%2, networkError=%3")
+                .arg(static_cast<int>(result.status))
                 .arg(result.httpStatus)
-                .arg(static_cast<int>(result.networkError))
-                .arg(result.errorString));
+                .arg(static_cast<int>(result.networkError)));
     }
 } // namespace
 
@@ -116,7 +119,7 @@ namespace Qv2ray::common::network
 {
     void NetworkRequestHelper::setHeader(QNetworkRequest &request, const QByteArray &key, const QByteArray &value)
     {
-        DEBUG("Adding HTTP request header: " + key + ":" + value);
+        DEBUG("Adding HTTP request header: " + key + ":" + Qv2ray::common::diagnostics::SafeHttpHeaderValueForLog(key, value));
         request.setRawHeader(key, value);
     }
 
