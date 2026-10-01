@@ -2,13 +2,13 @@
 
 QMainWindow,
 QDialog {
-    background: #f5f5f7;
+    background: #ffffff;
 }
 
 QGroupBox {
-    background: #ffffff;
-    border: 1px solid #e4e4e7;
-    border-radius: 9px;
+    background: #f5f5f7;
+    border: 1px solid #e6e6ea;
+    border-radius: 10px;
     margin-top: 12px;
     padding: 12px 10px 10px 10px;
 }
@@ -17,7 +17,7 @@ QGroupBox::title {
     subcontrol-origin: margin;
     left: 10px;
     padding: 0 4px;
-    background: #ffffff;
+    background: #f5f5f7;
     font-weight: 600;
 }
 
@@ -25,7 +25,7 @@ QPushButton,
 QToolButton {
     min-height: 28px;
     padding: 3px 10px;
-    background: #fbfbfc;
+    background: #ffffff;
     border: 1px solid #d9d9de;
     border-radius: 7px;
 }
@@ -44,8 +44,8 @@ QToolButton:pressed {
 QPushButton:disabled,
 QToolButton:disabled {
     color: #919197;
-    background: #f4f4f5;
-    border-color: #e7e7ea;
+    background: #f2f2f4;
+    border-color: #e4e4e8;
 }
 
 QLineEdit,
@@ -79,8 +79,34 @@ QComboBox::drop-down {
     width: 24px;
 }
 
+/* Keep numeric fields visually consistent with the rest of the form. Values
+   remain keyboard- and wheel-editable; the dated Fusion +/- buttons are hidden. */
+QSpinBox,
+QDoubleSpinBox {
+    padding-right: 7px;
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button,
+QDoubleSpinBox::up-button,
+QDoubleSpinBox::down-button {
+    width: 0;
+    height: 0;
+    border: 0;
+    background: transparent;
+}
+
+QSpinBox::up-arrow,
+QSpinBox::down-arrow,
+QDoubleSpinBox::up-arrow,
+QDoubleSpinBox::down-arrow {
+    width: 0;
+    height: 0;
+    image: none;
+}
+
 QTabWidget::pane {
-    border: 1px solid #e4e4e7;
+    border: 1px solid #ececef;
     border-radius: 8px;
     background: #ffffff;
     top: -1px;
@@ -124,18 +150,85 @@ QTableView::item {
 QTreeView::item:hover,
 QListView::item:hover,
 QTableView::item:hover {
-    background: #f2f2f4;
+    background: #eeeeF1;
 }
 
 QHeaderView::section {
-    background: #fafafa;
+    background: #f5f5f7;
     border: 0;
     border-bottom: 1px solid #e4e4e7;
     padding: 6px;
     font-weight: 600;
 }
 
+/* Native Qt/Fusion scroll bars otherwise remain square and visually fight the
+   rounded cards. Use a narrow, arrowless macOS-like track and thumb. */
+QScrollBar:vertical {
+    width: 10px;
+    margin: 2px;
+    background: transparent;
+    border: 0;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 28px;
+    background: #c8c8ce;
+    border: 0;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #a9a9b0;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+    border: 0;
+    background: transparent;
+}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QScrollBar:horizontal {
+    height: 10px;
+    margin: 2px;
+    background: transparent;
+    border: 0;
+}
+
+QScrollBar::handle:horizontal {
+    min-width: 28px;
+    background: #c8c8ce;
+    border: 0;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #a9a9b0;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+    border: 0;
+    background: transparent;
+}
+
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+
+QAbstractScrollArea::corner {
+    background: transparent;
+}
+
 QMenu {
+    min-width: 176px;
     background: #ffffff;
     border: 1px solid #d9d9de;
     border-radius: 7px;
@@ -143,12 +236,24 @@ QMenu {
 }
 
 QMenu::item {
-    padding: 6px 24px 6px 10px;
+    padding: 6px 38px 6px 10px;
     border-radius: 5px;
 }
 
 QMenu::item:selected {
     background: #e7f0f7;
+}
+
+QMenu::separator {
+    height: 1px;
+    margin: 4px 7px;
+    background: #e5e5e8;
+}
+
+QMenu::right-arrow {
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
 }
 
 QToolTip {
@@ -159,22 +264,24 @@ QToolTip {
 }
 
 QStatusBar {
-    background: #f5f5f7;
+    background: #ffffff;
     border-top: 1px solid #e5e5e8;
 }
 
-/* Main window: macOS Light-inspired hierarchy without custom window chrome. */
-QFrame#mainHeaderFrame,
+/* Main window: white canvas with quiet gray rounded content regions. */
+QFrame#mainHeaderFrame {
+    background: #ffffff;
+    border: 1px solid #ececef;
+    border-radius: 10px;
+    min-height: 44px;
+}
+
 QFrame#leftWidget,
 QFrame#connectionInfoFrame,
 QFrame#inspectorFrame {
-    background: #ffffff;
-    border: 1px solid #e5e5e8;
+    background: #f5f5f7;
+    border: 1px solid #e6e6ea;
     border-radius: 10px;
-}
-
-QFrame#mainHeaderFrame {
-    min-height: 44px;
 }
 
 QLabel#appTitleLabel {
@@ -216,14 +323,14 @@ QPushButton#connectBtn:pressed {
 
 QLineEdit#connectionFilterTxt {
     min-height: 30px;
-    background: #f7f7f9;
-    border-color: #e3e3e7;
+    background: #ffffff;
+    border-color: #dedee3;
 }
 
 QTreeView#connectionTreeView {
     border: 0;
     border-radius: 0;
-    background: #ffffff;
+    background: transparent;
 }
 
 QToolButton#locateBtn,
@@ -248,8 +355,8 @@ QToolButton#clearlogButton:hover,
 QToolButton#editJsonBtn:hover,
 QToolButton#latencyBtn:hover,
 QToolButton#deleteBtn:hover {
-    background: #f0f0f2;
-    border-color: #e4e4e7;
+    background: #e9e9ed;
+    border-color: #ddddE2;
 }
 
 QScrollArea#scrollArea,
@@ -276,13 +383,13 @@ QPushButton#logVisibilityBtn:hover {
 }
 
 QTextBrowser#masterLogBrowser {
-    background: #fbfbfc;
-    border-color: #ebebee;
+    background: #ffffff;
+    border-color: #e2e2e6;
     border-radius: 8px;
 }
 
 QFrame#statusFrame {
-    background: transparent;
+    background: #ffffff;
     border: 0;
     border-top: 1px solid #e5e5e8;
 }
@@ -293,7 +400,7 @@ QLabel#connetionStatusLabel {
 
 QLabel#protocolLabel {
     color: #326f9f;
-    background: #edf4f9;
+    background: #e7f0f7;
     border-radius: 5px;
     padding: 2px 7px;
 }
@@ -309,5 +416,5 @@ QLabel#subscriptionCaptionLabel {
 
 QFrame#headerDivider,
 QFrame#inspectorDivider {
-    color: #ededf0;
+    color: #ddddE2;
 }
