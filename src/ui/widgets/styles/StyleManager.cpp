@@ -3,6 +3,7 @@
 #include "base/Qv2rayBase.hpp"
 
 #include <QApplication>
+#include <QColor>
 #include <QEvent>
 #include <QFile>
 #include <QPalette>
