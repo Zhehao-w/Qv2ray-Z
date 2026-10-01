@@ -3,7 +3,7 @@ name: Qv2ray-Z Windows release
 on:
   push:
     tags:
-      - "v*-z*"
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -32,12 +32,12 @@ jobs:
       - name: Prepare and verify release metadata
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+-z\d+$') {
+          if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+$') {
             throw "Release tag has an unsupported format: $env:GITHUB_REF_NAME"
           }
 
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          $sourceVersion = ((Get-Content 'makespec/VERSION' -Raw).Trim() + (Get-Content 'makespec/VERSIONSUFFIX' -Raw).Trim())
+          $sourceVersion = (Get-Content 'makespec/VERSION' -Raw).Trim()
           if ($version -ne $sourceVersion) {
             throw "Release tag version $version does not match source version $sourceVersion"
           }
