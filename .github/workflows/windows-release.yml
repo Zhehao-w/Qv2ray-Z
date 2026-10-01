@@ -117,31 +117,7 @@ jobs:
       - name: Download and verify pinned official Xray Windows x64 release
         shell: pwsh
         run: |
-          $manifest = Get-Content '.github/release-dependencies.json' -Raw | ConvertFrom-Json
-          $tag = $manifest.xray.version
-          $asset = $manifest.xray.assets.'windows-x64'
-          if (-not $tag -or -not $asset.name -or -not $asset.sha256) {
-            throw 'Pinned Xray Windows dependency metadata is incomplete.'
-          }
-
-          $xrayDir = "$env:RUNNER_TEMP/xray"
-          New-Item -ItemType Directory -Force $xrayDir | Out-Null
-          $archive = Join-Path $xrayDir $asset.name
-          $url = "https://github.com/XTLS/Xray-core/releases/download/$tag/$($asset.name)"
-          Invoke-WebRequest -Uri $url -OutFile $archive
-
-          $actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expectedHash = $asset.sha256.ToLowerInvariant()
-          if ($actualHash -ne $expectedHash) {
-            throw "Xray checksum mismatch: expected $expectedHash, got $actualHash"
-          }
-
-          Expand-Archive $archive "$xrayDir/bin" -Force
-          "XRAY_BIN=$xrayDir/bin/xray.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "XRAY_VERSION=$tag" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "XRAY_ASSET=$($asset.name)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "XRAY_SHA256=$expectedHash" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Verified pinned Xray release $tag ($($asset.name))"
+          & ./.github/scripts/install-pinned-xray-windows.ps1
 
       - name: Validate TLS Vision and REALITY Vision fixtures
         shell: pwsh
@@ -200,7 +176,7 @@ jobs:
           $xrayVersionOutput = & "$deployment/xray.exe" version 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host $xrayVersionOutput
-          $expectedXrayVersion = $env:XRAY_VERSION.TrimStart('v')
+          $expectedXrayVersion = $env:XRAY_VERSION -replace '^v', ''
           if ($xrayVersionOutput -notmatch [regex]::Escape($expectedXrayVersion)) {
             throw "Packaged xray.exe did not report pinned version $env:XRAY_VERSION"
           }
