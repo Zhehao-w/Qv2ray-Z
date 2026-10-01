@@ -60,7 +60,15 @@ namespace Qv2ray::ui::styles
     {
         if (event->type() == QEvent::Polish)
         {
-            static const QSet<QString> retiredUiObjects = {
+            auto *widget = qobject_cast<QWidget *>(watched);
+            if (!widget)
+                return QObject::eventFilter(watched, event);
+
+            const auto *topLevel = widget->window();
+            const auto topLevelName = topLevel ? topLevel->objectName() : QString{};
+            const auto objectName = widget->objectName();
+
+            static const QSet<QString> retiredPreferencesObjects = {
                 // Multi-theme UI is retired. Qv2ray-Z has one maintained look.
                 QStringLiteral("darkThemeLabel"),
                 QStringLiteral("darkThemeCB"),
@@ -72,10 +80,11 @@ namespace Qv2ray::ui::styles
                 QStringLiteral("pushButton"),
                 QStringLiteral("groupBox_2"),
                 QStringLiteral("updateSettingsGroupBox"),
-                QStringLiteral("pluginsBtn"),
             };
 
-            if (auto *widget = qobject_cast<QWidget *>(watched); widget && retiredUiObjects.contains(widget->objectName()))
+            const bool retiredPreference = topLevelName == QStringLiteral("PreferencesWindow") && retiredPreferencesObjects.contains(objectName);
+            const bool retiredMainWindowControl = topLevelName == QStringLiteral("MainWindow") && objectName == QStringLiteral("pluginsBtn");
+            if (retiredPreference || retiredMainWindowControl)
                 widget->hide();
         }
         return QObject::eventFilter(watched, event);
