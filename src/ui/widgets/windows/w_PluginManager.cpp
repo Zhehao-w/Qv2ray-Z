@@ -5,8 +5,6 @@
 #include "ui/widgets/editors/w_JsonEditor.hpp"
 #include "utils/QvHelpers.hpp"
 
-#include <QDesktopServices>
-
 PluginManageWindow::PluginManageWindow(QWidget *parent) : QvDialog("PluginManager", parent)
 {
     addStateOptions("width", { [&] { return width(); }, [&](QJsonValue val) { resize(val.toInt(), size().height()); } });
@@ -15,11 +13,15 @@ PluginManageWindow::PluginManageWindow(QWidget *parent) : QvDialog("PluginManage
     addStateOptions("y", { [&] { return y(); }, [&](QJsonValue val) { move(x(), val.toInt()); } });
 
     setupUi(this);
-    for (auto &plugin : PluginHost->AllPlugins())
+    setWindowTitle(tr("Bundled Components"));
+    openPluginFolder->hide();
+    toolButton->hide();
+
+    for (const auto &plugin : PluginHost->AllPlugins())
     {
         const auto &info = PluginHost->GetPlugin(plugin)->metadata;
         auto item = new QListWidgetItem(pluginListWidget);
-        item->setCheckState(PluginHost->GetPluginEnabled(info.InternalName) ? Qt::Checked : Qt::Unchecked);
+        item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
         item->setData(Qt::UserRole, info.InternalName);
         item->setText(info.Name + " (" + (PluginHost->GetPlugin(info.InternalName)->isLoaded ? tr("Loaded") : tr("Not loaded")) + ")");
         pluginListWidget->addItem(item);
@@ -63,7 +65,7 @@ void PluginManageWindow::on_pluginListWidget_currentItemChanged(QListWidgetItem 
     if (!currentPluginInfo->isLoaded)
     {
         pluginUnloadLabel->setVisible(true);
-        pluginUnloadLabel->setText(tr("Plugin Not Loaded"));
+        pluginUnloadLabel->setText(tr("Bundled component not loaded"));
         return;
     }
 
@@ -82,7 +84,7 @@ void PluginManageWindow::on_pluginListWidget_currentItemChanged(QListWidgetItem 
         else
         {
             pluginUnloadLabel->setVisible(true);
-            pluginUnloadLabel->setText(tr("Plugin does not have settings widget."));
+            pluginUnloadLabel->setText(tr("Bundled component does not have a settings widget."));
         }
     }
     else
@@ -94,18 +96,12 @@ void PluginManageWindow::on_pluginListWidget_currentItemChanged(QListWidgetItem 
 void PluginManageWindow::on_pluginListWidget_itemClicked(QListWidgetItem *item)
 {
     Q_UNUSED(item)
-    // on_pluginListWidget_currentItemChanged(item, nullptr);
 }
 
 void PluginManageWindow::on_pluginListWidget_itemChanged(QListWidgetItem *item)
 {
-    if (isLoading)
-        return;
-    bool isEnabled = item->checkState() == Qt::Checked;
-    const auto pluginInternalName = item->data(Qt::UserRole).toString();
-    PluginHost->SetPluginEnabled(pluginInternalName, isEnabled);
-    const auto info = PluginHost->GetPlugin(pluginInternalName);
-    item->setText(info->metadata.Name + " (" + (info->isLoaded ? tr("Loaded") : tr("Not loaded")) + ")");
+    Q_UNUSED(item)
+    // Bundled components are required and cannot be enabled or disabled.
 }
 
 void PluginManageWindow::on_pluginEditSettingsJsonBtn_clicked()
@@ -115,7 +111,7 @@ void PluginManageWindow::on_pluginEditSettingsJsonBtn_clicked()
         const auto &info = PluginHost->GetPlugin(current->data(Qt::UserRole).toString());
         if (!info->isLoaded)
         {
-            QvMessageBoxWarn(this, tr("Plugin not loaded"), tr("This plugin is not loaded, please enable or reload the plugin to continue."));
+            QvMessageBoxWarn(this, tr("Bundled component not loaded"), tr("This bundled component is not loaded."));
             return;
         }
         JsonEditor w(info->pluginInterface->GetSettngs());
@@ -129,21 +125,16 @@ void PluginManageWindow::on_pluginEditSettingsJsonBtn_clicked()
 
 void PluginManageWindow::on_pluginListWidget_itemSelectionChanged()
 {
-    auto needEnable = !pluginListWidget->selectedItems().isEmpty();
-    pluginEditSettingsJsonBtn->setEnabled(needEnable);
+    const auto hasSelection = !pluginListWidget->selectedItems().isEmpty();
+    pluginEditSettingsJsonBtn->setEnabled(hasSelection);
 }
 
 void PluginManageWindow::on_openPluginFolder_clicked()
 {
-    QDir pluginPath(QV2RAY_CONFIG_DIR + "plugins/");
-    if (!pluginPath.exists())
-    {
-        pluginPath.mkpath(QV2RAY_CONFIG_DIR + "plugins/");
-    }
-    QDesktopServices::openUrl(QUrl::fromLocalFile(pluginPath.absolutePath()));
+    QvMessageBoxInfo(this, tr("External plugins deprecated"), tr("External plugins are no longer supported by Qv2ray-Z."));
 }
 
 void PluginManageWindow::on_toolButton_clicked()
 {
-    QDesktopServices::openUrl(QUrl("https://qv2ray.net/plugins/"));
+    QvMessageBoxInfo(this, tr("External plugins deprecated"), tr("External plugins are no longer supported by Qv2ray-Z."));
 }
