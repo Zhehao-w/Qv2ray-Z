@@ -109,7 +109,7 @@ void ConnectionItemWidget::BeginConnection()
 bool ConnectionItemWidget::NameMatched(const QString &arg) const
 {
     auto searchString = arg.toLower();
-    auto isGroupNameMatched = GetDisplayName(groupId).toLower().contains(arg);
+    auto isGroupNameMatched = GetDisplayName(groupId).toLower().contains(searchString);
 
     if (IsConnection())
     {
