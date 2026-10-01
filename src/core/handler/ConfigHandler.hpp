@@ -182,6 +182,20 @@ namespace Qv2ray::core::handler
       private:
         bool p_CHUpdateSubscription(const GroupId &id, const QByteArray &data);
         bool CommitConnectionConfig(const QList<data_safety::PersistenceFileMutation> &additionalMutations = {});
+        void RepairCurrentContextAfterMembershipRemoval(const ConnectionGroupPair &removed)
+        {
+            const auto current = CurrentConnection();
+            if (current.isEmpty() || current != removed || IsValidId(current))
+                return;
+
+            ConnectionGroupPair fallback;
+            if (IsValidId(current.connectionId))
+                fallback = ResolveConnectionContext(current.connectionId, GlobalConfig.lastConnectedId);
+
+            StopConnection();
+            if (!fallback.isEmpty())
+                StartConnection(fallback);
+        }
 
       private:
         int saveTimerId;
@@ -195,6 +209,9 @@ namespace Qv2ray::core::handler
       private:
         LatencyTestHost *pingHelper;
         KernelInstanceHandler *kernelHandler;
+        QMetaObject::Connection contextRepairConnection = QObject::connect(
+            this, &QvConfigHandler::OnConnectionRemovedFromGroup, this,
+            [this](const ConnectionGroupPair &removed) { RepairCurrentContextAfterMembershipRemoval(removed); });
     };
 
     inline ::Qv2ray::core::handler::QvConfigHandler *ConnectionManager = nullptr;
