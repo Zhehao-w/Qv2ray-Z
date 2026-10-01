@@ -1,4 +1,4 @@
-name: Apply quiet mode polarity fix
+name: Finalize UI polish validation
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   actions: write
 
 jobs:
-  apply:
+  finalize:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out branch
@@ -21,26 +21,22 @@ jobs:
           ref: ui/main-window-modernization
           fetch-depth: 0
 
-      - name: Fix quiet mode polarity and self-remove
+      - name: Verify final UI state and self-remove
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("src/ui/widgets/windows/w_PreferencesWindow.cpp")
-          text = path.read_text(encoding="utf-8")
-          old = "void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)\n{\n    LOADINGCHECK\n    CurrentConfig.uiConfig.quietMode = arg1 != Qt::Checked;\n}"
-          new = "void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)\n{\n    LOADINGCHECK\n    CurrentConfig.uiConfig.quietMode = arg1 == Qt::Checked;\n}"
-          if text.count(old) != 1:
-              raise SystemExit(f"Expected one quiet-mode handler, found {text.count(old)}")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
-          PY
+          grep -F 'CurrentConfig.uiConfig.quietMode = arg1 == Qt::Checked;' src/ui/widgets/windows/w_PreferencesWindow.cpp
+          grep -F 'connectBtn->setIcon(QIcon());' src/ui/widgets/widgets/ConnectionInfoWidget.cpp
+          grep -F 'speedChartHolderWidget->setVisible(true);' src/ui/widgets/windows/w_MainWindow_extra.cpp
+          grep -F 'masterLogBrowser->setVisible(true);' src/ui/widgets/windows/w_MainWindow_extra.cpp
+          grep -F 'by Zhehao-w' src/ui/widgets/windows/w_MainWindow_extra.cpp
+          grep -F 'QScrollBar::handle:vertical' assets/styles/qv2ray-modern.qss
+          grep -F 'QSpinBox::up-button' assets/styles/qv2ray-modern.qss
           git diff --check
           git rm .github/workflows/ui-quiet-mode-fix.yml
           git config user.name "Zhehao Wang"
           git config user.email "31388024+Zhehao-w@users.noreply.github.com"
-          git add src/ui/widgets/windows/w_PreferencesWindow.cpp
-          git commit -m "Fix quiet mode preference polarity"
+          git commit -m "ci: remove temporary UI polish validator"
           git push origin HEAD:ui/main-window-modernization
 
       - name: Dispatch maintained validation
