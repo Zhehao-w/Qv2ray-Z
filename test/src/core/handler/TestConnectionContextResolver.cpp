@@ -17,17 +17,21 @@ TEST_CASE("connection context resolution preserves explicit and active membershi
     REQUIRE(Resolve(connection, memberships, {}, { connection, beta }, { connection, alpha }) == betaContext);
 }
 
-TEST_CASE("stale preferred contexts fall through to last connected membership")
+TEST_CASE("stale or mismatched contexts fall through to a valid membership")
 {
     const ConnectionId connection{ "connection" };
+    const ConnectionId otherConnection{ "other-connection" };
     const GroupId alpha{ "alpha" };
     const GroupId beta{ "beta" };
     const GroupId removed{ "removed" };
     const ConnectionGroupPair betaContext{ connection, beta };
 
-    const auto resolved = Resolve(connection, { alpha, beta }, { connection, removed }, { connection, removed }, { connection, beta });
-    REQUIRE(resolved == betaContext);
+    const auto staleResolved = Resolve(connection, { alpha, beta }, { connection, removed }, { connection, removed }, { connection, beta });
+    REQUIRE(staleResolved == betaContext);
     REQUIRE_FALSE(IsMembership({ connection, removed }, { alpha, beta }));
+
+    const auto mismatchedResolved = Resolve(connection, { alpha, beta }, { otherConnection, beta }, { otherConnection, alpha }, betaContext);
+    REQUIRE(mismatchedResolved == betaContext);
 }
 
 TEST_CASE("default group is the stable fallback when it contains the connection")
