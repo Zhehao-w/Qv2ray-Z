@@ -1,0 +1,80 @@
+name: Apply compact square layout polish
+
+on:
+  push:
+    branches:
+      - ui/main-window-modernization
+    paths:
+      - ".github/workflows/ui-square-alignment-polish.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ui/main-window-modernization
+          fetch-depth: 0
+
+      - name: Apply narrower taller layout and align connection values
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          # Make the normal restored footprint nearly square, then slightly taller.
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.ui",
+              '''    <width>850</width>\n    <height>720</height>\n   </rect>\n  </property>\n  <property name="minimumSize">\n   <size>\n    <width>800</width>\n    <height>640</height>''',
+              '''    <width>780</width>\n    <height>820</height>\n   </rect>\n  </property>\n  <property name="minimumSize">\n   <size>\n    <width>740</width>\n    <height>700</height>''')
+
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow_extra.cpp",
+              '''        setMinimumSize(800, 640);\n        leftWidget->setMinimumWidth(265);\n        scrollArea->setMinimumWidth(400);\n        if (width() >= 900 && width() <= 1024)\n            resize(850, qMax(height(), 720));\n        splitter->setSizes({ 280, qMax(width() - 300, 400) });''',
+              '''        setMinimumSize(740, 700);\n        leftWidget->setMinimumWidth(250);\n        scrollArea->setMinimumWidth(380);\n        // Migrate the previous compact default (roughly 850x720) to the\n        // narrower, slightly taller footprint without overriding deliberately\n        // large/tall restored windows.\n        if (width() >= 800 && width() <= 900 && height() <= 760)\n            resize(780, 820);\n        splitter->setSizes({ 260, qMax(width() - 280, 380) });''')
+
+          # Preserve the protocol badge background/padding, but give all value
+          # labels the same text inset so Group / Protocol / Address / Port align.
+          replace_once(
+              "assets/styles/qv2ray-modern.qss",
+              '''QLabel#protocolLabel {\n    color: #326f9f;\n    background: #e7f0f7;\n    border-radius: 5px;\n    padding: 2px 7px 2px 0;\n}\n''',
+              '''QLabel#groupLabel,\nQLabel#protocolLabel,\nQLabel#addressLabel,\nQLabel#portLabel {\n    padding-left: 7px;\n    padding-right: 7px;\n}\n\nQLabel#protocolLabel {\n    color: #326f9f;\n    background: #e7f0f7;\n    border-radius: 5px;\n    padding-top: 2px;\n    padding-bottom: 2px;\n}\n''')
+
+          ET.parse("src/ui/widgets/windows/w_MainWindow.ui")
+          ET.parse("src/ui/widgets/widgets/ConnectionInfoWidget.ui")
+          PY
+
+          git diff --check
+          git rm .github/workflows/ui-square-alignment-polish.yml
+          git config user.name "Zhehao Wang"
+          git config user.email "31388024+Zhehao-w@users.noreply.github.com"
+          git add assets/styles/qv2ray-modern.qss \
+                  src/ui/widgets/windows/w_MainWindow.ui \
+                  src/ui/widgets/windows/w_MainWindow_extra.cpp
+          git commit -m "Refine main window proportions and detail alignment"
+          git push origin HEAD:ui/main-window-modernization
+
+      - name: Dispatch maintained validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run data-safety-hardening.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run vless-vision-validation.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run windows-vless-vision-package.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
