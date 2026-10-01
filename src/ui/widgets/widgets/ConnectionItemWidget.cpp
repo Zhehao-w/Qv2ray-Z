@@ -79,11 +79,26 @@ ConnectionItemWidget::ConnectionItemWidget(const GroupId &id, QWidget *parent) :
     connect(ConnectionManager, &QvConfigHandler::OnGroupRenamed, this, &ConnectionItemWidget::OnGroupItemRenamed);
 }
 
+void ConnectionItemWidget::SetIdentifier(const ConnectionGroupPair &id)
+{
+    if (!IsConnection() || id.connectionId != connectionId || !ConnectionManager->IsValidId(id))
+        return;
+    groupId = id.groupId;
+    OnConnectionItemRenamed(connectionId, "", originalItemName);
+}
+
 void ConnectionItemWidget::BeginConnection()
 {
     if (IsConnection())
     {
-        ConnectionManager->StartConnection({ connectionId, groupId });
+        const auto resolved = ConnectionManager->ResolveConnectionContext(connectionId, { connectionId, groupId });
+        if (resolved.isEmpty())
+        {
+            LOG("Cannot start connection because it has no valid group context.");
+            return;
+        }
+        SetIdentifier(resolved);
+        ConnectionManager->StartConnection(resolved);
     }
     else
     {
@@ -115,8 +130,10 @@ void ConnectionItemWidget::RecalculateConnectionsCount()
 
 void ConnectionItemWidget::OnConnected(const ConnectionGroupPair &id)
 {
-    if (id == ConnectionGroupPair{ connectionId, groupId })
+    if (id.connectionId == connectionId && (flexibleContext || id.groupId == groupId))
     {
+        if (flexibleContext)
+            SetIdentifier(id);
         connNameLabel->setText("● " + originalItemName);
         DEBUG("ConnectionItemWidgetOnConnected signal received for: " + id.connectionId.toString());
         emit RequestWidgetFocus(this);
@@ -125,7 +142,7 @@ void ConnectionItemWidget::OnConnected(const ConnectionGroupPair &id)
 
 void ConnectionItemWidget::OnDisConnected(const ConnectionGroupPair &id)
 {
-    if (id == ConnectionGroupPair{ connectionId, groupId })
+    if (id.connectionId == connectionId && (flexibleContext || id.groupId == groupId))
     {
         connNameLabel->setText(originalItemName);
     }
