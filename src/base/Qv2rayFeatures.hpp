@@ -14,9 +14,6 @@
 #define QVFEATURE_ui_has_import_qrcode          -1
 #define QVFEATURE_ui_has_store_state            -1
 
-// Utilities
-#define QVFEATURE_util_has_ntp                  1
-
 // clang-format on
 
 #define QV2RAY_FEATURE(feat) ((1 / QVFEATURE_##feat) == 1)
