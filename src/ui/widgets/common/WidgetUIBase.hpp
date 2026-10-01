@@ -157,6 +157,6 @@ namespace Qv2ray::ui
         cursor.insertText(message);
         cursor.endEditBlock();
     }
-} // namespace Qv2ray::ui;
+} // namespace Qv2ray::ui
 
 using namespace Qv2ray::ui;
