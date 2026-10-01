@@ -26,7 +26,9 @@ QvMessageBusSlotImpl(ConnectionInfoWidget)
 
 void ConnectionInfoWidget::setConnectionAction(bool connected)
 {
-    connectBtn->setIcon(QIcon(connected ? QV2RAY_COLORSCHEME_FILE("stop") : QV2RAY_COLORSCHEME_FILE("start")));
+    // Keep the primary action text-only. The legacy start/stop SVGs do not
+    // render reliably against the maintained blue primary-button palette.
+    connectBtn->setIcon(QIcon());
     connectBtn->setText(connected ? tr("Disconnect") : tr("Connect"));
 }
 

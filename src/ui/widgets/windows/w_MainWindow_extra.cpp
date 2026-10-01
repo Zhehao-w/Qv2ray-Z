@@ -32,6 +32,27 @@ void MainWindow::MWShowWindow()
 #if QV2RAY_FEATURE(ui_has_store_state)
     RestoreState();
 #endif
+    if (!property("modernLayoutDefaultsApplied").toBool())
+    {
+        setProperty("modernLayoutDefaultsApplied", true);
+        setMinimumSize(760, 580);
+        leftWidget->setMinimumWidth(240);
+        scrollArea->setMinimumWidth(420);
+        if (width() > 900 && width() <= 1024)
+            resize(900, qMax(height(), 620));
+        splitter->setSizes({ 250, qMax(width() - 270, 420) });
+
+        // Diagnostics are useful in day-to-day operation, so expose them by
+        // default while keeping the existing header toggles for manual collapse.
+        speedChartHolderWidget->setVisible(true);
+        masterLogBrowser->setVisible(true);
+
+        // Leave enough room for submenu arrows and long labels under Fusion.
+        tray_RootMenu->setMinimumWidth(190);
+        tray_BypassCNMenu->setMinimumWidth(220);
+        tray_SystemProxyMenu->setMinimumWidth(220);
+        tray_RecentConnectionsMenu->setMinimumWidth(220);
+    }
     this->show();
 #ifdef Q_OS_WIN
     setWindowState(Qt::WindowNoState);
@@ -277,6 +298,7 @@ void MainWindow::updateColorScheme()
 
 void MainWindow::UpdateActionTranslations()
 {
+    appSubtitleLabel->setText(tr("Connections") + QStringLiteral(" · v" QV2RAY_VERSION_STRING " · by Zhehao-w"));
     tray_BypassCNMenu->setTitle(tr("Bypass CN Mainland"));
     tray_SystemProxyMenu->setTitle(tr("System Proxy"));
     tray_RecentConnectionsMenu->setTitle(tr("Recent Connections"));

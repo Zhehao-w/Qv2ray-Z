@@ -93,9 +93,14 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     glyphTrayCB->setChecked(CurrentConfig.uiConfig.useGlyphTrayIcon);
     languageComboBox->setCurrentText(CurrentConfig.uiConfig.language);
     logLevelComboBox->setCurrentIndex(CurrentConfig.logLevel);
-    quietModeCB->setText(tr("Show connection and proxy status notifications"));
-    quietModeCB->setToolTip(tr("Errors, warnings, logs, status indicators and traffic statistics are always shown."));
-    quietModeCB->setChecked(!CurrentConfig.uiConfig.quietMode);
+    // Present the setting with the same polarity as the stored value: checked
+    // means Quiet Mode is enabled. Quiet Mode suppresses routine tray status
+    // notifications and accepts scheduled subscription refreshes without a prompt.
+    label_86->setText(tr("Quiet Mode"));
+    quietModeCB->setText(tr("Enabled"));
+    quietModeCB->setToolTip(
+        tr("Suppress routine connection, subscription and system-proxy tray notifications and automatically accept scheduled subscription updates. Errors, warnings, logs, status indicators and traffic statistics remain visible."));
+    quietModeCB->setChecked(CurrentConfig.uiConfig.quietMode);
     useOldShareLinkFormatCB->setChecked(CurrentConfig.uiConfig.useOldShareLinkFormat);
     // Keep the setting readable for migration, but modern exports no longer need
     // to present this compatibility switch in the everyday preferences UI.
@@ -977,7 +982,7 @@ void PreferencesWindow::on_setTestlatencyOnConnectedCB_stateChanged(int arg1)
 void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)
 {
     LOADINGCHECK
-    CurrentConfig.uiConfig.quietMode = arg1 != Qt::Checked;
+    CurrentConfig.uiConfig.quietMode = arg1 == Qt::Checked;
 }
 
 void PreferencesWindow::on_tproxyGroupBox_toggled(bool arg1)
