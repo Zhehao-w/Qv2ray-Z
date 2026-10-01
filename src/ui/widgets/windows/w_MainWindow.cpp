@@ -1,6 +1,5 @@
 #include "w_MainWindow.hpp"
 
-#include "components/update/UpdateChecker.hpp"
 #include "core/handler/ConfigHandler.hpp"
 #include "core/settings/SettingsBackend.hpp"
 #include "plugin-interface/QvGUIPluginInterface.hpp"
@@ -337,8 +336,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     //
     CheckSubscriptionsUpdate();
     qvLogTimerId = startTimer(1000);
-    auto checker = new QvUpdateChecker(this);
-    checker->CheckUpdate();
     //
     for (const auto &name : PluginHost->UsablePlugins())
     {
