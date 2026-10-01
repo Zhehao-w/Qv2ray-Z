@@ -129,6 +129,10 @@ Qv2rayExitReason Qv2rayWidgetApplication::runQv2rayInternal()
 {
     setQuitOnLastWindowClosed(false);
     hTray = new QSystemTrayIcon();
+
+    // The historical dark-theme flag remains readable for old configurations,
+    // but the maintained product now has one first-party application palette.
+    GlobalConfig.uiConfig.useDarkTheme = false;
     StyleManager = new QvStyleManager();
     StyleManager->ApplyStyle();
     // Show MainWindow
