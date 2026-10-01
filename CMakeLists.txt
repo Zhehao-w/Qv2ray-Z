@@ -107,9 +107,7 @@ QVLOG(QV2RAY_DEFAULT_VASSETS_PATH)
 set(QV2RAY_DEFAULT_VCORE_PATH "unset" CACHE STRING "Default Xray core path")
 QVLOG(QV2RAY_DEFAULT_VCORE_PATH)
 
-option(QV2RAY_EMBED_TRANSLATIONS "Embed Translations" OFF)
 option(QV2RAY_USE_V5_CORE "Use current Xray/V2Ray v5 API layout" ON)
-QVLOG(QV2RAY_EMBED_TRANSLATIONS)
 QVLOG(QV2RAY_USE_V5_CORE)
 
 # Maintained frontend/tooling choices are fixed instead of exposing dead build
@@ -133,19 +131,6 @@ if(QV2RAY_DEFAULT_VCORE_PATH AND NOT QV2RAY_DEFAULT_VCORE_PATH STREQUAL "unset")
 endif()
 if(QV2RAY_DEFAULT_VASSETS_PATH AND NOT QV2RAY_DEFAULT_VASSETS_PATH STREQUAL "unset")
     add_definitions(-DQV2RAY_DEFAULT_VASSETS_PATH="${QV2RAY_DEFAULT_VASSETS_PATH}")
-endif()
-
-# ==================================================================================
-# Translations
-# ==================================================================================
-set(QV2RAY_TRANSLATION_PATH "unset" CACHE STRING "Default translation path")
-if(QV2RAY_TRANSLATION_PATH AND NOT QV2RAY_TRANSLATION_PATH STREQUAL "unset")
-    add_definitions(-DQV2RAY_TRANSLATION_PATH="${QV2RAY_TRANSLATION_PATH}")
-endif()
-if(QV2RAY_EMBED_TRANSLATIONS)
-    add_definitions(-DQV2RAY_EMBED_TRANSLATIONS)
-    configure_file(translations/translations.qrc ${CMAKE_BINARY_DIR} COPYONLY)
-    set(QV2RAY_EMBED_TRANSLATION_QRC ${CMAKE_BINARY_DIR}/translations.qrc)
 endif()
 
 # ==================================================================================
@@ -254,7 +239,6 @@ include(cmake/qnodeeditor.cmake)
 list(APPEND QV2RAY_QRC_RESOURCES ${QNODEEDITOR_QRC_RESOURCES})
 
 include(cmake/components/qv2ray-platform.cmake)
-include(cmake/translations.cmake)
 
 list(APPEND QV2RAY_QRC_RESOURCES
     ${CMAKE_SOURCE_DIR}/resources.qrc
@@ -266,12 +250,9 @@ set(QV2RAY_FULL_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/main.cpp
     ${QV2RAY_UI_SOURCES}
     ${QV2RAY_PLATFORM_SOURCES}
-    ${QV2RAY_EMBED_TRANSLATION_QRC}
     ${QV2RAY_QRC_RESOURCES}
-    ${QV2RAY_QM_FILES}
     )
 
-QVLOG(QV2RAY_QM_FILES)
 QVLOG(QV2RAY_QRC_RESOURCES)
 add_executable(qv2ray ${GUI_TYPE} ${QV2RAY_FULL_SOURCES})
 

@@ -111,13 +111,12 @@ bool Qv2rayPlatformApplication::Initialize()
 #endif
 #endif
 
-    // Install a default translater. From the OS/DE
+    // Qv2ray-Z is English-only. Keep a tiny compatibility object until the
+    // legacy Preferences form is replaced, but never inspect the OS locale or
+    // load a QTranslator/resource bundle.
     Qv2rayTranslator = std::make_unique<QvTranslator>();
-    Qv2rayTranslator->InstallTranslation(QLocale::system().name());
-    const auto allTranslations = Qv2rayTranslator->GetAvailableLanguages();
-    const auto osLanguage = QLocale::system().name();
-    //
     LocateConfiguration();
+    GlobalConfig.uiConfig.language = QStringLiteral("en_US");
 #ifdef Q_OS_WIN
     using namespace Qv2ray::components::proxy::safety;
     SetProxyAccessAllowed(false);
@@ -179,27 +178,6 @@ bool Qv2rayPlatformApplication::Initialize()
         }
     }
 #endif
-    if (!allTranslations.contains(GlobalConfig.uiConfig.language))
-    {
-        // If we need to reset the language.
-        if (allTranslations.contains(osLanguage))
-        {
-            GlobalConfig.uiConfig.language = osLanguage;
-        }
-        else if (!allTranslations.isEmpty())
-        {
-            GlobalConfig.uiConfig.language = allTranslations.first();
-        }
-    }
-
-    if (!Qv2rayTranslator->InstallTranslation(GlobalConfig.uiConfig.language))
-    {
-        QvMessageBoxWarn(nullptr, "Translation Failed",
-                         "Cannot load translation for " + GlobalConfig.uiConfig.language + NEWLINE + //
-                             "English is now used." + NEWLINE + NEWLINE +                            //
-                             "Please go to Preferences Window to change language or open an Issue");
-        GlobalConfig.uiConfig.language = "en_US";
-    }
 
     return true;
 }

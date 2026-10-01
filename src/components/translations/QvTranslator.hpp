@@ -1,37 +1,30 @@
 #pragma once
+
 #include <QString>
-#include <QTranslator>
+#include <QStringList>
 #include <memory>
-#include <optional>
 
 namespace Qv2ray::common
 {
+    // Source-compatibility shim for the legacy Preferences implementation.
+    // Qv2ray-Z is English-only: no QTranslator is created and no external or
+    // embedded translation resources are discovered or loaded.
     class QvTranslator
     {
       public:
-        explicit QvTranslator();
+        explicit QvTranslator() = default;
 
-      public:
-        /**
-         * @brief get the available languages.
-         * @return (if available) languages (zh_CN, en_US, ...)
-         */
-        const inline QStringList GetAvailableLanguages() const
+        QStringList GetAvailableLanguages() const
         {
-            return languages;
+            return { QStringLiteral("en_US") };
         }
-        /**
-         * @brief reload the translation from file
-         * @param code eg: en_US, zh_CN, ...
-         */
-        bool InstallTranslation(const QString &);
 
-      private:
-        void refreshTranslations();
-        QStringList languages;
-        QStringList searchPaths;
-        std::unique_ptr<QTranslator> pTranslator;
+        bool InstallTranslation(const QString &code) const
+        {
+            return code == QStringLiteral("en_US");
+        }
     };
+
     inline std::unique_ptr<common::QvTranslator> Qv2rayTranslator;
 } // namespace Qv2ray::common
 
