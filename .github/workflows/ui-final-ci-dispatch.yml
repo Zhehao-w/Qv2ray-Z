@@ -1,0 +1,28 @@
+name: UI final CI dispatcher
+
+on:
+  push:
+    branches:
+      - ui/main-window-modernization
+    paths:
+      - ".github/workflows/ui-final-ci-dispatch.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    name: Dispatch maintained UI product gates
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Run branch CI workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run data-safety-hardening.yml --repo "$GITHUB_REPOSITORY" --ref "$REF_NAME"
+          gh workflow run vless-vision-validation.yml --repo "$GITHUB_REPOSITORY" --ref "$REF_NAME"
+          gh workflow run windows-vless-vision-package.yml --repo "$GITHUB_REPOSITORY" --ref "$REF_NAME"
