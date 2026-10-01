@@ -3,6 +3,7 @@
         <file>assets/icons/qv2ray.icns</file>
         <file>assets/icons/qv2ray.ico</file>
         <file>assets/icons/qv2ray.png</file>
+        <file>assets/styles/qv2ray-modern.qss</file>
         <file>assets/credit.html</file>
     </qresource>
 </RCC>

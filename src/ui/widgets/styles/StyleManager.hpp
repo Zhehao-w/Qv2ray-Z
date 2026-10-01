@@ -1,35 +1,33 @@
 #pragma once
 
-#include <QMap>
 #include <QObject>
 #include <QStringList>
 
 namespace Qv2ray::ui::styles
 {
-    struct QvStyle
-    {
-        enum StyleType
-        {
-            QVSTYLE_FACTORY,
-            QVSTYLE_QSS
-        } Type;
-        QString Name;
-        QString qssPath;
-    };
-
-    class QvStyleManager : QObject
+    // Qv2ray-Z intentionally exposes one maintained first-party interface.
+    // This object remains the central application-style installer, but it no
+    // longer discovers Qt factory styles or user-supplied theme files.
+    class QvStyleManager : public QObject
     {
       public:
-        QvStyleManager(QObject *parent = nullptr);
+        explicit QvStyleManager(QObject *parent = nullptr);
+        void ApplyStyle();
+
+        // Transitional source compatibility while the legacy Preferences form
+        // is removed in this branch. These APIs do not restore theme selection.
         inline QStringList AllStyles() const
         {
-            return styles.keys();
+            return { QStringLiteral("Qv2ray-Z") };
         }
-        bool ApplyStyle(const QString &);
+        inline bool ApplyStyle(const QString &)
+        {
+            ApplyStyle();
+            return true;
+        }
 
-      private:
-        void ReloadStyles();
-        QMap<QString, QvStyle> styles;
+      protected:
+        bool eventFilter(QObject *watched, QEvent *event) override;
     };
 
     inline QvStyleManager *StyleManager = nullptr;

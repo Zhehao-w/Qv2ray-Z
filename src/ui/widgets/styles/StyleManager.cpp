@@ -1,121 +1,92 @@
 #include "StyleManager.hpp"
 
 #include "base/Qv2rayBase.hpp"
-#include "ui/widgets/common/WidgetUIBase.hpp"
-#include "utils/QvHelpers.hpp"
 
 #include <QApplication>
 #include <QColor>
+#include <QEvent>
+#include <QFile>
 #include <QPalette>
-#include <QStyle>
+#include <QSet>
 #include <QStyleFactory>
+#include <QWidget>
 
-constexpr auto QV2RAY_BUILT_IN_DARK_MODE_NAME = "Built-in Darkmode";
 #define QV_MODULE_NAME "StyleManager"
 
 namespace Qv2ray::ui::styles
 {
     QvStyleManager::QvStyleManager(QObject *parent) : QObject(parent)
     {
-        ReloadStyles();
+        qApp->installEventFilter(this);
     }
 
-    void QvStyleManager::ReloadStyles()
+    void QvStyleManager::ApplyStyle()
     {
-        styles.clear();
-        styles.insert(QV2RAY_BUILT_IN_DARK_MODE_NAME, {});
-        for (const auto &key : QStyleFactory::keys())
+        // Keep the rendering base deterministic across supported Windows
+        // systems, then layer the maintained first-party visual system on top.
+        qApp->setStyle(QStyleFactory::create("Fusion"));
+
+        QPalette palette;
+        palette.setColor(QPalette::Window, QColor(247, 247, 247));
+        palette.setColor(QPalette::WindowText, QColor(31, 31, 31));
+        palette.setColor(QPalette::Base, Qt::white);
+        palette.setColor(QPalette::AlternateBase, QColor(250, 250, 250));
+        palette.setColor(QPalette::ToolTipBase, Qt::white);
+        palette.setColor(QPalette::ToolTipText, QColor(31, 31, 31));
+        palette.setColor(QPalette::Text, QColor(31, 31, 31));
+        palette.setColor(QPalette::Button, QColor(251, 251, 251));
+        palette.setColor(QPalette::ButtonText, QColor(31, 31, 31));
+        palette.setColor(QPalette::BrightText, Qt::red);
+        palette.setColor(QPalette::Link, QColor(0, 95, 184));
+        palette.setColor(QPalette::Highlight, QColor(0, 120, 212));
+        palette.setColor(QPalette::HighlightedText, Qt::white);
+        palette.setColor(QPalette::Disabled, QPalette::Text, QColor(145, 145, 145));
+        palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(145, 145, 145));
+        palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(145, 145, 145));
+        qApp->setPalette(palette);
+
+        QFile stylesheet(":/assets/styles/qv2ray-modern.qss");
+        if (!stylesheet.open(QIODevice::ReadOnly | QIODevice::Text))
         {
-            LOG("Found factory style: " + key);
-            QvStyle style;
-            style.Name = key;
-            style.Type = QvStyle::QVSTYLE_FACTORY;
-            styles.insert(key, style);
+            LOG("Cannot open the built-in Qv2ray-Z stylesheet.");
+            qApp->setStyleSheet({});
+            return;
         }
 
-        for (const auto &styleDir : QvCoreApplication->GetAssetsPaths("uistyles"))
-        {
-            for (const auto &file : GetFileList(QDir(styleDir)))
-            {
-                QFileInfo fileInfo(styleDir + "/" + file);
-                if (fileInfo.suffix() == "css" || fileInfo.suffix() == "qss" || fileInfo.suffix() == "qvstyle")
-                {
-                    LOG("Found QSS style at: \"" + fileInfo.absoluteFilePath() + "\"");
-                    QvStyle style;
-                    style.Name = fileInfo.baseName();
-                    style.qssPath = fileInfo.absoluteFilePath();
-                    style.Type = QvStyle::QVSTYLE_QSS;
-                    styles.insert(style.Name, style);
-                }
-            }
-        }
+        qApp->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
     }
 
-    bool QvStyleManager::ApplyStyle(const QString &style)
+    bool QvStyleManager::eventFilter(QObject *watched, QEvent *event)
     {
-        if (!styles.contains(style))
-            return false;
-        qApp->setStyle("fusion");
-        if (style == QV2RAY_BUILT_IN_DARK_MODE_NAME)
+        if (event->type() == QEvent::Polish)
         {
-            LOG("Applying built-in darkmode theme.");
-            // From https://forum.qt.io/topic/101391/windows-10-dark-theme/4
-            static const QColor darkColor(45, 45, 45);
-            static const QColor disabledColor(70, 70, 70);
-            static const QColor defaultTextColor(210, 210, 210);
-            //
-            QPalette darkPalette;
-            darkPalette.setColor(QPalette::Window, darkColor);
-            darkPalette.setColor(QPalette::Button, darkColor);
-            darkPalette.setColor(QPalette::AlternateBase, darkColor);
-            //
-            darkPalette.setColor(QPalette::Text, defaultTextColor);
-            darkPalette.setColor(QPalette::ButtonText, defaultTextColor);
-            darkPalette.setColor(QPalette::WindowText, defaultTextColor);
-            darkPalette.setColor(QPalette::ToolTipBase, defaultTextColor);
-            darkPalette.setColor(QPalette::ToolTipText, defaultTextColor);
-            //
-            darkPalette.setColor(QPalette::Disabled, QPalette::Text, disabledColor);
-            darkPalette.setColor(QPalette::Disabled, QPalette::WindowText, disabledColor);
-            darkPalette.setColor(QPalette::Disabled, QPalette::ButtonText, disabledColor);
-            darkPalette.setColor(QPalette::Disabled, QPalette::HighlightedText, disabledColor);
-            //
-            darkPalette.setColor(QPalette::Base, QColor(18, 18, 18));
-            darkPalette.setColor(QPalette::Link, QColor(42, 130, 218));
-            darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-            //
-            darkPalette.setColor(QPalette::BrightText, Qt::red);
-            darkPalette.setColor(QPalette::HighlightedText, Qt::black);
-            qApp->setPalette(darkPalette);
-            qApp->setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }");
-            return true;
-        }
+            auto *widget = qobject_cast<QWidget *>(watched);
+            if (!widget)
+                return QObject::eventFilter(watched, event);
 
-        const auto &s = styles[style];
-        switch (s.Type)
-        {
-            case QvStyle::QVSTYLE_QSS:
-            {
-                LOG("Applying UI QSS style: " + s.qssPath);
-                const auto content = StringFromFile(s.qssPath);
-                qApp->setStyleSheet(content);
-                break;
-            }
-            case QvStyle::QVSTYLE_FACTORY:
-            {
-                LOG("Applying UI style: " + s.Name);
-                const auto &_style = QStyleFactory::create(s.Name);
-                qApp->setPalette(_style->standardPalette());
-                qApp->setStyle(_style);
-                qApp->setStyleSheet("");
-                break;
-            }
-            default:
-            {
-                return false;
-            }
+            const auto *topLevel = widget->window();
+            const auto topLevelName = topLevel ? topLevel->objectName() : QString{};
+            const auto objectName = widget->objectName();
+
+            static const QSet<QString> retiredPreferencesObjects = {
+                // Multi-theme UI is retired. Qv2ray-Z has one maintained look.
+                QStringLiteral("darkThemeLabel"),
+                QStringLiteral("darkThemeCB"),
+                QStringLiteral("label_35"),
+                QStringLiteral("themeCombo"),
+                // These entries correspond to already-retired product features.
+                QStringLiteral("label_38"),
+                QStringLiteral("useOldShareLinkFormatCB"),
+                QStringLiteral("pushButton"),
+                QStringLiteral("groupBox_2"),
+                QStringLiteral("updateSettingsGroupBox"),
+            };
+
+            const bool retiredPreference = topLevelName == QStringLiteral("PreferencesWindow") && retiredPreferencesObjects.contains(objectName);
+            const bool retiredMainWindowControl = topLevelName == QStringLiteral("MainWindow") && objectName == QStringLiteral("pluginsBtn");
+            if (retiredPreference || retiredMainWindowControl)
+                widget->hide();
         }
-        qApp->processEvents();
-        return true;
+        return QObject::eventFilter(watched, event);
     }
 } // namespace Qv2ray::ui::styles

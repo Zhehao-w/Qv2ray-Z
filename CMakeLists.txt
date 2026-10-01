@@ -108,10 +108,8 @@ set(QV2RAY_DEFAULT_VCORE_PATH "unset" CACHE STRING "Default Xray core path")
 QVLOG(QV2RAY_DEFAULT_VCORE_PATH)
 
 option(QV2RAY_EMBED_TRANSLATIONS "Embed Translations" OFF)
-option(QV2RAY_HAS_BUILTIN_THEMES "Build with built-in themes" ON)
 option(QV2RAY_USE_V5_CORE "Use current Xray/V2Ray v5 API layout" ON)
 QVLOG(QV2RAY_EMBED_TRANSLATIONS)
-QVLOG(QV2RAY_HAS_BUILTIN_THEMES)
 QVLOG(QV2RAY_USE_V5_CORE)
 
 # Maintained frontend/tooling choices are fixed instead of exposing dead build
@@ -252,10 +250,6 @@ list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_COMMON_SOURCES})
 include(cmake/components/qv2ray-ui-widget.cmake)
 list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_WIDGET_SOURCES})
 
-if(QV2RAY_HAS_BUILTIN_THEMES)
-    include(3rdparty/uistyles/uistyles.cmake)
-    list(APPEND QV2RAY_QRC_RESOURCES ${UISTYLE_QRCS})
-endif()
 include(cmake/qnodeeditor.cmake)
 list(APPEND QV2RAY_QRC_RESOURCES ${QNODEEDITOR_QRC_RESOURCES})
 
