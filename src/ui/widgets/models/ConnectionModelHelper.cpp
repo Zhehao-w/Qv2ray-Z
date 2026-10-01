@@ -3,8 +3,6 @@
 #include "core/handler/ConfigHandler.hpp"
 #include "ui/widgets/widgets/ConnectionItemWidget.hpp"
 
-#include <QTimer>
-
 #define NumericString(i) (QString("%1").arg(i, 30, 10, QLatin1Char('0')))
 
 ConnectionListHelper::ConnectionListHelper(QTreeView *view, QObject *parent) : QObject(parent)
@@ -128,27 +126,6 @@ void ConnectionListHelper::sanitizeStoredContexts()
             validRecent.append(item);
     }
     GlobalConfig.uiConfig.recentConnections = validRecent;
-    scheduleCurrentContextRepair();
-}
-
-void ConnectionListHelper::scheduleCurrentContextRepair()
-{
-    const auto current = ConnectionManager->CurrentConnection();
-    if (current.isEmpty() || ConnectionManager->IsValidId(current) || contextRepairScheduled)
-        return;
-
-    contextRepairScheduled = true;
-    QTimer::singleShot(0, this, [this]() {
-        contextRepairScheduled = false;
-        const auto staleCurrent = ConnectionManager->CurrentConnection();
-        if (staleCurrent.isEmpty() || ConnectionManager->IsValidId(staleCurrent))
-            return;
-
-        const auto fallback = ConnectionManager->ResolveConnectionContext(staleCurrent.connectionId, GlobalConfig.lastConnectedId);
-        ConnectionManager->StopConnection();
-        if (!fallback.isEmpty())
-            ConnectionManager->StartConnection(fallback);
-    });
 }
 
 void ConnectionListHelper::rebuild(const ConnectionGroupPair &preferredContext)
@@ -193,9 +170,17 @@ void ConnectionListHelper::rebuild(const ConnectionGroupPair &preferredContext)
     }
     Filter(filterText);
 
-    if (!preferred.isEmpty() && ConnectionManager->IsValidId(preferred))
+    auto selection = preferred;
+    if (selection.isEmpty() || !ConnectionManager->IsValidId(selection))
     {
-        const auto index = GetConnectionPairIndex(preferred);
+        const auto current = ConnectionManager->CurrentConnection();
+        if (ConnectionManager->IsValidId(current))
+            selection = current;
+    }
+
+    if (!selection.isEmpty() && ConnectionManager->IsValidId(selection))
+    {
+        const auto index = GetConnectionPairIndex(selection);
         if (index.isValid())
         {
             parentView->setCurrentIndex(index);
