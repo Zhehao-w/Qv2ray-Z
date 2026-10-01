@@ -28,6 +28,7 @@ class ConnectionInfoWidget
     void on_deleteBtn_clicked();
 
     void OnGroupRenamed(const GroupId &id, const QString &oldName, const QString &newName);
+    void OnConnectionRenamed(const ConnectionId &id, const QString &oldName, const QString &newName);
     void OnConnected(const ConnectionGroupPair &id);
     void OnDisConnected(const ConnectionGroupPair &id);
     void OnConnectionModified(const ConnectionId &id);
