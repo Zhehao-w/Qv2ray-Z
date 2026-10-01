@@ -3,11 +3,8 @@ set(SUBSCRIPTION_PLUGIN_TARGET QvPlugin-BuiltinSubscriptionSupport)
 set(QVPLUGIN_INTERFACE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/src/plugin-interface)
 
 include(${CMAKE_SOURCE_DIR}/src/plugin-interface/QvPluginInterface.cmake)
-include(${CMAKE_SOURCE_DIR}/src/plugin-interface/QvGUIPluginInterface.cmake)
 
 set(BUILTIN_SUBSCRIPTION_PLUGIN_SOURCES
-    ${QVPLUGIN_INTERFACE_HEADERS}
-    ${QVGUIPLUGIN_INTERFACE_HEADERS}
     ${CMAKE_CURRENT_LIST_DIR}/BuiltinSubscriptionAdapter.cpp
     ${CMAKE_CURRENT_LIST_DIR}/BuiltinSubscriptionAdapter.hpp
     ${CMAKE_CURRENT_LIST_DIR}/core/SubscriptionAdapter.cpp
@@ -16,9 +13,9 @@ set(BUILTIN_SUBSCRIPTION_PLUGIN_SOURCES
 list(APPEND PLUGIN_TRANSLATION_SOURCES ${BUILTIN_SUBSCRIPTION_PLUGIN_SOURCES})
 
 # Subscription parsing is first-party functionality. Build it as in-process
-# object code instead of a native runtime-loaded plugin.
+# object code instead of a native runtime-loaded plugin. Shared plugin interface
+# headers are moc-owned by qv2ray_baselib and are not regenerated here.
 add_library(${SUBSCRIPTION_PLUGIN_TARGET} OBJECT
-    ${CMAKE_CURRENT_LIST_DIR}/resx.qrc
     ${BUILTIN_SUBSCRIPTION_PLUGIN_SOURCES}
     )
 
