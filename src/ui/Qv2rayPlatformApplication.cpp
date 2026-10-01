@@ -283,7 +283,7 @@ bool Qv2rayPlatformApplication::parseCommandLine(QString *errorMessage, bool *ca
 
     if (parser.isSet(reconnectOption))
     {
-        DEBUG("disconnectOption is set.");
+        DEBUG("reconnectOption is set.");
         StartupArguments.arguments << Qv2rayStartupArguments::RECONNECT;
     }
 
