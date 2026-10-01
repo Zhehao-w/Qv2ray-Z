@@ -8,11 +8,13 @@ on:
       - ".github/workflows/windows-vless-vision-package.yml"
       - ".github/release-dependencies.json"
       - ".github/scripts/install-pinned-xray-windows.ps1"
-      - "src/**"
-      - "test/**"
+      - "src/components/plugins/**"
+      - "src/plugins/**"
       - "libs/**"
       - "cmake/**"
       - "CMakeLists.txt"
+      - "makespec/VERSION"
+      - "makespec/VERSIONSUFFIX"
   push:
     branches:
       - dev
