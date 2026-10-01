@@ -142,7 +142,7 @@ void ConnectionItemWidget::OnConnected(const ConnectionGroupPair &id)
 
 void ConnectionItemWidget::OnDisConnected(const ConnectionGroupPair &id)
 {
-    if (id.connectionId == connectionId && (flexibleContext || id.groupId == groupId))
+    if (id.connectionId == connectionId && id.groupId == groupId)
     {
         connNameLabel->setText(originalItemName);
     }
