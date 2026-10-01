@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / ".github" / "release-dependencies.json"
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
+XRAY_INSTALLER = ROOT / ".github" / "scripts" / "install-pinned-xray-windows.ps1"
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SHA_REF = re.compile(r"^[0-9a-f]{40}$")
@@ -57,18 +58,24 @@ for workflow in sorted(WORKFLOW_DIR.glob("*.yml")):
         if not SHA_REF.fullmatch(ref):
             fail(f"{workflow.name}: action {action}@{ref} is not pinned to a 40-character commit SHA")
 
+installer_text = XRAY_INSTALLER.read_text(encoding="utf-8")
+for marker in ("release-dependencies.json", "Get-FileHash", "Xray checksum mismatch"):
+    if marker not in installer_text:
+        fail(f"shared Windows Xray installer is missing required verification marker: {marker}")
+
 for name in ("windows-release.yml", "windows-vless-vision-package.yml"):
     text = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
     if "releases/latest" in text or "releases download latest" in text:
         fail(f"{name}: release packaging must not resolve latest dependencies")
-    if "release-dependencies.json" not in text:
-        fail(f"{name}: release dependency manifest is not consumed")
+    if "install-pinned-xray-windows.ps1" not in text:
+        fail(f"{name}: shared pinned Xray installer is not used")
 
 setup_libs = (ROOT / "libs" / "setup-libs.sh").read_text(encoding="utf-8")
 if "releases/latest" in setup_libs:
     fail("setup-libs.sh still resolves the latest Qv2ray-deps release")
-if "release-dependencies.json" not in setup_libs:
-    fail("setup-libs.sh does not consume the pinned dependency manifest")
+for marker in ("release-dependencies.json", "release_id", "asset_id", "Downloaded size mismatch"):
+    if marker not in setup_libs:
+        fail(f"setup-libs.sh is missing required pinned dependency verification marker: {marker}")
 
 version = (ROOT / "makespec" / "VERSION").read_text(encoding="utf-8").strip()
 suffix = (ROOT / "makespec" / "VERSIONSUFFIX").read_text(encoding="utf-8").strip()
