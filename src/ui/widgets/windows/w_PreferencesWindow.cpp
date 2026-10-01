@@ -52,6 +52,7 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     setupUi(this);
     label_6->hide();
     languageComboBox->hide();
+    updateSettingsGroupBox->hide();
     //
     QvMessageBusConnect(PreferencesWindow);
     textBrowser->setHtml(StringFromFile(":/assets/credit.html"));
@@ -306,16 +307,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
         routeSettingsWidget->SetRouteConfig(CurrentConfig.defaultRouteConfig.routeConfig);
         advRouteSettingsLayout->addWidget(routeSettingsWidget);
     }
-    //
-#ifdef DISABLE_AUTO_UPDATE
-    updateSettingsGroupBox->setEnabled(false);
-    updateSettingsGroupBox->setToolTip(tr("Update is disabled by your vendor."));
-#endif
-    //
-    updateChannelCombo->setCurrentIndex(CurrentConfig.updateConfig.updateChannel);
-    cancelIgnoreVersionBtn->setEnabled(!CurrentConfig.updateConfig.ignoredVersion.isEmpty());
-    ignoredNextVersion->setText(CurrentConfig.updateConfig.ignoredVersion);
-    //
     //
     {
         noAutoConnectRB->setChecked(CurrentConfig.autoStartBehavior == AUTO_CONNECTION_NONE);
@@ -601,12 +592,6 @@ void PreferencesWindow::on_aboutQt_clicked()
     QApplication::aboutQt();
 }
 
-void PreferencesWindow::on_cancelIgnoreVersionBtn_clicked()
-{
-    CurrentConfig.updateConfig.ignoredVersion.clear();
-    cancelIgnoreVersionBtn->setEnabled(false);
-}
-
 void PreferencesWindow::on_bypassCNCb_stateChanged(int arg1)
 {
     NEEDRESTART
@@ -887,13 +872,6 @@ void PreferencesWindow::on_enableAPI_stateChanged(int arg1)
     LOADINGCHECK
     NEEDRESTART
     CurrentConfig.kernelConfig.enableAPI = arg1 == Qt::Checked;
-}
-
-void PreferencesWindow::on_updateChannelCombo_currentIndexChanged(int index)
-{
-    LOADINGCHECK
-    CurrentConfig.updateConfig.updateChannel = (Qv2rayConfig_Update::UpdateChannel) index;
-    CurrentConfig.updateConfig.ignoredVersion.clear();
 }
 
 void PreferencesWindow::on_pluginKernelV2RayIntegrationCB_stateChanged(int arg1)
