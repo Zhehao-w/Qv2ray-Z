@@ -20,14 +20,23 @@ jobs:
 
     steps:
       - name: Check out source and recursive submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
       - name: Prepare and verify release metadata
         shell: pwsh
         run: |
+          if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+-z\d+$') {
+            throw "Release tag has an unsupported format: $env:GITHUB_REF_NAME"
+          }
+
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $sourceVersion = ((Get-Content 'makespec/VERSION' -Raw).Trim() + (Get-Content 'makespec/VERSIONSUFFIX' -Raw).Trim())
+          if ($version -ne $sourceVersion) {
+            throw "Release tag version $version does not match source version $sourceVersion"
+          }
+
           $releaseNotes = "docs/release-notes/$version.md"
           if (-not (Test-Path $releaseNotes -PathType Leaf)) {
             throw "Release notes file does not exist: $releaseNotes"
@@ -39,19 +48,26 @@ jobs:
           Write-Host "Release notes: $releaseNotes"
 
       - name: Install MSVC 14.2 environment
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         with:
           toolset: 14.2
           arch: x64
 
+      - name: Set up Python for pinned Qt installer
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13.3'
+
       - name: Install Qt 5.15.2
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1 internal action
         with:
           version: 5.15.2
           arch: win64_msvc2019_64
           cache: true
+          aqtversion: '==3.3.0'
+          py7zrversion: '==1.0.0'
 
-      - name: Download historical Qv2ray Windows dependencies
+      - name: Download pinned historical Qv2ray Windows dependencies
         shell: bash
         run: |
           set -euo pipefail
@@ -72,7 +88,6 @@ jobs:
           if (-not $header) { throw "CURL header was not found below $prefix" }
           if (-not $library) { throw "CURL import library was not found below $prefix" }
 
-          # CMake's FindCURL expects the directory which contains curl/curl.h.
           $include = Split-Path (Split-Path $header.FullName -Parent) -Parent
           "CURL_INCLUDE_DIR=$include" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "CURL_LIBRARY=$($library.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
@@ -106,20 +121,10 @@ jobs:
           if (-not $plugins) { throw 'No Qv2ray plugin DLLs were installed.' }
           $plugins | ForEach-Object { Write-Host "Packaged plugin: $($_.Name)" }
 
-      - name: Download latest official Xray Windows x64 release
+      - name: Download and verify pinned official Xray Windows x64 release
         shell: pwsh
         run: |
-          $tag = gh api repos/XTLS/Xray-core/releases/latest --jq .tag_name
-          if ($LASTEXITCODE -ne 0 -or -not $tag) { throw 'Could not resolve the latest Xray release.' }
-          Write-Host "Resolved latest official Xray release: $tag"
-          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/xray" | Out-Null
-          gh release download $tag `
-            --repo XTLS/Xray-core `
-            --pattern Xray-windows-64.zip `
-            --dir "$env:RUNNER_TEMP/xray"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Expand-Archive "$env:RUNNER_TEMP/xray/Xray-windows-64.zip" "$env:RUNNER_TEMP/xray/bin" -Force
-          "XRAY_BIN=$env:RUNNER_TEMP/xray/bin/xray.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          & ./.github/scripts/install-pinned-xray-windows.ps1
 
       - name: Validate TLS Vision and REALITY Vision fixtures
         shell: pwsh
@@ -138,12 +143,12 @@ jobs:
             } elseif ($runHelp -match '\-test') {
               & "$env:XRAY_BIN" run -test -c $fixture
             } else {
-              throw 'The latest Xray release does not advertise a supported validation interface.'
+              throw 'The pinned Xray release does not advertise a supported validation interface.'
             }
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-      - name: Package Xray executable and assets
+      - name: Package Xray executable, assets, and release manifest
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
@@ -153,24 +158,49 @@ jobs:
             Copy-Item $source $deployment -Force
           }
 
+          $releaseManifest = [ordered]@{
+            schema_version = 1
+            qv2ray_version = $env:RELEASE_VERSION
+            qv2ray_commit = $env:GITHUB_SHA
+            xray_version = $env:XRAY_VERSION
+            xray_asset = $env:XRAY_ASSET
+            xray_sha256 = $env:XRAY_SHA256
+            qt_version = '5.15.2'
+            msvc_toolset = '14.2'
+            runner_image = 'windows-2022'
+          }
+          $releaseManifest | ConvertTo-Json | Set-Content (Join-Path $deployment 'release-manifest.json') -Encoding utf8
+
       - name: Smoke-test packaged Qv2ray-Z
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
-          foreach ($file in @('qv2ray.exe', 'xray.exe', 'geoip.dat', 'geosite.dat')) {
+          foreach ($file in @('qv2ray.exe', 'xray.exe', 'geoip.dat', 'geosite.dat', 'release-manifest.json')) {
             $packagedFile = Join-Path $deployment $file
             if (-not (Test-Path $packagedFile -PathType Leaf)) { throw "Deployment is missing $file" }
           }
 
-          & "$deployment/xray.exe" version
+          $xrayVersionOutput = & "$deployment/xray.exe" version 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host $xrayVersionOutput
+          $expectedXrayVersion = $env:XRAY_VERSION -replace '^v', ''
+          if ($xrayVersionOutput -notmatch [regex]::Escape($expectedXrayVersion)) {
+            throw "Packaged xray.exe did not report pinned version $env:XRAY_VERSION"
+          }
+
           $qv2rayVersion = & "$deployment/qv2ray.exe" --version 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host $qv2rayVersion
+          if ($qv2rayVersion -notmatch [regex]::Escape($env:RELEASE_VERSION)) {
+            throw "qv2ray.exe did not report release version $env:RELEASE_VERSION"
+          }
 
-          $expectedVersion = $env:GITHUB_REF_NAME -replace '^v', ''
-          if ($qv2rayVersion -notmatch [regex]::Escape($expectedVersion)) {
-            throw "qv2ray.exe did not report tag version $expectedVersion"
+          $metadata = Get-Content "$deployment/release-manifest.json" -Raw | ConvertFrom-Json
+          if ($metadata.qv2ray_version -ne $env:RELEASE_VERSION -or
+              $metadata.qv2ray_commit -ne $env:GITHUB_SHA -or
+              $metadata.xray_version -ne $env:XRAY_VERSION -or
+              $metadata.xray_sha256 -ne $env:XRAY_SHA256) {
+            throw 'Packaged release manifest does not match the verified build inputs.'
           }
 
       - name: Create versioned ZIP and SHA256 checksum
@@ -186,7 +216,7 @@ jobs:
           "RELEASE_ARCHIVE=$archiveName" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Publish GitHub Release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           body_path: ${{ env.RELEASE_NOTES }}
           files: |

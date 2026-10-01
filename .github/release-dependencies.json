@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "xray": {
+    "version": "v26.3.27",
+    "assets": {
+      "linux-x64": {
+        "name": "Xray-linux-64.zip",
+        "sha256": "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae"
+      },
+      "windows-x64": {
+        "name": "Xray-windows-64.zip",
+        "sha256": "d004c39288ce9ada487c6f398c7c545f7d749e44bdfdd59dbc9f865afba4e1ad"
+      }
+    }
+  },
+  "qv2ray_deps": {
+    "release_id": 23439661,
+    "release_tag": "release",
+    "assets": {
+      "curl-x64-windows.7z": {
+        "asset_id": 34781198,
+        "size": 1524878
+      },
+      "grpc-x64-windows.7z": {
+        "asset_id": 34782566,
+        "size": 119665448
+      },
+      "openssl-x64-windows.7z": {
+        "asset_id": 34781392,
+        "size": 8922788
+      }
+    }
+  }
+}

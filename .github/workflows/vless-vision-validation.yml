@@ -36,28 +36,46 @@ concurrency:
 
 jobs:
   xray-compatibility:
-    name: Latest Xray config validation
+    name: Latest Xray config validation (integrity verified)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out fixtures
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Download latest stable official Xray release
+      - name: Download and verify latest stable official Xray release
         shell: bash
         run: |
           set -euo pipefail
-          tag="$(gh api repos/XTLS/Xray-core/releases/latest --jq .tag_name)"
+          release_json="$(gh api repos/XTLS/Xray-core/releases/latest)"
+          tag="$(jq -r '.tag_name' <<< "$release_json")"
+          asset_name='Xray-linux-64.zip'
+          digest="$(jq -r --arg name "$asset_name" '.assets[] | select(.name == $name) | .digest // empty' <<< "$release_json")"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::Latest Xray release does not publish a usable SHA256 digest for $asset_name."
+            exit 1
+          fi
+          expected_hash="${digest#sha256:}"
+
           echo "Resolved latest stable Xray release: ${tag}"
           echo "XRAY_RELEASE=${tag}" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/xray"
           gh release download "$tag" \
             --repo XTLS/Xray-core \
-            --pattern Xray-linux-64.zip \
+            --pattern "$asset_name" \
             --dir "$RUNNER_TEMP/xray"
-          unzip -q "$RUNNER_TEMP/xray/Xray-linux-64.zip" -d "$RUNNER_TEMP/xray/bin"
+
+          archive="$RUNNER_TEMP/xray/$asset_name"
+          actual_hash="$(sha256sum "$archive" | awk '{print $1}')"
+          if [[ "${actual_hash,,}" != "${expected_hash,,}" ]]; then
+            echo "::error::Xray checksum mismatch: expected $expected_hash, got $actual_hash"
+            exit 1
+          fi
+          echo "Verified Xray asset SHA256: $actual_hash"
+
+          unzip -q "$archive" -d "$RUNNER_TEMP/xray/bin"
           chmod +x "$RUNNER_TEMP/xray/bin/xray"
           echo "XRAY_BIN=$RUNNER_TEMP/xray/bin/xray" >> "$GITHUB_ENV"
 
@@ -119,9 +137,6 @@ jobs:
           validate .github/xray-fixtures/vless-tls-vision.json
           validate .github/xray-fixtures/vless-reality-vision.json
 
-          # Generate a disposable, syntactically valid ML-DSA-65 key with the
-          # same official Xray binary used for validation. Persist only the
-          # public verification value in the temporary client fixture.
           verify="$($XRAY_BIN mldsa65 | awk '/^Verify: / { sub(/^Verify: /, ""); print; exit }')"
           if [[ -z "$verify" ]]; then
             echo "::error::Xray did not generate an ML-DSA-65 verification key."
@@ -199,7 +214,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check out source and recursive submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
@@ -243,7 +258,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
