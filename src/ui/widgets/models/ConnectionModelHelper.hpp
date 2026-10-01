@@ -28,14 +28,11 @@ namespace Qv2ray::ui::widgets::models
         void SetGrouped(bool grouped);
         bool IsGrouped() const { return groupedView; }
 
-        inline QModelIndex GetConnectionPairIndex(const ConnectionGroupPair &id) const
-        {
-            return model->indexFromItem(pairs[id]);
-        }
+        QModelIndex GetConnectionPairIndex(const ConnectionGroupPair &id);
 
         inline QModelIndex GetGroupIndex(const GroupId &id) const
         {
-            return model->indexFromItem(groups[id]);
+            return model->indexFromItem(groups.value(id, nullptr));
         }
 
       private:
@@ -46,6 +43,9 @@ namespace Qv2ray::ui::widgets::models
         void OnConnectionCreated(const ConnectionGroupPair &Id, const QString &displayName);
         void OnConnectionDeleted(const ConnectionGroupPair &Id);
         void OnConnectionLinkedWithGroup(const ConnectionGroupPair &id);
+        ConnectionGroupPair currentSelection() const;
+        void sanitizeStoredContexts();
+        void scheduleCurrentContextRepair();
 
       private:
         QTreeView *parentView;
@@ -55,8 +55,9 @@ namespace Qv2ray::ui::widgets::models
         QHash<ConnectionGroupPair, QStandardItem *> pairs;
         QHash<ConnectionId, QList<QStandardItem *>> connections;
         bool groupedView = true;
+        bool contextRepairScheduled = false;
         QString filterText;
-        void rebuild();
+        void rebuild(const ConnectionGroupPair &preferredContext = {});
     };
 
 } // namespace Qv2ray::ui::widgets::models
