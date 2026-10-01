@@ -1,0 +1,83 @@
+name: Apply fourth UI polish pass
+
+on:
+  push:
+    branches:
+      - ui/main-window-modernization
+    paths:
+      - ".github/workflows/ui-polish-round4.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ui/main-window-modernization
+          fetch-depth: 0
+
+      - name: Apply narrower window and detail alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          # Make the default restored window close to square, but still slightly landscape.
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.ui",
+              '''    <width>1000</width>\n    <height>720</height>''',
+              '''    <width>850</width>\n    <height>720</height>''')
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.ui",
+              '''    <width>860</width>\n    <height>620</height>''',
+              '''    <width>800</width>\n    <height>640</height>''')
+
+          old_defaults = '''        setMinimumSize(800, 600);\n        leftWidget->setMinimumWidth(270);\n        scrollArea->setMinimumWidth(420);\n        if (width() >= 900 && width() <= 1024)\n            resize(940, qMax(height(), 660));\n        splitter->setSizes({ 285, qMax(width() - 305, 420) });'''
+          new_defaults = '''        setMinimumSize(800, 640);\n        leftWidget->setMinimumWidth(265);\n        scrollArea->setMinimumWidth(400);\n        if (width() >= 900 && width() <= 1024)\n            resize(850, qMax(height(), 720));\n        splitter->setSizes({ 280, qMax(width() - 300, 400) });'''
+          replace_once("src/ui/widgets/windows/w_MainWindow_extra.cpp", old_defaults, new_defaults)
+
+          # QFormLayout already aligns the field widgets. The protocol badge's
+          # left padding was the reason its text looked shifted to the right.
+          replace_once(
+              "assets/styles/qv2ray-modern.qss",
+              '''QLabel#protocolLabel {\n    color: #326f9f;\n    background: #e7f0f7;\n    border-radius: 5px;\n    padding: 2px 7px;\n}''',
+              '''QLabel#protocolLabel {\n    color: #326f9f;\n    background: #e7f0f7;\n    border-radius: 5px;\n    padding: 2px 7px 2px 0;\n}''')
+
+          ET.parse("src/ui/widgets/windows/w_MainWindow.ui")
+          ET.parse("src/ui/widgets/widgets/ConnectionInfoWidget.ui")
+          PY
+
+          git diff --check
+          git rm .github/workflows/ui-polish-round4.yml
+          git config user.name "Zhehao Wang"
+          git config user.email "31388024+Zhehao-w@users.noreply.github.com"
+          git add assets/styles/qv2ray-modern.qss \
+                  src/ui/widgets/windows/w_MainWindow.ui \
+                  src/ui/widgets/windows/w_MainWindow_extra.cpp
+          git commit -m "Refine main window proportions and detail alignment"
+          git push origin HEAD:ui/main-window-modernization
+
+      - name: Dispatch maintained validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run data-safety-hardening.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run vless-vision-validation.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run windows-vless-vision-package.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
