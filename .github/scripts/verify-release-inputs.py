@@ -90,7 +90,13 @@ for name in ("windows-release.yml", "windows-vless-vision-package.yml"):
 setup_libs = (ROOT / "libs" / "setup-libs.sh").read_text(encoding="utf-8")
 if "releases/latest" in setup_libs:
     fail("setup-libs.sh still resolves the latest Qv2ray-deps release")
-for marker in ("release-dependencies.json", "release_id", "asset_id", "Downloaded size mismatch"):
+for marker in (
+    "release-dependencies.json",
+    "release_id",
+    "asset_id",
+    "releases/assets/$ASSET_ID",
+    "Downloaded size mismatch",
+):
     if marker not in setup_libs:
         fail(f"setup-libs.sh is missing required pinned dependency verification marker: {marker}")
 
