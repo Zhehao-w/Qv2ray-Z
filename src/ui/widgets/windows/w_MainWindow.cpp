@@ -97,7 +97,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     const auto setSpeedWidgetVisibility = [&](QJsonValue val) { speedChartHolderWidget->setVisible(val.toBool()); };
     const auto setLogWidgetVisibility = [&](QJsonValue val) { masterLogBrowser->setVisible(val.toBool()); };
     addStateOptions("speedchart.visibility", { [&] { return speedChartHolderWidget->isVisible(); }, setSpeedWidgetVisibility });
-    addStateOptions("log.visibility", { [&] { return masterLogBrowser->setVisible(val.toBool()); }, setLogWidgetVisibility });
+    addStateOptions("log.visibility", { [&] { return masterLogBrowser->isVisible(); }, setLogWidgetVisibility });
 #else
     constexpr auto sizeRatioA = 0.31;
     constexpr auto sizeRatioB = 1 - sizeRatioA;
