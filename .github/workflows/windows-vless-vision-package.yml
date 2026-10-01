@@ -100,25 +100,28 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_INSTALL_PREFIX="$PWD/build/deployment" `
             -DQV2RAY_USE_V5_CORE=ON `
-            -DQV2RAY_HAS_BUILTIN_PLUGINS=ON `
             -DCURL_INCLUDE_DIR="$env:CURL_INCLUDE_DIR" `
             -DCURL_LIBRARY="$env:CURL_LIBRARY"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build --config Release --parallel
+          cmake --build build --config Release --target qv2ray --parallel
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --install build --config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Deploy Qt runtime and Qv2ray plugins
+      - name: Deploy Qt runtime
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
           windeployqt --release --compiler-runtime --verbose 2 --dir "$deployment" "$deployment/qv2ray.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $plugins = Get-ChildItem "$deployment/plugins" -File -Filter '*.dll'
-          if (-not $plugins) { throw 'No Qv2ray plugin DLLs were installed.' }
-          $plugins | ForEach-Object { Write-Host "Packaged plugin: $($_.Name)" }
+          $legacyPluginDir = Join-Path $deployment 'plugins'
+          if (Test-Path $legacyPluginDir) {
+            $legacyPluginDlls = Get-ChildItem $legacyPluginDir -File -Filter 'QvPlugin-*.dll' -ErrorAction SilentlyContinue
+            if ($legacyPluginDlls) {
+              throw 'Deployment unexpectedly contains legacy Qv2ray native plugin DLLs.'
+            }
+          }
 
       - name: Download and verify pinned official Xray Windows x64 release
         shell: pwsh
@@ -168,6 +171,7 @@ jobs:
             qt_version = '5.15.2'
             msvc_toolset = '14.2'
             runner_image = 'windows-2022'
+            component_model = 'in-process'
           }
           $buildManifest | ConvertTo-Json | Set-Content (Join-Path $deployment 'release-manifest.json') -Encoding utf8
 
@@ -195,6 +199,9 @@ jobs:
           }
           if ($metadata.qv2ray_commit -ne $env:GITHUB_SHA -or $metadata.xray_sha256 -ne $env:XRAY_SHA256) {
             throw 'Packaged build manifest does not match the verified build inputs.'
+          }
+          if ($metadata.component_model -ne 'in-process') {
+            throw 'Packaged build manifest does not identify the internal component model.'
           }
 
       - name: Upload Windows deployment
