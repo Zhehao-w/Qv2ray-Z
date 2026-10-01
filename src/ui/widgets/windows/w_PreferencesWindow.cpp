@@ -1,7 +1,5 @@
 #include "w_PreferencesWindow.hpp"
 
-#include "components/ntp/QvNTPClient.hpp"
-#include "components/translations/QvTranslator.hpp"
 #include "core/connection/ConnectionIO.hpp"
 #include "core/handler/ConfigHandler.hpp"
 #include "core/kernel/V2RayKernelInteractions.hpp"
@@ -18,8 +16,6 @@
 #include <QCompleter>
 #include <QDesktopServices>
 #include <QFileDialog>
-#include <QHostInfo>
-#include <QInputDialog>
 #include <QMessageBox>
 
 using Qv2ray::common::validation::IsIPv4Address;
@@ -60,20 +56,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     configdirLabel->setText(QV2RAY_CONFIG_DIR);
 
-    // We add locales
-    auto langs = Qv2rayTranslator->GetAvailableLanguages();
-    if (!langs.empty())
-    {
-        languageComboBox->clear();
-        languageComboBox->addItems(langs);
-    }
-    else
-    {
-        languageComboBox->setDisabled(true);
-        // Since we can't have languages detected. It worths nothing to translate these.
-        languageComboBox->setToolTip("Cannot find any language providers.");
-    }
-
     // Set auto start button state
     SetAutoStartButtonsState(GetLaunchAtLoginStatus());
     themeCombo->addItems(StyleManager->AllStyles());
@@ -95,7 +77,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     glyphTrayCB->setChecked(CurrentConfig.uiConfig.useGlyphTrayIcon);
     glyphTrayCB->setToolTip(
         tr("Use simplified glyph variants for the disconnected, connected and system-proxy tray states."));
-    languageComboBox->setCurrentText(CurrentConfig.uiConfig.language);
     logLevelComboBox->setCurrentIndex(CurrentConfig.logLevel);
     // Present the setting with the same polarity as the stored value: checked
     // means Quiet Mode is enabled. Quiet Mode suppresses routine tray status
@@ -109,8 +90,8 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     // Keep the setting readable for migration, but modern exports no longer need
     // to present this compatibility switch in the everyday preferences UI.
     useOldShareLinkFormatCB->hide();
-    // The VMess-era NTP checker is legacy diagnostic UX. Generic application
-    // time handling is untouched; only the preference entry point is removed.
+    // The retired NTP control remains in the legacy form until the next physical
+    // Preferences UI cleanup, but it has no runtime slot or backend.
     pushButton->hide();
     // browserForwarder was a Qv2ray-specific top-level config object and is no
     // longer accepted by current Xray-core. Retain its model solely so old
@@ -463,15 +444,6 @@ void PreferencesWindow::on_buttonBox_accepted()
     }
     else
     {
-        if (CurrentConfig.uiConfig.language != GlobalConfig.uiConfig.language)
-        {
-            // Install translator
-            if (Qv2rayTranslator->InstallTranslation(CurrentConfig.uiConfig.language))
-            {
-                UIMessageBus.EmitGlobalSignal(QvMBMessage::RETRANSLATE);
-                QApplication::processEvents();
-            }
-        }
         CurrentConfig.defaultRouteConfig.routeConfig = routeSettingsWidget->GetRouteConfig();
         if (!(CurrentConfig.defaultRouteConfig.routeConfig == GlobalConfig.defaultRouteConfig.routeConfig))
         {
@@ -526,12 +498,6 @@ void PreferencesWindow::on_socksAuthCB_stateChanged(int checked)
     socksAuthUsernameTxt->setEnabled(enabled);
     socksAuthPasswordTxt->setEnabled(enabled);
     CurrentConfig.inboundConfig.socksSettings.useAuth = enabled;
-}
-
-void PreferencesWindow::on_languageComboBox_currentTextChanged(const QString &arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.language = arg1;
 }
 
 void PreferencesWindow::on_logLevelComboBox_currentIndexChanged(int index)
@@ -1193,51 +1159,6 @@ void PreferencesWindow::on_socksOverrideTLSCB_stateChanged(int arg1)
         CurrentConfig.inboundConfig.socksSettings.destOverride.removeAll("tls");
     else if (!CurrentConfig.inboundConfig.socksSettings.destOverride.contains("tls"))
         CurrentConfig.inboundConfig.socksSettings.destOverride.append("tls");
-}
-
-void PreferencesWindow::on_pushButton_clicked()
-{
-#if QV2RAY_FEATURE(util_has_ntp)
-    const auto ntpTitle = tr("NTP Checker");
-    const auto ntpHint = tr("Check date and time from server:");
-    const static QStringList ntpServerList = { "cn.pool.ntp.org",      "cn.ntp.org.cn",           "edu.ntp.org.cn",
-                                               "time.pool.aliyun.com", "time1.cloud.tencent.com", "ntp.neu.edu.cn" };
-    bool ok = false;
-    const auto ntpServer = QInputDialog::getItem(this, ntpTitle, ntpHint, ntpServerList, 0, true, &ok).trimmed();
-    if (!ok)
-        return;
-
-    auto client = new ntp::NtpClient(this);
-    connect(client, &ntp::NtpClient::replyReceived, [&](const QHostAddress &, quint16, const ntp::NtpReply &reply) {
-        const int offsetSecTotal = reply.localClockOffset() / 1000;
-        if (offsetSecTotal >= 90 || offsetSecTotal <= -90)
-        {
-            const auto inaccurateWarning = tr("Your time offset is %1 seconds, which is too high.") + NEWLINE + //
-                                           tr("Please synchronize your system to use the VMess protocol.");
-            QvMessageBoxWarn(this, tr("Time Inaccurate"), inaccurateWarning.arg(offsetSecTotal));
-        }
-        else if (offsetSecTotal > 15 || offsetSecTotal < -15)
-        {
-            const auto smallErrorWarning = tr("Your time offset is %1 seconds, which is a little high.") + NEWLINE + //
-                                           tr("VMess protocol may still work, but we suggest you synchronize your clock.");
-            QvMessageBoxInfo(this, tr("Time Somewhat Inaccurate"), smallErrorWarning.arg(offsetSecTotal));
-        }
-        else
-        {
-            const auto accurateInfo = tr("Your time offset is %1 seconds, which looks good.") + NEWLINE + //
-                                      tr("VMess protocol may not suffer from time inaccuracy.");
-            QvMessageBoxInfo(this, tr("Time Accurate"), accurateInfo.arg(offsetSecTotal));
-        }
-    });
-
-    const auto hostInfo = QHostInfo::fromName(ntpServer);
-    if (hostInfo.error() == QHostInfo::NoError)
-        client->sendRequest(hostInfo.addresses().first(), 123);
-    else
-        QvMessageBoxWarn(this, ntpTitle, tr("Failed to lookup server: %1").arg(hostInfo.errorString()));
-#else
-    QvMessageBoxWarn(this, tr("No NTP Backend"), tr("Qv2ray was not built with NTP support."));
-#endif
 }
 
 void PreferencesWindow::on_noAutoConnectRB_clicked()
