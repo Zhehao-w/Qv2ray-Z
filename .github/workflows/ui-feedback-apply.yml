@@ -1,0 +1,86 @@
+name: Apply UI feedback fixes
+
+on:
+  push:
+    branches:
+      - ui/main-window-modernization
+    paths:
+      - ".github/workflows/ui-feedback-apply.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply targeted UI fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, found {count}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "src/ui/widgets/widgets/ConnectionInfoWidget.cpp",
+              '''void ConnectionInfoWidget::setConnectionAction(bool connected)\n{\n    connectBtn->setIcon(QIcon(connected ? QV2RAY_COLORSCHEME_FILE("stop") : QV2RAY_COLORSCHEME_FILE("start")));\n    connectBtn->setText(connected ? tr("Disconnect") : tr("Connect"));\n}\n''',
+              '''void ConnectionInfoWidget::setConnectionAction(bool connected)\n{\n    // Keep the primary action text-only. The legacy start/stop SVGs do not\n    // render reliably against the maintained blue primary-button palette.\n    connectBtn->setIcon(QIcon());\n    connectBtn->setText(connected ? tr("Disconnect") : tr("Connect"));\n}\n''')
+
+          replace_once(
+              "src/ui/widgets/windows/w_PreferencesWindow.cpp",
+              '''    quietModeCB->setText(tr("Show connection and proxy status notifications"));\n    quietModeCB->setToolTip(tr("Errors, warnings, logs, status indicators and traffic statistics are always shown."));\n    quietModeCB->setChecked(!CurrentConfig.uiConfig.quietMode);\n''',
+              '''    // Present the setting with the same polarity as the stored value: checked\n    // means Quiet Mode is enabled. Quiet Mode suppresses routine tray status\n    // notifications and accepts scheduled subscription refreshes without a prompt.\n    label_86->setText(tr("Quiet Mode"));\n    quietModeCB->setText(tr("Enabled"));\n    quietModeCB->setToolTip(\n        tr("Suppress routine connection, subscription and system-proxy tray notifications and automatically accept scheduled subscription updates. Errors, warnings, logs, status indicators and traffic statistics remain visible."));\n    quietModeCB->setChecked(CurrentConfig.uiConfig.quietMode);\n''')
+
+          replace_once(
+              "src/ui/widgets/windows/w_PreferencesWindow.cpp",
+              '''void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)\n{\n    LOADINGCHECK\n    CurrentConfig.uiConfig.quietMode = arg1 != Qt::Checked;\n}\n''',
+              '''void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)\n{\n    LOADINGCHECK\n    CurrentConfig.uiConfig.quietMode = arg1 == Qt::Checked;\n}\n''')
+
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.cpp",
+              '''    connect(ConnectionManager, &QvConfigHandler::OnSubscriptionAsyncUpdateFinished, [](const GroupId &gid) {\n        QvWidgetApplication->ShowTrayMessage(tr("Subscription \\\"%1\\\" has been updated").arg(GetDisplayName(gid))); //\n    });\n''',
+              '''    connect(ConnectionManager, &QvConfigHandler::OnSubscriptionAsyncUpdateFinished, [](const GroupId &gid) {\n        if (!GlobalConfig.uiConfig.quietMode)\n            QvWidgetApplication->ShowTrayMessage(tr("Subscription \\\"%1\\\" has been updated").arg(GetDisplayName(gid))); //\n    });\n''')
+
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow_extra.cpp",
+              '''#if QV2RAY_FEATURE(ui_has_store_state)\n    RestoreState();\n#endif\n    this->show();\n''',
+              '''#if QV2RAY_FEATURE(ui_has_store_state)\n    RestoreState();\n#endif\n    if (!property("modernLayoutDefaultsApplied").toBool())\n    {\n        setProperty("modernLayoutDefaultsApplied", true);\n        setMinimumSize(760, 580);\n        leftWidget->setMinimumWidth(240);\n        scrollArea->setMinimumWidth(420);\n        if (width() > 900 && width() <= 1024)\n            resize(900, qMax(height(), 620));\n        splitter->setSizes({ 250, qMax(width() - 270, 420) });\n\n        // Diagnostics are useful in day-to-day operation, so expose them by\n        // default while keeping the existing header toggles for manual collapse.\n        speedChartHolderWidget->setVisible(true);\n        masterLogBrowser->setVisible(true);\n\n        // Leave enough room for submenu arrows and long labels under Fusion.\n        tray_RootMenu->setMinimumWidth(190);\n        tray_BypassCNMenu->setMinimumWidth(220);\n        tray_SystemProxyMenu->setMinimumWidth(220);\n        tray_RecentConnectionsMenu->setMinimumWidth(220);\n    }\n    this->show();\n''')
+
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow_extra.cpp",
+              '''void MainWindow::UpdateActionTranslations()\n{\n    tray_BypassCNMenu->setTitle(tr("Bypass CN Mainland"));\n''',
+              '''void MainWindow::UpdateActionTranslations()\n{\n    appSubtitleLabel->setText(tr("Connections") + QStringLiteral(" · v" QV2RAY_VERSION_STRING " · by Zhehao-w"));\n    tray_BypassCNMenu->setTitle(tr("Bypass CN Mainland"));\n''')
+
+      - name: Verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff -- src/ui/widgets/widgets/ConnectionInfoWidget.cpp \
+                     src/ui/widgets/windows/w_MainWindow.cpp \
+                     src/ui/widgets/windows/w_MainWindow_extra.cpp \
+                     src/ui/widgets/windows/w_PreferencesWindow.cpp
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Zhehao Wang"
+          git config user.email "31388024+Zhehao-w@users.noreply.github.com"
+          git add src/ui/widgets/widgets/ConnectionInfoWidget.cpp \
+                  src/ui/widgets/windows/w_MainWindow.cpp \
+                  src/ui/widgets/windows/w_MainWindow_extra.cpp \
+                  src/ui/widgets/windows/w_PreferencesWindow.cpp
+          git commit -m "Fix Windows UI feedback from main window test"
+          git push origin HEAD:${GITHUB_REF_NAME}
