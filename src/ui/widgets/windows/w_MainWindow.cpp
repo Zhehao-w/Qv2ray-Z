@@ -100,7 +100,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     addStateOptions("speedchart.visibility", { [&] { return speedChartHolderWidget->isVisible(); }, setSpeedWidgetVisibility });
     addStateOptions("log.visibility", { [&] { return masterLogBrowser->isVisible(); }, setLogWidgetVisibility });
 #else
-    constexpr auto sizeRatioA = 0.382;
+    constexpr auto sizeRatioA = 0.31;
     constexpr auto sizeRatioB = 1 - sizeRatioA;
     splitter->setSizes({ (int) (width() * sizeRatioA), (int) (width() * sizeRatioB) });
 #endif
@@ -117,22 +117,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     speedChart->addWidget(speedChartWidget);
     //
     modelHelper = new ConnectionListHelper(connectionTreeView);
-    connectionViewCombo = new QComboBox(leftWidget);
-    connectionViewCombo->setToolTip(tr("Choose a flat list or the traditional grouped tree"));
-    connectionViewCombo->addItem(tr("Flat"), false);
-    connectionViewCombo->addItem(tr("Grouped"), true);
-    connectionViewCombo->setCurrentIndex(GlobalConfig.uiConfig.groupedConnectionView ? 1 : 0);
-    horizontalLayout_6->insertWidget(1, connectionViewCombo);
     modelHelper->SetGrouped(GlobalConfig.uiConfig.groupedConnectionView);
     collapseGroupsBtn->setVisible(GlobalConfig.uiConfig.groupedConnectionView);
-    connect(connectionViewCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
-        const auto grouped = connectionViewCombo->itemData(index).toBool();
-        GlobalConfig.uiConfig.groupedConnectionView = grouped;
-        modelHelper->SetGrouped(grouped);
-        collapseGroupsBtn->setVisible(grouped);
-        if (grouped && !lastConnected.isEmpty())
-            connectionTreeView->expand(modelHelper->GetGroupIndex(lastConnected.groupId));
-    });
+    sortAction_ViewFlat->setCheckable(true);
+    sortAction_ViewGrouped->setCheckable(true);
+    sortAction_ViewFlat->setChecked(!GlobalConfig.uiConfig.groupedConnectionView);
+    sortAction_ViewGrouped->setChecked(GlobalConfig.uiConfig.groupedConnectionView);
     //
     this->setWindowIcon(QIcon(":/assets/icons/qv2ray.png"));
     updateColorScheme();
@@ -152,7 +142,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     connect(ConnectionManager, &QvConfigHandler::OnKernelLogAvailable, this, &MainWindow::OnVCoreLogAvailable);
     //
     connect(ConnectionManager, &QvConfigHandler::OnSubscriptionAsyncUpdateFinished, [](const GroupId &gid) {
-        QvWidgetApplication->ShowTrayMessage(tr("Subscription \"%1\" has been updated").arg(GetDisplayName(gid))); //
+        if (!GlobalConfig.uiConfig.quietMode)
+            QvWidgetApplication->ShowTrayMessage(tr("Subscription \"%1\" has been updated").arg(GetDisplayName(gid))); //
     });
     //
     connect(infoWidget, &ConnectionInfoWidget::OnEditRequested, this, &MainWindow::OnEditRequested);
@@ -281,8 +272,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     connect(action_RCM_UpdateSubscription, &QAction::triggered, this, &MainWindow::Action_UpdateSubscription);
     connect(action_RCM_DeleteConnection, &QAction::triggered, this, &MainWindow::Action_DeleteConnections);
     //
-    // Sort Menu
+    // View / Sort Menu
     //
+    sortMenu->addAction(sortAction_ViewFlat);
+    sortMenu->addAction(sortAction_ViewGrouped);
+    sortMenu->addSeparator();
     sortMenu->addAction(sortAction_SortByName_Asc);
     sortMenu->addAction(sortAction_SortByName_Dsc);
     sortMenu->addSeparator();
@@ -292,6 +286,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     sortMenu->addAction(sortAction_SortByPing_Asc);
     sortMenu->addAction(sortAction_SortByPing_Dsc);
     //
+    const auto setGroupedView = [this](bool grouped) {
+        GlobalConfig.uiConfig.groupedConnectionView = grouped;
+        modelHelper->SetGrouped(grouped);
+        collapseGroupsBtn->setVisible(grouped);
+        sortAction_ViewFlat->setChecked(!grouped);
+        sortAction_ViewGrouped->setChecked(grouped);
+        if (grouped && !lastConnected.isEmpty())
+            connectionTreeView->expand(modelHelper->GetGroupIndex(lastConnected.groupId));
+    };
+    connect(sortAction_ViewFlat, &QAction::triggered, [setGroupedView](bool) { setGroupedView(false); });
+    connect(sortAction_ViewGrouped, &QAction::triggered, [setGroupedView](bool) { setGroupedView(true); });
     connect(sortAction_SortByName_Asc, &QAction::triggered, [this] { SortConnectionList(ROLE_DISPLAYNAME, true); });
     connect(sortAction_SortByName_Dsc, &QAction::triggered, [this] { SortConnectionList(ROLE_DISPLAYNAME, false); });
     connect(sortAction_SortByData_Asc, &QAction::triggered, [this] { SortConnectionList(ROLE_DATA_USAGE, true); });

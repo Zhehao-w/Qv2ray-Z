@@ -23,9 +23,17 @@ if [[ ! "$RELEASE_ID" =~ ^[0-9]+$ ]] || [[ -z "$RELEASE_TAG" || "$RELEASE_TAG" =
     exit 1
 fi
 
-release_json="$(curl -fsSL --retry 3 \
-    -H 'Accept: application/vnd.github+json' \
-    -H 'X-GitHub-Api-Version: 2022-11-28' \
+GITHUB_API_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+declare -a github_api_headers=(
+    -H 'Accept: application/vnd.github+json'
+    -H 'X-GitHub-Api-Version: 2022-11-28'
+)
+if [[ -n "$GITHUB_API_TOKEN" ]]; then
+    github_api_headers+=( -H "Authorization: Bearer $GITHUB_API_TOKEN" )
+fi
+
+release_json="$(curl -fsSL --retry 3 --retry-all-errors \
+    "${github_api_headers[@]}" \
     "https://api.github.com/repos/Qv2ray/Qv2ray-deps/releases/$RELEASE_ID")"
 actual_tag="$(jq -r '.tag_name' <<<"$release_json")"
 if [[ "$actual_tag" != "$RELEASE_TAG" ]]; then
@@ -64,9 +72,15 @@ for data in "${assets[@]}"; do
     fi
 
     echo "Downloading pinned Qv2ray-deps asset: $NAME (asset id $ASSET_ID)"
-    curl -fL --retry 3 \
-        -H 'Accept: application/octet-stream' \
-        -H 'X-GitHub-Api-Version: 2022-11-28' \
+    declare -a asset_headers=(
+        -H 'Accept: application/octet-stream'
+        -H 'X-GitHub-Api-Version: 2022-11-28'
+    )
+    if [[ -n "$GITHUB_API_TOKEN" ]]; then
+        asset_headers+=( -H "Authorization: Bearer $GITHUB_API_TOKEN" )
+    fi
+    curl -fL --retry 3 --retry-all-errors \
+        "${asset_headers[@]}" \
         "https://api.github.com/repos/Qv2ray/Qv2ray-deps/releases/assets/$ASSET_ID" \
         -o "$DOWNLOAD_DIR/$NAME"
     ACTUAL_SIZE="$(wc -c < "$DOWNLOAD_DIR/$NAME" | tr -d '[:space:]')"

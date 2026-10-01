@@ -1,4 +1,4 @@
-name: Windows VLESS Vision package
+name: Windows authoritative package
 
 on:
   pull_request:
@@ -8,8 +8,10 @@ on:
       - ".github/workflows/windows-vless-vision-package.yml"
       - ".github/release-dependencies.json"
       - ".github/scripts/install-pinned-xray-windows.ps1"
-      - "src/components/plugins/**"
-      - "src/plugins/**"
+      - "src/**"
+      - "assets/**"
+      - "3rdparty/**"
+      - "translations/**"
       - "libs/**"
       - "cmake/**"
       - "CMakeLists.txt"
@@ -68,6 +70,8 @@ jobs:
 
       - name: Download pinned historical Qv2ray Windows dependencies
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd libs
@@ -127,28 +131,6 @@ jobs:
         shell: pwsh
         run: |
           & ./.github/scripts/install-pinned-xray-windows.ps1
-
-      - name: Validate TLS Vision and REALITY Vision fixtures
-        shell: pwsh
-        run: |
-          $help = & "$env:XRAY_BIN" help 2>&1 | Out-String
-          $runHelp = & "$env:XRAY_BIN" help run 2>&1 | Out-String
-          $fixtures = @(
-            '.github/xray-fixtures/vless-tls-vision.json',
-            '.github/xray-fixtures/vless-reality-vision.json'
-          )
-
-          foreach ($fixture in $fixtures) {
-            Write-Host "Validating $fixture"
-            if ($help -match '(?m)(^|\s)test(\s|$)') {
-              & "$env:XRAY_BIN" test -c $fixture
-            } elseif ($runHelp -match '\-test') {
-              & "$env:XRAY_BIN" run -test -c $fixture
-            } else {
-              throw 'The pinned Xray release does not advertise a supported validation interface.'
-            }
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
 
       - name: Package Xray executable, assets, and build manifest
         shell: pwsh

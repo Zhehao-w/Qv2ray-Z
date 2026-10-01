@@ -9,7 +9,6 @@
 #include "ui_w_MainWindow.h"
 
 #include <QHostAddress>
-#include <QComboBox>
 #include <QMainWindow>
 #include <QMenu>
 
@@ -114,7 +113,6 @@ class MainWindow
     SpeedWidget *speedChartWidget;
     SyntaxHighlighter *vCoreLogHighlighter;
     ConnectionInfoWidget *infoWidget;
-    QComboBox *connectionViewCombo = nullptr;
     //
     // Declare Actions
 #define DECL_ACTION(parent, name) QAction *name = new QAction(parent)
@@ -151,6 +149,8 @@ class MainWindow
     DECL_ACTION(connectionListRCM_Menu, action_RCM_RealLatencyTest);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_ResetStats);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_DeleteConnection);
+    DECL_ACTION(sortMenu, sortAction_ViewFlat);
+    DECL_ACTION(sortMenu, sortAction_ViewGrouped);
     DECL_ACTION(sortMenu, sortAction_SortByName_Asc);
     DECL_ACTION(sortMenu, sortAction_SortByName_Dsc);
     DECL_ACTION(sortMenu, sortAction_SortByPing_Asc);

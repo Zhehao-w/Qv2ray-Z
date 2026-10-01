@@ -32,6 +32,29 @@ void MainWindow::MWShowWindow()
 #if QV2RAY_FEATURE(ui_has_store_state)
     RestoreState();
 #endif
+    if (!property("modernLayoutDefaultsApplied").toBool())
+    {
+        setProperty("modernLayoutDefaultsApplied", true);
+        setMinimumSize(740, 700);
+        leftWidget->setMinimumWidth(250);
+        scrollArea->setMinimumWidth(380);
+        // Only migrate the actual legacy designer default. A broader size
+        // heuristic would overwrite legitimate user-restored window sizes.
+        if (width() == 829 && height() == 697)
+            resize(810, 820);
+        splitter->setSizes({ 260, qMax(width() - 280, 380) });
+
+        // Diagnostics are useful in day-to-day operation, so expose them by
+        // default while keeping the existing header toggles for manual collapse.
+        speedChartHolderWidget->setVisible(true);
+        masterLogBrowser->setVisible(true);
+
+        // Leave enough room for submenu arrows and long labels under Fusion.
+        tray_RootMenu->setMinimumWidth(190);
+        tray_BypassCNMenu->setMinimumWidth(220);
+        tray_SystemProxyMenu->setMinimumWidth(220);
+        tray_RecentConnectionsMenu->setMinimumWidth(220);
+    }
     this->show();
 #ifdef Q_OS_WIN
     setWindowState(Qt::WindowNoState);
@@ -277,6 +300,7 @@ void MainWindow::updateColorScheme()
 
 void MainWindow::UpdateActionTranslations()
 {
+    appSubtitleLabel->setText(tr("Connections") + QStringLiteral(" · v" QV2RAY_VERSION_STRING " · by Zhehao-w"));
     tray_BypassCNMenu->setTitle(tr("Bypass CN Mainland"));
     tray_SystemProxyMenu->setTitle(tr("System Proxy"));
     tray_RecentConnectionsMenu->setTitle(tr("Recent Connections"));
@@ -306,7 +330,10 @@ void MainWindow::UpdateActionTranslations()
     action_RCM_ResetStats->setText(tr("Clear Usage Data"));
     action_RCM_DeleteConnection->setText(tr("Delete Connection"));
     //
-    sortMenu->setTitle(tr("Sort connection list."));
+    sortBtn->setToolTip(tr("View and sort connections"));
+    sortMenu->setTitle(tr("View and sort connections"));
+    sortAction_ViewFlat->setText(tr("Flat connection list"));
+    sortAction_ViewGrouped->setText(tr("Grouped connection list"));
     sortAction_SortByName_Asc->setText(tr("By connection name, A-Z"));
     sortAction_SortByName_Dsc->setText(tr("By connection name, Z-A"));
     sortAction_SortByPing_Asc->setText(tr("By latency, Ascending"));
