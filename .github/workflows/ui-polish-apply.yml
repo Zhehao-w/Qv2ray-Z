@@ -35,151 +35,71 @@ jobs:
                   raise SystemExit(f"{path}: expected exactly one match, found {count}: {old[:80]!r}")
               p.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          # 1/3/4/6/8: visual-system polish.
           qss = Path("assets/styles/qv2ray-modern.qss")
           text = qss.read_text(encoding="utf-8")
-          text = text.replace(
-              "QMainWindow,\nQDialog {\n    background: #f5f5f7;\n}",
-              "QMainWindow,\nQDialog {\n    background: #ffffff;\n}\n\nQWidget#centralWidget {\n    background: #ffffff;\n}"
+          old = "QMainWindow,\nQDialog {\n    background: #f5f5f7;\n}"
+          new = "QMainWindow,\nQDialog {\n    background: #ffffff;\n}\n\nQWidget#centralWidget {\n    background: #ffffff;\n}"
+          if text.count(old) != 1:
+              raise SystemExit("window background block not unique")
+          text = text.replace(old, new, 1)
+          old = "    background: #ffffff;\n    border: 1px solid #e4e4e7;\n    border-radius: 9px;\n    margin-top: 12px;"
+          new = "    background: #f7f7f9;\n    border: 1px solid #e4e4e7;\n    border-radius: 9px;\n    margin-top: 12px;"
+          if text.count(old) < 1:
+              raise SystemExit("group-box style block not found")
+          text = text.replace(old, new, 1)
+          old = "QMenu::item {\n    padding: 6px 24px 6px 10px;\n    border-radius: 5px;\n}"
+          new = "QMenu::item {\n    padding: 7px 38px 7px 12px;\n    border-radius: 5px;\n}\n\nQMenu::separator {\n    height: 1px;\n    background: #e5e5e8;\n    margin: 4px 8px;\n}"
+          if text.count(old) != 1:
+              raise SystemExit("menu item style block not unique")
+          text = text.replace(old, new, 1)
+          old = "QFrame#mainHeaderFrame,\nQFrame#leftWidget,\nQFrame#connectionInfoFrame,\nQFrame#inspectorFrame {\n    background: #ffffff;\n    border: 1px solid #e5e5e8;\n    border-radius: 10px;\n}\n\nQFrame#mainHeaderFrame {\n    min-height: 44px;\n}"
+          new = "QFrame#mainHeaderFrame {\n    min-height: 44px;\n    background: transparent;\n    border: 0;\n}\n\nQFrame#leftWidget,\nQFrame#connectionInfoFrame,\nQFrame#inspectorFrame {\n    background: #f5f5f7;\n    border: 1px solid #e3e3e7;\n    border-radius: 10px;\n}"
+          if text.count(old) != 1:
+              raise SystemExit("main card style block not unique")
+          text = text.replace(old, new, 1)
+          old = "QLabel#appSubtitleLabel {\n    color: #7a7a80;\n    padding-left: 4px;\n}"
+          new = "QLabel#appSubtitleLabel {\n    color: #7a7a80;\n    padding-left: 4px;\n}\n\nQLabel#buildLabel {\n    color: #8e8e93;\n    padding-left: 6px;\n}"
+          if text.count(old) != 1:
+              raise SystemExit("subtitle style block not unique")
+          text = text.replace(old, new, 1)
+          old = "QLineEdit#connectionFilterTxt {\n    min-height: 30px;\n    background: #f7f7f9;\n    border-color: #e3e3e7;\n}"
+          new = "QLineEdit#connectionFilterTxt {\n    min-height: 30px;\n    background: #ffffff;\n    border-color: #dedee3;\n}"
+          if text.count(old) != 1:
+              raise SystemExit("search style block not unique")
+          text = text.replace(old, new, 1)
+          old = "QTreeView#connectionTreeView {\n    border: 0;\n    border-radius: 0;\n    background: #ffffff;\n}"
+          new = "QTreeView#connectionTreeView {\n    border: 0;\n    border-radius: 0;\n    background: transparent;\n}"
+          if text.count(old) != 1:
+              raise SystemExit("connection tree style block not unique")
+          text = text.replace(old, new, 1)
+          old = "QTextBrowser#masterLogBrowser {\n    background: #fbfbfc;"
+          new = "QTextBrowser#masterLogBrowser {\n    background: #ffffff;"
+          if text.count(old) != 1:
+              raise SystemExit("log style block not unique")
+          text = text.replace(old, new, 1)
+          scroll_spin = (
+              "\n\n/* Compact macOS-like scrollbars: rounded thumb, no square end buttons. */\n"
+              "QScrollBar:vertical {\n    background: transparent;\n    width: 10px;\n    margin: 2px 1px;\n    border: 0;\n}\n\n"
+              "QScrollBar::handle:vertical {\n    background: #c7c7cc;\n    min-height: 28px;\n    border-radius: 4px;\n}\n\n"
+              "QScrollBar::handle:vertical:hover {\n    background: #aeaeb2;\n}\n\n"
+              "QScrollBar::add-line:vertical,\nQScrollBar::sub-line:vertical {\n    height: 0;\n    border: 0;\n    background: transparent;\n}\n\n"
+              "QScrollBar::add-page:vertical,\nQScrollBar::sub-page:vertical {\n    background: transparent;\n}\n\n"
+              "QScrollBar:horizontal {\n    background: transparent;\n    height: 10px;\n    margin: 1px 2px;\n    border: 0;\n}\n\n"
+              "QScrollBar::handle:horizontal {\n    background: #c7c7cc;\n    min-width: 28px;\n    border-radius: 4px;\n}\n\n"
+              "QScrollBar::handle:horizontal:hover {\n    background: #aeaeb2;\n}\n\n"
+              "QScrollBar::add-line:horizontal,\nQScrollBar::sub-line:horizontal {\n    width: 0;\n    border: 0;\n    background: transparent;\n}\n\n"
+              "QScrollBar::add-page:horizontal,\nQScrollBar::sub-page:horizontal {\n    background: transparent;\n}\n\n"
+              "QAbstractScrollArea::corner {\n    background: transparent;\n}\n\n"
+              "/* Numeric fields remain keyboard/wheel editable without dated stepper chrome. */\n"
+              "QSpinBox,\nQDoubleSpinBox {\n    padding-right: 7px;\n}\n\n"
+              "QSpinBox::up-button,\nQSpinBox::down-button,\nQDoubleSpinBox::up-button,\nQDoubleSpinBox::down-button {\n    width: 0;\n    height: 0;\n    border: 0;\n    background: transparent;\n}\n"
           )
-          text = text.replace("    background: #ffffff;\n    border: 1px solid #e4e4e7;\n    border-radius: 9px;\n    margin-top: 12px;",
-                              "    background: #f7f7f9;\n    border: 1px solid #e4e4e7;\n    border-radius: 9px;\n    margin-top: 12px;", 1)
-          text = text.replace(
-              "QMenu::item {\n    padding: 6px 24px 6px 10px;\n    border-radius: 5px;\n}",
-              "QMenu::item {\n    padding: 7px 38px 7px 12px;\n    border-radius: 5px;\n}\n\nQMenu::separator {\n    height: 1px;\n    background: #e5e5e8;\n    margin: 4px 8px;\n}"
-          )
-          old_cards = """QFrame#mainHeaderFrame,
-QFrame#leftWidget,
-QFrame#connectionInfoFrame,
-QFrame#inspectorFrame {
-    background: #ffffff;
-    border: 1px solid #e5e5e8;
-    border-radius: 10px;
-}
-
-QFrame#mainHeaderFrame {
-    min-height: 44px;
-}"""
-          new_cards = """QFrame#mainHeaderFrame {
-    min-height: 44px;
-    background: transparent;
-    border: 0;
-}
-
-QFrame#leftWidget,
-QFrame#connectionInfoFrame,
-QFrame#inspectorFrame {
-    background: #f5f5f7;
-    border: 1px solid #e3e3e7;
-    border-radius: 10px;
-}"""
-          if old_cards not in text:
-              raise SystemExit("main card style block not found")
-          text = text.replace(old_cards, new_cards, 1)
-          text = text.replace(
-              "QLabel#appSubtitleLabel {\n    color: #7a7a80;\n    padding-left: 4px;\n}",
-              "QLabel#appSubtitleLabel {\n    color: #7a7a80;\n    padding-left: 4px;\n}\n\nQLabel#buildLabel {\n    color: #8e8e93;\n    padding-left: 6px;\n}"
-          )
-          text = text.replace(
-              "QLineEdit#connectionFilterTxt {\n    min-height: 30px;\n    background: #f7f7f9;\n    border-color: #e3e3e7;\n}",
-              "QLineEdit#connectionFilterTxt {\n    min-height: 30px;\n    background: #ffffff;\n    border-color: #dedee3;\n}"
-          )
-          text = text.replace(
-              "QTreeView#connectionTreeView {\n    border: 0;\n    border-radius: 0;\n    background: #ffffff;\n}",
-              "QTreeView#connectionTreeView {\n    border: 0;\n    border-radius: 0;\n    background: transparent;\n}"
-          )
-          text = text.replace(
-              "QTextBrowser#masterLogBrowser {\n    background: #fbfbfc;",
-              "QTextBrowser#masterLogBrowser {\n    background: #ffffff;"
-          )
-          scroll_spin = r'''
-
-/* Compact macOS-like scrollbars: rounded thumb, no square end buttons. */
-QScrollBar:vertical {
-    background: transparent;
-    width: 10px;
-    margin: 2px 1px;
-    border: 0;
-}
-
-QScrollBar::handle:vertical {
-    background: #c7c7cc;
-    min-height: 28px;
-    border-radius: 4px;
-}
-
-QScrollBar::handle:vertical:hover {
-    background: #aeaeb2;
-}
-
-QScrollBar::add-line:vertical,
-QScrollBar::sub-line:vertical {
-    height: 0;
-    border: 0;
-    background: transparent;
-}
-
-QScrollBar::add-page:vertical,
-QScrollBar::sub-page:vertical {
-    background: transparent;
-}
-
-QScrollBar:horizontal {
-    background: transparent;
-    height: 10px;
-    margin: 1px 2px;
-    border: 0;
-}
-
-QScrollBar::handle:horizontal {
-    background: #c7c7cc;
-    min-width: 28px;
-    border-radius: 4px;
-}
-
-QScrollBar::handle:horizontal:hover {
-    background: #aeaeb2;
-}
-
-QScrollBar::add-line:horizontal,
-QScrollBar::sub-line:horizontal {
-    width: 0;
-    border: 0;
-    background: transparent;
-}
-
-QScrollBar::add-page:horizontal,
-QScrollBar::sub-page:horizontal {
-    background: transparent;
-}
-
-QAbstractScrollArea::corner {
-    background: transparent;
-}
-
-/* Numeric fields remain keyboard/wheel editable without dated stepper chrome. */
-QSpinBox,
-QDoubleSpinBox {
-    padding-right: 7px;
-}
-
-QSpinBox::up-button,
-QSpinBox::down-button,
-QDoubleSpinBox::up-button,
-QDoubleSpinBox::down-button {
-    width: 0;
-    height: 0;
-    border: 0;
-    background: transparent;
-}
-'''
           marker = "\nQToolTip {"
-          if marker not in text or "Compact macOS-like scrollbars" in text:
+          if text.count(marker) != 1 or "Compact macOS-like scrollbars" in text:
               raise SystemExit("scrollbar insertion marker invalid")
           text = text.replace(marker, scroll_spin + marker, 1)
           qss.write_text(text, encoding="utf-8")
 
-          # 2/7/9: default-expanded diagnostics, narrower main window, dynamic branding label.
           replace_once("src/ui/widgets/windows/w_MainWindow.ui", "<width>1000</width>\n    <height>720</height>", "<width>900</width>\n    <height>700</height>")
           replace_once("src/ui/widgets/windows/w_MainWindow.ui", "<width>860</width>\n    <height>620</height>", "<width>760</width>\n    <height>600</height>")
           replace_once("src/ui/widgets/windows/w_MainWindow.ui", "<width>280</width>\n         <height>0</height>", "<width>250</width>\n         <height>0</height>")
@@ -189,89 +109,30 @@ QDoubleSpinBox::down-button {
 
           main_ui = Path("src/ui/widgets/windows/w_MainWindow.ui")
           text = main_ui.read_text(encoding="utf-8")
-          left_min = """       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>0</height>
-        </size>
-       </property>"""
-          left_with_max = left_min + """
-       <property name="maximumSize">
-        <size>
-         <width>320</width>
-         <height>16777215</height>
-        </size>
-       </property>"""
+          left_min = "       <property name=\"minimumSize\">\n        <size>\n         <width>250</width>\n         <height>0</height>\n        </size>\n       </property>"
+          left_with_max = left_min + "\n       <property name=\"maximumSize\">\n        <size>\n         <width>320</width>\n         <height>16777215</height>\n        </size>\n       </property>"
           if text.count(left_min) != 1:
               raise SystemExit("left panel minimum-size block not unique")
           text = text.replace(left_min, left_with_max, 1)
-
-          subtitle = """       <item>
-        <widget class="QLabel" name="appSubtitleLabel">
-         <property name="text">
-          <string>Connections</string>
-         </property>
-        </widget>
-       </item>"""
-          branding = subtitle + """
-       <item>
-        <widget class="QLabel" name="buildLabel">
-         <property name="font">
-          <font>
-           <pointsize>8</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string notr="true">Version · by Zhehao-w</string>
-         </property>
-        </widget>
-       </item>"""
+          subtitle = "       <item>\n        <widget class=\"QLabel\" name=\"appSubtitleLabel\">\n         <property name=\"text\">\n          <string>Connections</string>\n         </property>\n        </widget>\n       </item>"
+          branding = subtitle + "\n       <item>\n        <widget class=\"QLabel\" name=\"buildLabel\">\n         <property name=\"font\">\n          <font>\n           <pointsize>8</pointsize>\n          </font>\n         </property>\n         <property name=\"text\">\n          <string notr=\"true\">Version · by Zhehao-w</string>\n         </property>\n        </widget>\n       </item>"
           if text.count(subtitle) != 1:
               raise SystemExit("subtitle block not unique")
           text = text.replace(subtitle, branding, 1)
-
-          speed_hidden = """             <widget class="QWidget" name="speedChartHolderWidget" native="true">
-              <property name="visible">
-               <bool>false</bool>
-              </property>"""
-          speed_shown = speed_hidden.replace("<bool>false</bool>", "<bool>true</bool>")
-          log_hidden = """             <widget class="QTextBrowser" name="masterLogBrowser">
-              <property name="visible">
-               <bool>false</bool>
-              </property>"""
-          log_shown = log_hidden.replace("<bool>false</bool>", "<bool>true</bool>")
+          speed_hidden = "             <widget class=\"QWidget\" name=\"speedChartHolderWidget\" native=\"true\">\n              <property name=\"visible\">\n               <bool>false</bool>\n              </property>"
+          log_hidden = "             <widget class=\"QTextBrowser\" name=\"masterLogBrowser\">\n              <property name=\"visible\">\n               <bool>false</bool>\n              </property>"
           if text.count(speed_hidden) != 1 or text.count(log_hidden) != 1:
               raise SystemExit("diagnostic visibility blocks not found")
-          text = text.replace(speed_hidden, speed_shown, 1).replace(log_hidden, log_shown, 1)
+          text = text.replace(speed_hidden, speed_hidden.replace("<bool>false</bool>", "<bool>true</bool>"), 1)
+          text = text.replace(log_hidden, log_hidden.replace("<bool>false</bool>", "<bool>true</bool>"), 1)
           main_ui.write_text(text, encoding="utf-8")
 
-          # 1: remove the unreliable palette-dependent start/stop icon from the primary action.
-          replace_once(
-              "src/ui/widgets/widgets/ConnectionInfoWidget.cpp",
-              '    connectBtn->setIcon(QIcon(connected ? QV2RAY_COLORSCHEME_FILE("stop") : QV2RAY_COLORSCHEME_FILE("start")));',
-              '    connectBtn->setIcon(QIcon());'
-          )
-
-          # 5: present the existing inverted quietMode storage as a positive notification setting.
+          replace_once("src/ui/widgets/widgets/ConnectionInfoWidget.cpp", '    connectBtn->setIcon(QIcon(connected ? QV2RAY_COLORSCHEME_FILE("stop") : QV2RAY_COLORSCHEME_FILE("start")));', '    connectBtn->setIcon(QIcon());')
           replace_once("src/ui/widgets/windows/w_PreferencesWindow.ui", "<string>Quiet Mode</string>", "<string>Status Notifications</string>")
-          replace_once(
-              "src/ui/widgets/windows/w_PreferencesWindow.cpp",
-              '    quietModeCB->setText(tr("Show connection and proxy status notifications"));\n    quietModeCB->setToolTip(tr("Errors, warnings, logs, status indicators and traffic statistics are always shown."));',
-              '    quietModeCB->setText(tr("Enabled"));\n    quietModeCB->setToolTip(tr("Show tray notifications when connection or system proxy status changes. Errors, logs, on-screen status, and traffic statistics remain available."));'
-          )
-
-          # 6/7/9: tray spacing, narrower splitter balance, dynamic version/author label.
-          replace_once(
-              "src/ui/widgets/windows/w_MainWindow.cpp",
-              "    setupUi(this);\n    addStateOptions",
-              '    setupUi(this);\n    buildLabel->setText(QStringLiteral("%1 · by Zhehao-w").arg(QV2RAY_VERSION_STRING));\n    addStateOptions'
-          )
+          replace_once("src/ui/widgets/windows/w_PreferencesWindow.cpp", '    quietModeCB->setText(tr("Show connection and proxy status notifications"));\n    quietModeCB->setToolTip(tr("Errors, warnings, logs, status indicators and traffic statistics are always shown."));', '    quietModeCB->setText(tr("Enabled"));\n    quietModeCB->setToolTip(tr("Show tray notifications when connection or system proxy status changes. Errors, logs, on-screen status, and traffic statistics remain available."));')
+          replace_once("src/ui/widgets/windows/w_MainWindow.cpp", "    setupUi(this);\n    addStateOptions", '    setupUi(this);\n    buildLabel->setText(QStringLiteral("%1 · by Zhehao-w").arg(QV2RAY_VERSION_STRING));\n    addStateOptions')
           replace_once("src/ui/widgets/windows/w_MainWindow.cpp", "    constexpr auto sizeRatioA = 0.382;", "    constexpr auto sizeRatioA = 0.31;")
-          replace_once(
-              "src/ui/widgets/windows/w_MainWindow.cpp",
-              "    tray_SystemProxyMenu->addAction(tray_action_SetSystemProxy);\n    tray_SystemProxyMenu->addAction(tray_action_ClearSystemProxy);\n    //\n    tray_RootMenu->addAction(tray_action_ToggleVisibility);",
-              "    tray_SystemProxyMenu->addAction(tray_action_SetSystemProxy);\n    tray_SystemProxyMenu->addAction(tray_action_ClearSystemProxy);\n    // Keep submenu indicators clear of long labels on Windows native metrics.\n    tray_RootMenu->setMinimumWidth(190);\n    tray_BypassCNMenu->setMinimumWidth(190);\n    tray_SystemProxyMenu->setMinimumWidth(190);\n    tray_RecentConnectionsMenu->setMinimumWidth(190);\n    //\n    tray_RootMenu->addAction(tray_action_ToggleVisibility);"
-          )
+          replace_once("src/ui/widgets/windows/w_MainWindow.cpp", "    tray_SystemProxyMenu->addAction(tray_action_SetSystemProxy);\n    tray_SystemProxyMenu->addAction(tray_action_ClearSystemProxy);\n    //\n    tray_RootMenu->addAction(tray_action_ToggleVisibility);", "    tray_SystemProxyMenu->addAction(tray_action_SetSystemProxy);\n    tray_SystemProxyMenu->addAction(tray_action_ClearSystemProxy);\n    // Keep submenu indicators clear of long labels on Windows native metrics.\n    tray_RootMenu->setMinimumWidth(190);\n    tray_BypassCNMenu->setMinimumWidth(190);\n    tray_SystemProxyMenu->setMinimumWidth(190);\n    tray_RecentConnectionsMenu->setMinimumWidth(190);\n    //\n    tray_RootMenu->addAction(tray_action_ToggleVisibility);")
           PY
 
           git diff --check
@@ -288,13 +149,7 @@ QDoubleSpinBox::down-button {
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            assets/styles/qv2ray-modern.qss \
-            src/ui/widgets/widgets/ConnectionInfoWidget.cpp \
-            src/ui/widgets/windows/w_MainWindow.cpp \
-            src/ui/widgets/windows/w_MainWindow.ui \
-            src/ui/widgets/windows/w_PreferencesWindow.cpp \
-            src/ui/widgets/windows/w_PreferencesWindow.ui
+          git add assets/styles/qv2ray-modern.qss src/ui/widgets/widgets/ConnectionInfoWidget.cpp src/ui/widgets/windows/w_MainWindow.cpp src/ui/widgets/windows/w_MainWindow.ui src/ui/widgets/windows/w_PreferencesWindow.cpp src/ui/widgets/windows/w_PreferencesWindow.ui
           git diff --cached --stat
           git commit -m "Polish Windows UI after visual testing"
           git push origin HEAD:ui/main-window-modernization
