@@ -3,9 +3,12 @@
 #include "base/Qv2rayBase.hpp"
 
 #include <QApplication>
+#include <QEvent>
 #include <QFile>
 #include <QPalette>
+#include <QSet>
 #include <QStyleFactory>
+#include <QWidget>
 
 #define QV_MODULE_NAME "StyleManager"
 
@@ -13,6 +16,7 @@ namespace Qv2ray::ui::styles
 {
     QvStyleManager::QvStyleManager(QObject *parent) : QObject(parent)
     {
+        qApp->installEventFilter(this);
     }
 
     void QvStyleManager::ApplyStyle()
@@ -49,5 +53,30 @@ namespace Qv2ray::ui::styles
         }
 
         qApp->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+    }
+
+    bool QvStyleManager::eventFilter(QObject *watched, QEvent *event)
+    {
+        if (event->type() == QEvent::Polish)
+        {
+            static const QSet<QString> retiredUiObjects = {
+                // Multi-theme UI is retired. Qv2ray-Z has one maintained look.
+                QStringLiteral("darkThemeLabel"),
+                QStringLiteral("darkThemeCB"),
+                QStringLiteral("label_35"),
+                QStringLiteral("themeCombo"),
+                // These entries correspond to already-retired product features.
+                QStringLiteral("label_38"),
+                QStringLiteral("useOldShareLinkFormatCB"),
+                QStringLiteral("pushButton"),
+                QStringLiteral("groupBox_2"),
+                QStringLiteral("updateSettingsGroupBox"),
+                QStringLiteral("pluginsBtn"),
+            };
+
+            if (auto *widget = qobject_cast<QWidget *>(watched); widget && retiredUiObjects.contains(widget->objectName()))
+                widget->hide();
+        }
+        return QObject::eventFilter(watched, event);
     }
 } // namespace Qv2ray::ui::styles
