@@ -3,10 +3,14 @@ name: Qv2ray-Z Windows release
 on:
   push:
     tags:
-      - "v2.7.0-z*"
+      - "v*-z*"
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   package:
@@ -23,6 +27,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Prepare and verify release metadata
         shell: pwsh
@@ -42,10 +47,18 @@ jobs:
             throw "Release notes file does not exist: $releaseNotes"
           }
 
+          git fetch origin dev --no-tags
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/dev
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release tag $env:GITHUB_REF_NAME does not point to a commit contained in dev history."
+          }
+
           "RELEASE_VERSION=$version" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_NOTES=$releaseNotes" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Release version: $version"
           Write-Host "Release notes: $releaseNotes"
+          Write-Host "Release commit is contained in dev history."
 
       - name: Install MSVC 14.2 environment
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
@@ -121,6 +134,14 @@ jobs:
             $legacyPluginDlls = Get-ChildItem $legacyPluginDir -File -Filter 'QvPlugin-*.dll' -ErrorAction SilentlyContinue
             if ($legacyPluginDlls) {
               throw 'Release unexpectedly contains legacy Qv2ray native plugin DLLs.'
+            }
+          }
+
+          $legacyTranslationDir = Join-Path $deployment 'lang'
+          if (Test-Path $legacyTranslationDir) {
+            $legacyTranslationBundles = Get-ChildItem $legacyTranslationDir -File -Filter '*.qm' -ErrorAction SilentlyContinue
+            if ($legacyTranslationBundles) {
+              throw 'Release unexpectedly contains retired Qv2ray translation bundles.'
             }
           }
 
@@ -225,8 +246,10 @@ jobs:
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
+          name: Qv2ray-Z ${{ github.ref_name }}
           body_path: ${{ env.RELEASE_NOTES }}
           files: |
             ${{ env.RELEASE_ARCHIVE }}
             ${{ env.RELEASE_ARCHIVE }}.sha256
           fail_on_unmatched_files: true
+          make_latest: true
