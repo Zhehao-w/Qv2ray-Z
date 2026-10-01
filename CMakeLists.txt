@@ -193,12 +193,14 @@ set(CMAKE_AUTOUIC ON)
 # ==================================================================================
 include(cmake/components/qv2ray-base.cmake)
 include(src/plugin-interface/QvPluginInterface.cmake)
+include(src/plugin-interface/QvGUIPluginInterface.cmake)
 include(cmake/singleapplication.cmake)
 
 add_library(qv2ray_baselib STATIC
     ${QV2RAY_BASE_SOURCES}
     ${SINGLEAPPLICATION_SOURCES}
     ${QVPLUGIN_INTERFACE_HEADERS}
+    ${QVGUIPLUGIN_INTERFACE_HEADERS}
     ${PROTO_SRCS}
     ${PROTO_HDRS}
     ${API_GRPC_SRCS}
@@ -243,8 +245,6 @@ include(cmake/qrencode.cmake)
 include(cmake/components/qv2ray-ui.cmake)
 list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_COMMON_SOURCES})
 
-include(src/plugin-interface/QvGUIPluginInterface.cmake)
-list(APPEND QV2RAY_UI_SOURCES ${QVGUIPLUGIN_INTERFACE_HEADERS})
 include(cmake/components/qv2ray-ui-widget.cmake)
 list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_WIDGET_SOURCES})
 
