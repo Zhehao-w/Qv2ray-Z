@@ -24,6 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Re-dispatch after the final UI state synchronization fix.
           gh workflow run data-safety-hardening.yml --repo "$GITHUB_REPOSITORY" --ref "$REF_NAME"
           gh workflow run vless-vision-validation.yml --repo "$GITHUB_REPOSITORY" --ref "$REF_NAME"
           gh workflow run windows-vless-vision-package.yml --repo "$GITHUB_REPOSITORY" --ref "$REF_NAME"
