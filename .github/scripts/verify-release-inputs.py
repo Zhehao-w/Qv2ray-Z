@@ -101,8 +101,7 @@ for marker in (
         fail(f"setup-libs.sh is missing required pinned dependency verification marker: {marker}")
 
 version = (ROOT / "makespec" / "VERSION").read_text(encoding="utf-8").strip()
-suffix = (ROOT / "makespec" / "VERSIONSUFFIX").read_text(encoding="utf-8").strip()
-if not re.fullmatch(r"\d+\.\d+\.\d+-z\d+", version + suffix):
-    fail("source release version does not match the supported z-series format")
+if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+    fail("source release version does not match semantic version X.Y.Z")
 
 print("release input verification passed")
