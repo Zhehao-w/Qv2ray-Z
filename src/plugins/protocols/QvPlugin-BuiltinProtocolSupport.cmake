@@ -39,17 +39,15 @@ set(BUILTIN_PROTOCOL_PLUGIN_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/ui/PluginSettingsWidget.cpp
     ${CMAKE_CURRENT_LIST_DIR}/ui/PluginSettingsWidget.hpp
     ${CMAKE_CURRENT_LIST_DIR}/ui/PluginSettingsWidget.ui
-    ${QVPLUGIN_INTERFACE_HEADERS}
-    ${QVGUIPLUGIN_INTERFACE_HEADERS}
     )
 
 list(APPEND PLUGIN_TRANSLATION_SOURCES ${BUILTIN_PROTOCOL_PLUGIN_SOURCES})
 
 # The built-in protocol implementation is a first-party in-process component.
 # An OBJECT target preserves the existing source/UI boundaries without creating
-# a loadable native plugin DLL or shared-object trust boundary.
+# a loadable native plugin DLL or shared-object trust boundary. Shared plugin
+# interface headers are moc-owned by the host targets, not regenerated here.
 add_library(${PROTOCOL_PLUGIN_TARGET} OBJECT
-    ${CMAKE_CURRENT_LIST_DIR}/resx.qrc
     ${BUILTIN_PROTOCOL_PLUGIN_SOURCES}
     )
 
