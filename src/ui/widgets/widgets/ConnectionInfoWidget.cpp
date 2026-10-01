@@ -13,7 +13,10 @@ QvMessageBusSlotImpl(ConnectionInfoWidget)
     {
         case RETRANSLATE:
             retranslateUi(this);
-            updateConnectionAction();
+            if (groupId != NullGroupId)
+                ShowDetails({ connectionId, groupId });
+            else
+                updateConnectionAction();
             break;
         MBUpdateColorSchemeDefaultImpl;
         case HIDE_WINDOWS:
@@ -21,11 +24,16 @@ QvMessageBusSlotImpl(ConnectionInfoWidget)
     }
 }
 
+void ConnectionInfoWidget::setConnectionAction(bool connected)
+{
+    connectBtn->setIcon(QIcon(connected ? QV2RAY_COLORSCHEME_FILE("stop") : QV2RAY_COLORSCHEME_FILE("start")));
+    connectBtn->setText(connected ? tr("Disconnect") : tr("Connect"));
+}
+
 void ConnectionInfoWidget::updateConnectionAction()
 {
-    const auto isCurrentItem = KernelInstance->CurrentConnection().connectionId == connectionId;
-    connectBtn->setIcon(QIcon(isCurrentItem ? QV2RAY_COLORSCHEME_FILE("stop") : QV2RAY_COLORSCHEME_FILE("start")));
-    connectBtn->setText(isCurrentItem ? tr("Disconnect") : tr("Connect"));
+    const auto isCurrentItem = KernelInstance->CurrentConnection() == ConnectionGroupPair{ connectionId, groupId };
+    setConnectionAction(isCurrentItem);
 }
 
 void ConnectionInfoWidget::updateColorScheme()
@@ -146,13 +154,13 @@ void ConnectionInfoWidget::on_deleteBtn_clicked()
 void ConnectionInfoWidget::OnConnected(const ConnectionGroupPair &id)
 {
     if (id == ConnectionGroupPair{ connectionId, groupId })
-        updateConnectionAction();
+        setConnectionAction(true);
 }
 
 void ConnectionInfoWidget::OnDisConnected(const ConnectionGroupPair &id)
 {
     if (id == ConnectionGroupPair{ connectionId, groupId })
-        updateConnectionAction();
+        setConnectionAction(false);
 }
 
 void ConnectionInfoWidget::on_latencyBtn_clicked()
