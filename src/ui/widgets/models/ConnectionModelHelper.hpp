@@ -45,7 +45,6 @@ namespace Qv2ray::ui::widgets::models
         void OnConnectionLinkedWithGroup(const ConnectionGroupPair &id);
         ConnectionGroupPair currentSelection() const;
         void sanitizeStoredContexts();
-        void scheduleCurrentContextRepair();
 
       private:
         QTreeView *parentView;
@@ -55,7 +54,6 @@ namespace Qv2ray::ui::widgets::models
         QHash<ConnectionGroupPair, QStandardItem *> pairs;
         QHash<ConnectionId, QList<QStandardItem *>> connections;
         bool groupedView = true;
-        bool contextRepairScheduled = false;
         QString filterText;
         void rebuild(const ConnectionGroupPair &preferredContext = {});
     };
