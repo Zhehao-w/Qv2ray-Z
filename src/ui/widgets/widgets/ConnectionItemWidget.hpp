@@ -15,6 +15,8 @@ class ConnectionItemWidget
     explicit ConnectionItemWidget(const GroupId &groupId, QWidget *parent = nullptr);
     //
     void BeginConnection();
+    void SetIdentifier(const ConnectionGroupPair &id);
+    void SetFlexibleContext(bool enabled) { flexibleContext = enabled; }
     ~ConnectionItemWidget();
     //
     void BeginRename();
@@ -51,4 +53,5 @@ class ConnectionItemWidget
     QString originalItemName;
     ConnectionId connectionId;
     GroupId groupId;
+    bool flexibleContext = false;
 };

@@ -19,8 +19,10 @@ ConnectionListHelper::ConnectionListHelper(QTreeView *view, QObject *parent) : Q
         }
     }
     const auto renamedLambda = [&](const ConnectionId &id, const QString &, const QString &newName) {
-        for (const auto &gid : ConnectionManager->GetConnectionContainedIn(id))
+        for (const auto &gid : ConnectionManager->AllGroups())
         {
+            if (!ConnectionManager->GetConnections(gid).contains(id))
+                continue;
             ConnectionGroupPair pair{ id, gid };
             if (pairs.contains(pair))
                 pairs[pair]->setData(newName, ROLE_DISPLAYNAME);
@@ -28,8 +30,10 @@ ConnectionListHelper::ConnectionListHelper(QTreeView *view, QObject *parent) : Q
     };
 
     const auto latencyLambda = [&](const ConnectionId &id, const int avg) {
-        for (const auto &gid : ConnectionManager->GetConnectionContainedIn(id))
+        for (const auto &gid : ConnectionManager->AllGroups())
         {
+            if (!ConnectionManager->GetConnections(gid).contains(id))
+                continue;
             ConnectionGroupPair pair{ id, gid };
             if (pairs.contains(pair))
                 pairs[pair]->setData(NumericString(avg), ROLE_LATENCY);
@@ -37,6 +41,7 @@ ConnectionListHelper::ConnectionListHelper(QTreeView *view, QObject *parent) : Q
     };
 
     const auto statsLambda = [&](const ConnectionGroupPair &id, const QMap<StatisticsType, QvStatsSpeedData> &data) {
+        Q_UNUSED(data)
         if (connections.contains(id.connectionId))
         {
             for (const auto &index : connections[id.connectionId])
@@ -52,18 +57,84 @@ ConnectionListHelper::ConnectionListHelper(QTreeView *view, QObject *parent) : Q
     connect(ConnectionManager, &QvConfigHandler::OnConnectionRenamed, renamedLambda);
     connect(ConnectionManager, &QvConfigHandler::OnLatencyTestFinished, latencyLambda);
     connect(ConnectionManager, &QvConfigHandler::OnStatsAvailable, statsLambda);
+    sanitizeStoredContexts();
+}
+
+QModelIndex ConnectionListHelper::GetConnectionPairIndex(const ConnectionGroupPair &id)
+{
+    auto item = pairs.value(id, nullptr);
+    if (!item)
+        return {};
+    const auto index = model->indexFromItem(item);
+    if (!groupedView && ConnectionManager->IsValidId(id))
+    {
+        if (auto widget = qobject_cast<ConnectionItemWidget *>(parentView->indexWidget(index)))
+            widget->SetIdentifier(id);
+    }
+    return index;
+}
+
+ConnectionGroupPair ConnectionListHelper::currentSelection() const
+{
+    const auto index = parentView->currentIndex();
+    if (!index.isValid())
+        return {};
+    const auto widget = qobject_cast<ConnectionItemWidget *>(parentView->indexWidget(index));
+    if (!widget || !widget->IsConnection())
+        return {};
+    const auto id = widget->Identifier();
+    if (ConnectionManager->IsValidId(id))
+        return id;
+    return ConnectionManager->ResolveConnectionContext(id.connectionId, id);
 }
 
 void ConnectionListHelper::SetGrouped(bool grouped)
 {
+    const auto preferred = currentSelection();
     if (groupedView == grouped && !pairs.isEmpty())
+    {
+        sanitizeStoredContexts();
         return;
+    }
     groupedView = grouped;
-    rebuild();
+    rebuild(preferred);
 }
 
-void ConnectionListHelper::rebuild()
+void ConnectionListHelper::sanitizeStoredContexts()
 {
+    if (!GlobalConfig.lastConnectedId.isEmpty() && !ConnectionManager->IsValidId(GlobalConfig.lastConnectedId))
+    {
+        if (ConnectionManager->IsValidId(GlobalConfig.lastConnectedId.connectionId))
+            GlobalConfig.lastConnectedId = ConnectionManager->ResolveConnectionContext(GlobalConfig.lastConnectedId.connectionId, GlobalConfig.lastConnectedId);
+        else
+            GlobalConfig.lastConnectedId.clear();
+    }
+
+    if (GlobalConfig.autoStartBehavior == AUTO_CONNECTION_FIXED && !GlobalConfig.autoStartId.isEmpty() &&
+        !ConnectionManager->IsValidId(GlobalConfig.autoStartId))
+    {
+        if (ConnectionManager->IsValidId(GlobalConfig.autoStartId.connectionId))
+            GlobalConfig.autoStartId = ConnectionManager->ResolveConnectionContext(GlobalConfig.autoStartId.connectionId, GlobalConfig.autoStartId);
+        else
+            GlobalConfig.autoStartId.clear();
+    }
+
+    QList<ConnectionGroupPair> validRecent;
+    for (const auto &item : GlobalConfig.uiConfig.recentConnections)
+    {
+        if (ConnectionManager->IsValidId(item) && !validRecent.contains(item))
+            validRecent.append(item);
+    }
+    GlobalConfig.uiConfig.recentConnections = validRecent;
+}
+
+void ConnectionListHelper::rebuild(const ConnectionGroupPair &preferredContext)
+{
+    auto preferred = preferredContext;
+    if (preferred.isEmpty())
+        preferred = currentSelection();
+
+    sanitizeStoredContexts();
     model->clear();
     groups.clear();
     pairs.clear();
@@ -75,16 +146,48 @@ void ConnectionListHelper::rebuild()
             addGroupItem(group);
         for (const auto &connection : ConnectionManager->GetConnections(group))
         {
-            if (!groupedView && added.contains(connection))
+            const ConnectionGroupPair encountered{ connection, group };
+            if (!groupedView)
             {
-                pairs[{ connection, group }] = connections[connection].first();
+                if (added.contains(connection))
+                {
+                    pairs[encountered] = connections[connection].first();
+                    continue;
+                }
+
+                const auto explicitPreference = preferred.connectionId == connection ? preferred : ConnectionGroupPair{};
+                const auto resolved = ConnectionManager->ResolveConnectionContext(connection, explicitPreference);
+                if (resolved.isEmpty())
+                    continue;
+                auto item = addConnectionItem(resolved);
+                pairs[encountered] = item;
+                added.insert(connection);
                 continue;
             }
-            addConnectionItem({ connection, group });
+            addConnectionItem(encountered);
             added.insert(connection);
         }
     }
     Filter(filterText);
+
+    auto selection = preferred;
+    if (selection.isEmpty() || !ConnectionManager->IsValidId(selection))
+    {
+        const auto current = ConnectionManager->CurrentConnection();
+        if (ConnectionManager->IsValidId(current))
+            selection = current;
+    }
+
+    if (!selection.isEmpty() && ConnectionManager->IsValidId(selection))
+    {
+        const auto index = GetConnectionPairIndex(selection);
+        if (index.isValid())
+        {
+            parentView->setCurrentIndex(index);
+            parentView->scrollTo(index);
+            parentView->clicked(index);
+        }
+    }
 }
 
 ConnectionListHelper::~ConnectionListHelper()
@@ -103,11 +206,25 @@ void ConnectionListHelper::Filter(const QString &key)
     filterText = key;
     if (!groupedView)
     {
-        for (auto it = pairs.cbegin(); it != pairs.cend(); ++it)
+        const auto normalized = key.toLower();
+        for (auto it = connections.cbegin(); it != connections.cend(); ++it)
         {
-            const auto index = model->indexFromItem(it.value());
-            const auto widget = static_cast<ConnectionItemWidget *>(parentView->indexWidget(index));
-            parentView->setRowHidden(index.row(), index.parent(), !widget->NameMatched(key));
+            if (it.value().isEmpty())
+                continue;
+            bool matches = GetDisplayName(it.key()).toLower().contains(normalized);
+            if (!matches)
+            {
+                for (const auto &group : ConnectionManager->AllGroups())
+                {
+                    if (ConnectionManager->GetConnections(group).contains(it.key()) && GetDisplayName(group).toLower().contains(normalized))
+                    {
+                        matches = true;
+                        break;
+                    }
+                }
+            }
+            const auto index = model->indexFromItem(it.value().first());
+            parentView->setRowHidden(index.row(), index.parent(), !matches);
         }
         return;
     }
@@ -153,6 +270,7 @@ QStandardItem *ConnectionListHelper::addConnectionItem(const ConnectionGroupPair
     const auto connectionIndex = connectionItem->index();
     //
     auto widget = new ConnectionItemWidget(id, parentView);
+    widget->SetFlexibleContext(!groupedView);
     connect(widget, &ConnectionItemWidget::RequestWidgetFocus, [widget, connectionIndex, this]() {
         parentView->setCurrentIndex(connectionIndex);
         parentView->scrollTo(connectionIndex);
@@ -193,11 +311,18 @@ void ConnectionListHelper::OnConnectionDeleted(const ConnectionGroupPair &id)
         return;
     }
     auto item = pairs.take(id);
-    const auto index = model->indexFromItem(item);
-    if (!index.isValid())
+    if (!item)
+    {
+        sanitizeStoredContexts();
         return;
-    model->removeRow(index.row(), index.parent());
+    }
+    const auto index = model->indexFromItem(item);
+    if (index.isValid())
+        model->removeRow(index.row(), index.parent());
     connections[id.connectionId].removeAll(item);
+    if (connections[id.connectionId].isEmpty())
+        connections.remove(id.connectionId);
+    sanitizeStoredContexts();
 }
 
 void ConnectionListHelper::OnConnectionLinkedWithGroup(const ConnectionGroupPair &pairId)
@@ -227,8 +352,11 @@ void ConnectionListHelper::OnGroupDeleted(const GroupId &id, const QList<Connect
         OnConnectionDeleted(pair);
     }
     const auto item = groups.take(id);
-    const auto index = model->indexFromItem(item);
-    if (!index.isValid())
-        return;
-    model->removeRow(index.row(), index.parent());
+    if (item)
+    {
+        const auto index = model->indexFromItem(item);
+        if (index.isValid())
+            model->removeRow(index.row(), index.parent());
+    }
+    sanitizeStoredContexts();
 }

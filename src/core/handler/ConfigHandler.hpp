@@ -3,6 +3,7 @@
 #include "components/latency/LatencyTest.hpp"
 #include "core/CoreUtils.hpp"
 #include "core/connection/ConnectionIO.hpp"
+#include "core/handler/ConnectionContextResolver.hpp"
 #include "core/handler/KernelInstanceHandler.hpp"
 #include "core/handler/PersistenceTransaction.hpp"
 
@@ -53,7 +54,7 @@ namespace Qv2ray::core::handler
         }
         inline bool IsValidId(const ConnectionGroupPair &id) const
         {
-            return IsValidId(id.connectionId) && IsValidId(id.groupId);
+            return IsValidId(id.connectionId) && IsValidId(id.groupId) && groups.value(id.groupId).connections.contains(id.connectionId);
         }
         inline const ConnectionObject GetConnectionMetaObject(const ConnectionId &id) const
         {
@@ -64,6 +65,23 @@ namespace Qv2ray::core::handler
         {
             CheckValidId(id, {});
             return groups[id];
+        }
+
+        inline ConnectionGroupPair CurrentConnection() const
+        {
+            return kernelHandler ? kernelHandler->CurrentConnection() : ConnectionGroupPair{};
+        }
+
+        inline ConnectionGroupPair ResolveConnectionContext(const ConnectionId &id, const ConnectionGroupPair &preferred = {}) const
+        {
+            CheckValidId(id, {});
+            QList<GroupId> memberships;
+            for (auto it = groups.cbegin(); it != groups.cend(); ++it)
+            {
+                if (it.value().connections.contains(id))
+                    memberships.push_back(it.key());
+            }
+            return connection_context::Resolve(id, memberships, preferred, CurrentConnection(), GlobalConfig.lastConnectedId);
         }
 
         bool IsConnected(const ConnectionGroupPair &id) const
@@ -128,7 +146,7 @@ namespace Qv2ray::core::handler
         bool SetSubscriptionExcludeRelation(const GroupId &id, SubscriptionFilterRelation relation);
 
         // bool UpdateSubscriptionASync(const GroupId &id, bool useSystemProxy);
-        // const std::tuple<QString, int64_t, float> GetSubscriptionData(const GroupId &id) const;
+        // const optional<QString> GetSubscriptionData(const GroupId &id) const;
 
       signals:
         void OnKernelLogAvailable(const ConnectionGroupPair &id, const QString &log);
@@ -164,6 +182,20 @@ namespace Qv2ray::core::handler
       private:
         bool p_CHUpdateSubscription(const GroupId &id, const QByteArray &data);
         bool CommitConnectionConfig(const QList<data_safety::PersistenceFileMutation> &additionalMutations = {});
+        void RepairCurrentContextAfterMembershipRemoval(const ConnectionGroupPair &removed)
+        {
+            const auto current = CurrentConnection();
+            if (current.isEmpty() || current != removed || IsValidId(current))
+                return;
+
+            ConnectionGroupPair fallback;
+            if (IsValidId(current.connectionId))
+                fallback = ResolveConnectionContext(current.connectionId, GlobalConfig.lastConnectedId);
+
+            StopConnection();
+            if (!fallback.isEmpty())
+                StartConnection(fallback);
+        }
 
       private:
         int saveTimerId;
@@ -177,6 +209,9 @@ namespace Qv2ray::core::handler
       private:
         LatencyTestHost *pingHelper;
         KernelInstanceHandler *kernelHandler;
+        QMetaObject::Connection contextRepairConnection = QObject::connect(
+            this, &QvConfigHandler::OnConnectionRemovedFromGroup, this,
+            [this](const ConnectionGroupPair &removed) { RepairCurrentContextAfterMembershipRemoval(removed); });
     };
 
     inline ::Qv2ray::core::handler::QvConfigHandler *ConnectionManager = nullptr;

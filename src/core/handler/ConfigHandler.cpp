@@ -212,10 +212,10 @@ namespace Qv2ray::core::handler
     const QList<GroupId> QvConfigHandler::Subscriptions() const
     {
         QList<GroupId> subsList;
-        for (const auto &group : groups)
+        for (auto it = groups.cbegin(); it != groups.cend(); ++it)
         {
-            if (group.isSubscription)
-                subsList.push_back(groups.key(group));
+            if (it.value().isSubscription)
+                subsList.push_back(it.key());
         }
         return subsList;
     }
@@ -238,10 +238,10 @@ namespace Qv2ray::core::handler
     {
         CheckValidId(connId, {});
         QList<GroupId> grps;
-        for (const auto &group : groups)
+        for (auto it = groups.cbegin(); it != groups.cend(); ++it)
         {
-            if (group.connections.contains(connId))
-                grps.push_back(groups.key(group));
+            if (it.value().connections.contains(connId))
+                grps.push_back(it.key());
         }
         return grps;
     }
@@ -280,6 +280,7 @@ namespace Qv2ray::core::handler
         const auto oldGroup = groups[gid];
         const auto oldConnection = connections[id];
         const auto oldAutoStartId = GlobalConfig.autoStartId;
+        const auto oldLastConnectedId = GlobalConfig.lastConnectedId;
         const bool hadRoot = connectionRootCache.contains(id);
         const auto oldRoot = connectionRootCache.value(id);
         const auto displayName = connections[id].displayName;
@@ -295,6 +296,10 @@ namespace Qv2ray::core::handler
             connections.remove(id);
             connectionRootCache.remove(id);
         }
+        if (GlobalConfig.lastConnectedId == ConnectionGroupPair{ id, gid })
+        {
+            GlobalConfig.lastConnectedId = fullyRemoved ? ConnectionGroupPair{} : ResolveConnectionContext(id);
+        }
 
         QList<data_safety::PersistenceFileMutation> mutations;
         if (fullyRemoved)
@@ -307,6 +312,7 @@ namespace Qv2ray::core::handler
             if (hadRoot)
                 connectionRootCache[id] = oldRoot;
             GlobalConfig.autoStartId = oldAutoStartId;
+            GlobalConfig.lastConnectedId = oldLastConnectedId;
             LOG("Connection removal rolled back because metadata could not be saved.");
             return false;
         }
@@ -363,6 +369,7 @@ namespace Qv2ray::core::handler
         const auto oldTarget = groups[targetGid];
         const auto oldConnection = connections[id];
         const auto oldAutoStartId = GlobalConfig.autoStartId;
+        const auto oldLastConnectedId = GlobalConfig.lastConnectedId;
 
         const auto removedCount = groups[sourceGid].connections.removeAll(id);
         connections[id].__qvConnectionRefCount -= removedCount;
@@ -373,6 +380,8 @@ namespace Qv2ray::core::handler
         }
         if (GlobalConfig.autoStartId == ConnectionGroupPair{ id, sourceGid })
             GlobalConfig.autoStartId = { id, targetGid };
+        if (GlobalConfig.lastConnectedId == ConnectionGroupPair{ id, sourceGid })
+            GlobalConfig.lastConnectedId = { id, targetGid };
 
         if (!SaveConnectionConfig())
         {
@@ -380,6 +389,7 @@ namespace Qv2ray::core::handler
             groups[targetGid] = oldTarget;
             connections[id] = oldConnection;
             GlobalConfig.autoStartId = oldAutoStartId;
+            GlobalConfig.lastConnectedId = oldLastConnectedId;
             return false;
         }
 
@@ -399,6 +409,7 @@ namespace Qv2ray::core::handler
         const auto oldGroups = groups;
         const auto oldConnections = connections;
         const auto oldAutoStartId = GlobalConfig.autoStartId;
+        const auto oldLastConnectedId = GlobalConfig.lastConnectedId;
         const auto list = groups[id].connections;
         QSet<ConnectionId> newlyLinkedToDefault;
 
@@ -427,6 +438,13 @@ namespace Qv2ray::core::handler
             else
                 GlobalConfig.autoStartId.clear();
         }
+        if (GlobalConfig.lastConnectedId.groupId == id)
+        {
+            if (connections.contains(GlobalConfig.lastConnectedId.connectionId))
+                GlobalConfig.lastConnectedId.groupId = DefaultGroupId;
+            else
+                GlobalConfig.lastConnectedId.clear();
+        }
 
         const auto deletedName = groups[id].displayName;
         groups.remove(id);
@@ -435,6 +453,7 @@ namespace Qv2ray::core::handler
             groups = oldGroups;
             connections = oldConnections;
             GlobalConfig.autoStartId = oldAutoStartId;
+            GlobalConfig.lastConnectedId = oldLastConnectedId;
             return tr("Failed to save connection metadata.");
         }
 
@@ -475,8 +494,21 @@ namespace Qv2ray::core::handler
 
     void QvConfigHandler::RestartConnection()
     {
+        auto target = kernelHandler->CurrentConnection();
+        if (target.isEmpty() || !IsValidId(target))
+        {
+            if (!GlobalConfig.lastConnectedId.isEmpty() && IsValidId(GlobalConfig.lastConnectedId.connectionId))
+                target = ResolveConnectionContext(GlobalConfig.lastConnectedId.connectionId, GlobalConfig.lastConnectedId);
+            else
+                target.clear();
+        }
+
         StopConnection();
-        StartConnection(GlobalConfig.lastConnectedId);
+        if (!target.isEmpty())
+        {
+            GlobalConfig.lastConnectedId = target;
+            StartConnection(target);
+        }
     }
 
     void QvConfigHandler::StopConnection()
@@ -940,6 +972,8 @@ namespace Qv2ray::core::handler
         const auto oldGroup = groups[id];
         const auto oldConnections = connections;
         const auto oldRootCache = connectionRootCache;
+        const auto oldAutoStartId = GlobalConfig.autoStartId;
+        const auto oldLastConnectedId = GlobalConfig.lastConnectedId;
         const auto now = system_clock::to_time_t(system_clock::now());
 
         for (const auto &plan : plans)
@@ -979,6 +1013,16 @@ namespace Qv2ray::core::handler
             }
         }
 
+        if (membership.removed.contains(GlobalConfig.autoStartId.connectionId) && GlobalConfig.autoStartId.groupId == id)
+            GlobalConfig.autoStartId.clear();
+        if (membership.removed.contains(GlobalConfig.lastConnectedId.connectionId) && GlobalConfig.lastConnectedId.groupId == id)
+        {
+            if (connections.contains(GlobalConfig.lastConnectedId.connectionId))
+                GlobalConfig.lastConnectedId = ResolveConnectionContext(GlobalConfig.lastConnectedId.connectionId);
+            else
+                GlobalConfig.lastConnectedId.clear();
+        }
+
         QList<data_safety::PersistenceFileMutation> mutations;
         for (const auto &plan : plans)
             mutations.append(data_safety::PersistenceFileMutation::Write(connectionPath(plan.id), JsonToString(plan.root).toUtf8()));
@@ -990,6 +1034,8 @@ namespace Qv2ray::core::handler
             groups[id] = oldGroup;
             connections = oldConnections;
             connectionRootCache = oldRootCache;
+            GlobalConfig.autoStartId = oldAutoStartId;
+            GlobalConfig.lastConnectedId = oldLastConnectedId;
             QvMessageBoxWarn(nullptr, tr("Subscription update failed"),
                              tr("The updated subscription could not be committed safely. The previous connection state was restored."));
             return false;
