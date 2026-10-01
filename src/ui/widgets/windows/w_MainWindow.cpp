@@ -1,6 +1,5 @@
 #include "w_MainWindow.hpp"
 
-#include "components/update/UpdateChecker.hpp"
 #include "core/handler/ConfigHandler.hpp"
 #include "core/settings/SettingsBackend.hpp"
 #include "plugin-interface/QvGUIPluginInterface.hpp"
@@ -98,7 +97,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     const auto setSpeedWidgetVisibility = [&](QJsonValue val) { speedChartHolderWidget->setVisible(val.toBool()); };
     const auto setLogWidgetVisibility = [&](QJsonValue val) { masterLogBrowser->setVisible(val.toBool()); };
     addStateOptions("speedchart.visibility", { [&] { return speedChartHolderWidget->isVisible(); }, setSpeedWidgetVisibility });
-    addStateOptions("log.visibility", { [&] { return masterLogBrowser->isVisible(); }, setLogWidgetVisibility });
+    addStateOptions("log.visibility", { [&] { return masterLogBrowser->setVisible(val.toBool()); }, setLogWidgetVisibility });
 #else
     constexpr auto sizeRatioA = 0.31;
     constexpr auto sizeRatioB = 1 - sizeRatioA;
@@ -337,8 +336,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     //
     CheckSubscriptionsUpdate();
     qvLogTimerId = startTimer(1000);
-    auto checker = new QvUpdateChecker(this);
-    checker->CheckUpdate();
     //
     for (const auto &name : PluginHost->UsablePlugins())
     {
