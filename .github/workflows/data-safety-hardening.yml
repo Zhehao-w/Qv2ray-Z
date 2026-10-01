@@ -5,12 +5,16 @@ on:
     branches:
       - "hardening/**"
     paths:
-      - ".github/workflows/data-safety-hardening.yml"
+      - ".github/workflows/*.yml"
+      - ".github/release-dependencies.json"
+      - ".github/scripts/verify-release-inputs.py"
       - "src/**"
       - "test/**"
       - "libs/**"
       - "cmake/**"
       - "CMakeLists.txt"
+      - "makespec/VERSION"
+      - "makespec/VERSIONSUFFIX"
   workflow_dispatch:
 
 permissions:
@@ -27,10 +31,13 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Check out source and recursive submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Verify pinned release inputs
+        run: python3 .github/scripts/verify-release-inputs.py
 
       - name: Install Qt5 and build dependencies
         run: |
@@ -83,7 +90,7 @@ jobs:
 
       - name: Upload Linux build log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: data-safety-linux-build-log
           path: build.log
@@ -114,24 +121,24 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Check out source and recursive submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
       - name: Install MSVC 14.2 environment
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         with:
           toolset: 14.2
           arch: x64
 
       - name: Install Qt 5.15.2
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: 5.15.2
           arch: win64_msvc2019_64
           cache: true
 
-      - name: Download historical Qv2ray Windows dependencies
+      - name: Download pinned historical Qv2ray Windows dependencies
         shell: bash
         run: |
           set -euo pipefail
@@ -181,7 +188,7 @@ jobs:
 
       - name: Upload Windows build log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: data-safety-windows-build-log
           path: build.log
@@ -196,7 +203,7 @@ jobs:
 
       - name: Upload Windows test log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: data-safety-windows-test-log
           path: ctest.log
