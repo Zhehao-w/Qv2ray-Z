@@ -1,0 +1,68 @@
+name: Apply 810x820 main window polish
+
+on:
+  push:
+    branches:
+      - ui/main-window-modernization
+    paths:
+      - ".github/workflows/ui-size-810-polish.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ui/main-window-modernization
+          fetch-depth: 0
+
+      - name: Apply 810x820 restored footprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.ui",
+              "    <width>780</width>\n    <height>820</height>",
+              "    <width>810</width>\n    <height>820</height>")
+
+          old = '''        // Migrate the previous compact default (roughly 850x720) to the\n        // narrower, slightly taller footprint without overriding deliberately\n        // large/tall restored windows.\n        if (width() >= 800 && width() <= 900 && height() <= 760)\n            resize(780, 820);'''
+          new = '''        // Migrate the prior compact defaults to the final 810x820 footprint\n        // without overriding deliberately user-resized windows.\n        const bool previousWideCompact = width() >= 800 && width() <= 900 && height() <= 760;\n        const bool previousNarrowCompact = width() >= 760 && width() <= 800 && height() >= 790 && height() <= 850;\n        if (previousWideCompact || previousNarrowCompact)\n            resize(810, 820);'''
+          replace_once("src/ui/widgets/windows/w_MainWindow_extra.cpp", old, new)
+
+          ET.parse("src/ui/widgets/windows/w_MainWindow.ui")
+          PY
+
+          git diff --check
+          git rm .github/workflows/ui-size-810-polish.yml
+          git config user.name "Zhehao Wang"
+          git config user.email "31388024+Zhehao-w@users.noreply.github.com"
+          git add src/ui/widgets/windows/w_MainWindow.ui src/ui/widgets/windows/w_MainWindow_extra.cpp
+          git commit -m "Set final main window footprint to 810x820"
+          git push origin HEAD:ui/main-window-modernization
+
+      - name: Dispatch maintained validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run data-safety-hardening.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run vless-vision-validation.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run windows-vless-vision-package.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
