@@ -38,11 +38,12 @@ void MainWindow::MWShowWindow()
         setMinimumSize(740, 700);
         leftWidget->setMinimumWidth(250);
         scrollArea->setMinimumWidth(380);
-        // Migrate the previous compact default (roughly 850x720) to the
-        // narrower, slightly taller footprint without overriding deliberately
-        // large/tall restored windows.
-        if (width() >= 800 && width() <= 900 && height() <= 760)
-            resize(780, 820);
+        // Migrate the prior compact defaults to the final 810x820 footprint
+        // without overriding deliberately user-resized windows.
+        const bool previousWideCompact = width() >= 800 && width() <= 900 && height() <= 760;
+        const bool previousNarrowCompact = width() >= 760 && width() <= 800 && height() >= 790 && height() <= 850;
+        if (previousWideCompact || previousNarrowCompact)
+            resize(810, 820);
         splitter->setSizes({ 260, qMax(width() - 280, 380) });
 
         // Diagnostics are useful in day-to-day operation, so expose them by
