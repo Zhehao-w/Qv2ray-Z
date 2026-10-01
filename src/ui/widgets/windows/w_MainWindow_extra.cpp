@@ -35,12 +35,15 @@ void MainWindow::MWShowWindow()
     if (!property("modernLayoutDefaultsApplied").toBool())
     {
         setProperty("modernLayoutDefaultsApplied", true);
-        setMinimumSize(800, 640);
-        leftWidget->setMinimumWidth(265);
-        scrollArea->setMinimumWidth(400);
-        if (width() >= 900 && width() <= 1024)
-            resize(850, qMax(height(), 720));
-        splitter->setSizes({ 280, qMax(width() - 300, 400) });
+        setMinimumSize(740, 700);
+        leftWidget->setMinimumWidth(250);
+        scrollArea->setMinimumWidth(380);
+        // Migrate the previous compact default (roughly 850x720) to the
+        // narrower, slightly taller footprint without overriding deliberately
+        // large/tall restored windows.
+        if (width() >= 800 && width() <= 900 && height() <= 760)
+            resize(780, 820);
+        splitter->setSizes({ 260, qMax(width() - 280, 380) });
 
         // Diagnostics are useful in day-to-day operation, so expose them by
         // default while keeping the existing header toggles for manual collapse.
