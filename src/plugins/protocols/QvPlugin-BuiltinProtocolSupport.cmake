@@ -45,7 +45,10 @@ set(BUILTIN_PROTOCOL_PLUGIN_SOURCES
 
 list(APPEND PLUGIN_TRANSLATION_SOURCES ${BUILTIN_PROTOCOL_PLUGIN_SOURCES})
 
-add_library(${PROTOCOL_PLUGIN_TARGET} MODULE
+# The built-in protocol implementation is a first-party in-process component.
+# An OBJECT target preserves the existing source/UI boundaries without creating
+# a loadable native plugin DLL or shared-object trust boundary.
+add_library(${PROTOCOL_PLUGIN_TARGET} OBJECT
     ${CMAKE_CURRENT_LIST_DIR}/resx.qrc
     ${BUILTIN_PROTOCOL_PLUGIN_SOURCES}
     )
@@ -54,23 +57,11 @@ target_include_directories(${PROTOCOL_PLUGIN_TARGET} PRIVATE ${QVPLUGIN_INTERFAC
 target_include_directories(${PROTOCOL_PLUGIN_TARGET} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_include_directories(${PROTOCOL_PLUGIN_TARGET} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../common)
 
-if(UNIX AND NOT APPLE AND NOT WIN32 AND NOT ANDROID)
-    install(TARGETS ${PROTOCOL_PLUGIN_TARGET} LIBRARY DESTINATION share/qv2ray/plugins)
-elseif(WIN32)
-    install(TARGETS ${PROTOCOL_PLUGIN_TARGET} LIBRARY DESTINATION plugins)
-elseif(ANDROID)
-    set(deployment_tool "${QT_HOST_PATH}/${QT6_HOST_INFO_BINDIR}/androiddeployqt")
-    set(apk_dir "$<TARGET_PROPERTY:${PROTOCOL_PLUGIN_TARGET},BINARY_DIR>/android-build")
-    add_custom_command(TARGET ${PROTOCOL_PLUGIN_TARGET} POST_BUILD
-        COMMAND
-        ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROTOCOL_PLUGIN_TARGET}>
-        "${apk_dir}/libs/${CMAKE_ANDROID_ARCH_ABI}/$<TARGET_FILE_NAME:${PROTOCOL_PLUGIN_TARGET}>"
-        )
-else()
-    message(FATAL_ERROR "Unsupported bundled protocol plugin build platform")
-endif()
-
 target_link_libraries(${PROTOCOL_PLUGIN_TARGET}
     ${QV_QT_LIBNAME}::Core
     ${QV_QT_LIBNAME}::Gui
     ${QV_QT_LIBNAME}::Widgets)
+
+# qv2ray_baselib already exists when this file is included. Adding the object
+# files directly keeps all protocol registration and editor behavior in-process.
+target_sources(qv2ray_baselib PRIVATE $<TARGET_OBJECTS:${PROTOCOL_PLUGIN_TARGET}>)
