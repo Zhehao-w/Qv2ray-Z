@@ -21,9 +21,6 @@ class ConnectionInfoWidget
     void OnEditRequested(const ConnectionId &id);
     void OnJsonEditRequested(const ConnectionId &id);
 
-  protected:
-    bool eventFilter(QObject *object, QEvent *event) override;
-
   private slots:
     void on_connectBtn_clicked();
     void on_editBtn_clicked();
@@ -39,11 +36,8 @@ class ConnectionInfoWidget
 
   private:
     void updateColorScheme();
+    void updateConnectionAction();
     QvMessageBusSlotDecl;
     ConnectionId connectionId = NullConnectionId;
     GroupId groupId = NullGroupId;
-    //
-    bool isRealPixmapShown;
-    QPixmap qrPixmap;
-    QPixmap qrPixmapBlured;
 };
