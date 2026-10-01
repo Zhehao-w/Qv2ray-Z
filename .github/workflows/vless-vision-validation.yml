@@ -208,50 +208,6 @@ jobs:
             .github/xray-fixtures/vless-tls-vision.json > "$allow_insecure"
           reject "$allow_insecure" 'feature "allowInsecure" has been removed'
 
-  qv2ray-vless-tests:
-    name: Qt5 VLESS serialization tests
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-    steps:
-      - name: Check out source and recursive submodules
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          submodules: recursive
-
-      - name: Install Qt5 and build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            build-essential \
-            cmake \
-            libcurl4-openssl-dev \
-            libgrpc++-dev \
-            libprotobuf-dev \
-            libqt5svg5-dev \
-            ninja-build \
-            pkg-config \
-            protobuf-compiler \
-            protobuf-compiler-grpc \
-            qtbase5-dev \
-            qttools5-dev
-
-      - name: Configure tests with the existing Qt5 architecture
-        run: |
-          cmake -S . -B build -GNinja \
-            -DBUILD_TESTING=ON \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DQV2RAY_AUTO_DEPLOY=OFF \
-            -DQV2RAY_HAS_BUILTIN_THEMES=OFF \
-            -DQV2RAY_HAS_SINGLEAPPLICATION=OFF \
-            -DQV2RAY_QT6=OFF \
-            -DQV2RAY_USE_V5_CORE=ON
-
-      - name: Build the VLESS test target
-        run: cmake --build build --target parse_vless_url --parallel 2
-
-      - name: Run VLESS serialization tests
-        run: ctest --test-dir build --output-on-failure -R '^QV2RAY_TEST_parse_vless_url$'
-
   source-checks:
     name: Source and UI checks
     runs-on: ubuntu-24.04

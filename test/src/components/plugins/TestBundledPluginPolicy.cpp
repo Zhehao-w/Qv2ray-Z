@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
 TEST_CASE("Only Qv2ray-Z bundled component identities are allowlisted")
 {
     const auto &specs = BundledPluginSpecs();
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
     REQUIRE(specs.size() == 2);
 
     QSet<QString> fileNames;
@@ -33,6 +34,9 @@ TEST_CASE("Only Qv2ray-Z bundled component identities are allowlisted")
 
     REQUIRE(fileNames.size() == 2);
     REQUIRE(internalNames == QSet<QString>{ QStringLiteral("qvplugin_builtin_protocol"), QStringLiteral("builtin_subscription_support") });
+#else
+    REQUIRE(specs.isEmpty());
+#endif
 }
 
 TEST_CASE("Legacy and arbitrary plugin libraries are rejected by filename")
@@ -43,6 +47,8 @@ TEST_CASE("Legacy and arbitrary plugin libraries are rejected by filename")
         QStringLiteral("QvPlugin-Trojan.dll"),
         QStringLiteral("libQvPlugin-SS.so"),
         QStringLiteral("libQvPlugin-Trojan.so"),
+        QStringLiteral("libQvPlugin-BuiltinProtocolSupport.dylib"),
+        QStringLiteral("libQvPlugin-BuiltinSubscriptionSupport.dylib"),
         QStringLiteral("QvPlugin-BuiltinProtocolSupport.dll.bak"),
     };
 
@@ -53,8 +59,10 @@ TEST_CASE("Legacy and arbitrary plugin libraries are rejected by filename")
     REQUIRE_FALSE(IsBundledPluginInternalName(QStringLiteral("third_party_plugin")));
 
     const auto &specs = BundledPluginSpecs();
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
     REQUIRE_FALSE(BundledPluginIdentityMatches(specs[0].fileName, specs[1].internalName));
     REQUIRE_FALSE(BundledPluginIdentityMatches(specs[1].fileName, specs[0].internalName));
+#endif
 }
 
 TEST_CASE("Bundled component search paths use only trusted application and system locations")
@@ -68,15 +76,15 @@ TEST_CASE("Bundled component search paths use only trusted application and syste
     // which is valid here because it is standing in for applicationDir.
 #ifdef Q_OS_WIN
     const QStringList expected{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins"))) };
-#elif defined(Q_OS_MAC)
-    const QStringList expected{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../Resources/plugins"))) };
-#else
+#elif defined(Q_OS_LINUX)
     const QStringList expected{
         QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins"))),
         QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../share/qv2ray/plugins"))),
         QStringLiteral("/usr/local/share/qv2ray/plugins"),
         QStringLiteral("/usr/share/qv2ray/plugins"),
     };
+#else
+    const QStringList expected{};
 #endif
 
     REQUIRE(directories == expected);

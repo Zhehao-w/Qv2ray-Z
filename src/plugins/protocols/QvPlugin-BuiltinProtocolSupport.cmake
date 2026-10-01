@@ -58,11 +58,6 @@ if(UNIX AND NOT APPLE AND NOT WIN32 AND NOT ANDROID)
     install(TARGETS ${PROTOCOL_PLUGIN_TARGET} LIBRARY DESTINATION share/qv2ray/plugins)
 elseif(WIN32)
     install(TARGETS ${PROTOCOL_PLUGIN_TARGET} LIBRARY DESTINATION plugins)
-elseif(APPLE)
-    add_custom_command(TARGET ${PROTOCOL_PLUGIN_TARGET}
-        POST_BUILD
-        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath "@executable_path/../Frameworks/" $<TARGET_FILE:${PROTOCOL_PLUGIN_TARGET}>)
-    install(TARGETS ${PROTOCOL_PLUGIN_TARGET} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/qv2ray.app/Contents/Resources/plugins)
 elseif(ANDROID)
     set(deployment_tool "${QT_HOST_PATH}/${QT6_HOST_INFO_BINDIR}/androiddeployqt")
     set(apk_dir "$<TARGET_PROPERTY:${PROTOCOL_PLUGIN_TARGET},BINARY_DIR>/android-build")
@@ -72,7 +67,7 @@ elseif(ANDROID)
         "${apk_dir}/libs/${CMAKE_ANDROID_ARCH_ABI}/$<TARGET_FILE_NAME:${PROTOCOL_PLUGIN_TARGET}>"
         )
 else()
-    message(FATAL_ERROR "?")
+    message(FATAL_ERROR "Unsupported bundled protocol plugin build platform")
 endif()
 
 target_link_libraries(${PROTOCOL_PLUGIN_TARGET}
