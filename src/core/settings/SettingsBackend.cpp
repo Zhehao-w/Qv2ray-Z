@@ -173,7 +173,7 @@ namespace Qv2ray::core::config
             // Check if the dirs are write-able
             if (!hasPossibleNewLocation)
             {
-                // None of the path above can be used as a dir for storing config.
+                // None of the path above can be used as a dir for storing config files.
                 // Even the last folder failed to pass the check.
                 LOG("FATAL");
                 LOG(" ---> CANNOT find a proper place to store Qv2ray config files.");
@@ -215,7 +215,6 @@ namespace Qv2ray::core::config
             GlobalConfig.kernelConfig.KernelPath(QV2RAY_DEFAULT_VCORE_PATH);
             GlobalConfig.kernelConfig.AssetsPath(QV2RAY_DEFAULT_VASSETS_PATH);
             GlobalConfig.logLevel = 3;
-            GlobalConfig.uiConfig.language = QLocale::system().name();
             GlobalConfig.defaultRouteConfig.dnsConfig.servers.append({ "1.1.1.1" });
             GlobalConfig.defaultRouteConfig.dnsConfig.servers.append({ "8.8.8.8" });
             GlobalConfig.defaultRouteConfig.dnsConfig.servers.append({ "8.8.4.4" });
