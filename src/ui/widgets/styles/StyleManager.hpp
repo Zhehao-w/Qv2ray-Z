@@ -25,6 +25,9 @@ namespace Qv2ray::ui::styles
             ApplyStyle();
             return true;
         }
+
+      protected:
+        bool eventFilter(QObject *watched, QEvent *event) override;
     };
 
     inline QvStyleManager *StyleManager = nullptr;
