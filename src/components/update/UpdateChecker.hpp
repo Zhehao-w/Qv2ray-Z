@@ -4,27 +4,14 @@
 
 namespace Qv2ray::components
 {
-    struct QvUpdateInfo
+    // Compatibility shim for the legacy MainWindow call site. Qv2ray-Z no
+    // longer performs in-app release checks; releases are distributed through
+    // the repository packaging workflow.
+    class QvUpdateChecker final : public QObject
     {
-        int channel;
-        QString tag;
-        QString title;
-        QString releaseNotes;
-        QString downloadLink;
-    };
-
-    class QvUpdateChecker : public QObject
-    {
-        Q_OBJECT
       public:
-        explicit QvUpdateChecker(QObject *parent = nullptr);
-        void CheckUpdate();
-        ~QvUpdateChecker();
-      signals:
-        void OnCheckUpdateCompleted(bool hasUpdate, const QvUpdateInfo &updateInfo);
-
-      private:
-        void static VersionUpdate(const QByteArray &data);
+        explicit QvUpdateChecker(QObject *parent = nullptr) : QObject(parent) {}
+        void CheckUpdate() const {}
     };
 } // namespace Qv2ray::components
 using namespace Qv2ray::components;
