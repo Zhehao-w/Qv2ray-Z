@@ -112,6 +112,15 @@ void ConnectionListHelper::sanitizeStoredContexts()
             GlobalConfig.lastConnectedId.clear();
     }
 
+    if (GlobalConfig.autoStartBehavior == AUTO_CONNECTION_FIXED && !GlobalConfig.autoStartId.isEmpty() &&
+        !ConnectionManager->IsValidId(GlobalConfig.autoStartId))
+    {
+        if (ConnectionManager->IsValidId(GlobalConfig.autoStartId.connectionId))
+            GlobalConfig.autoStartId = ConnectionManager->ResolveConnectionContext(GlobalConfig.autoStartId.connectionId, GlobalConfig.autoStartId);
+        else
+            GlobalConfig.autoStartId.clear();
+    }
+
     QList<ConnectionGroupPair> validRecent;
     for (const auto &item : GlobalConfig.uiConfig.recentConnections)
     {
