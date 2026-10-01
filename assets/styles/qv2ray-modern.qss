@@ -1,9 +1,5 @@
 /* Qv2ray-Z maintained Qt5 visual system. */
 
-QWidget {
-    color: #1f1f1f;
-}
-
 QMainWindow,
 QDialog {
     background: #f7f7f7;
