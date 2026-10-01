@@ -17,6 +17,7 @@
 
 #ifndef Q_OS_WIN
 #include <QSocketNotifier>
+#include <atomic>
 #include <cerrno>
 #include <csignal>
 #include <fcntl.h>
@@ -31,17 +32,43 @@ char **globalArgv;
 #ifndef Q_OS_WIN
 namespace
 {
+    constexpr unsigned int PendingTerminate = 1u << 0;
+    constexpr unsigned int PendingHangup = 1u << 1;
+    constexpr unsigned int PendingRestart = 1u << 2;
+    constexpr unsigned int PendingStop = 1u << 3;
+    constexpr unsigned int PendingShutdown = PendingTerminate | PendingHangup;
+
     int controlSignalPipe[2] = { -1, -1 };
     volatile sig_atomic_t controlSignalWriteFd = -1;
+    std::atomic<unsigned int> pendingControlSignals{ 0 };
+    static_assert(std::atomic<unsigned int>::is_always_lock_free, "POSIX signal pending state must use lock-free atomics.");
+
+    unsigned int controlSignalBit(int signum) noexcept
+    {
+        switch (signum)
+        {
+            case SIGTERM: return PendingTerminate;
+            case SIGHUP: return PendingHangup;
+            case SIGUSR1: return PendingRestart;
+            case SIGUSR2: return PendingStop;
+            default: return 0;
+        }
+    }
 
     void controlSignalHandler(int signum) noexcept
     {
         const int savedErrno = errno;
+        const auto pendingBit = controlSignalBit(signum);
+        if (pendingBit != 0)
+            pendingControlSignals.fetch_or(pendingBit, std::memory_order_relaxed);
+
         const auto writeFd = controlSignalWriteFd;
         if (writeFd >= 0)
         {
-            const unsigned char signalByte = static_cast<unsigned char>(signum);
-            const auto ignored = ::write(static_cast<int>(writeFd), &signalByte, sizeof(signalByte));
+            // The pipe is wakeup-only. If it is full, the lock-free pending mask
+            // still retains the control action until the Qt thread drains it.
+            constexpr unsigned char wakeByte = 1;
+            const auto ignored = ::write(static_cast<int>(writeFd), &wakeByte, sizeof(wakeByte));
             Q_UNUSED(ignored)
         }
         errno = savedErrno;
@@ -70,22 +97,23 @@ namespace
         return ::sigaction(signum, &action, nullptr) == 0;
     }
 
-    void dispatchControlSignal(int signum)
+    void dispatchPendingControlSignals()
     {
-        switch (signum)
+        const auto pending = pendingControlSignals.exchange(0, std::memory_order_acq_rel);
+        if (pending == 0)
+            return;
+
+        // Shutdown requests take precedence over connection-management actions.
+        if ((pending & PendingShutdown) != 0)
         {
-            case SIGTERM:
-            case SIGHUP: QCoreApplication::quit(); break;
-            case SIGUSR1:
-                if (ConnectionManager)
-                    ConnectionManager->RestartConnection();
-                break;
-            case SIGUSR2:
-                if (ConnectionManager)
-                    ConnectionManager->StopConnection();
-                break;
-            default: break;
+            QCoreApplication::quit();
+            return;
         }
+
+        if ((pending & PendingRestart) != 0 && ConnectionManager)
+            ConnectionManager->RestartConnection();
+        if ((pending & PendingStop) != 0 && ConnectionManager)
+            ConnectionManager->StopConnection();
     }
 
     bool installControlSignalBridge(QObject *context)
@@ -106,15 +134,11 @@ namespace
         auto notifier = new QSocketNotifier(controlSignalPipe[0], QSocketNotifier::Read, context);
         QObject::connect(notifier, &QSocketNotifier::activated, context, [notifier]() {
             notifier->setEnabled(false);
-            unsigned char pendingSignals[64];
-            while (true)
+            unsigned char wakeBytes[64];
+            while (::read(controlSignalPipe[0], wakeBytes, sizeof(wakeBytes)) > 0)
             {
-                const auto count = ::read(controlSignalPipe[0], pendingSignals, sizeof(pendingSignals));
-                if (count <= 0)
-                    break;
-                for (ssize_t i = 0; i < count; ++i)
-                    dispatchControlSignal(static_cast<int>(pendingSignals[i]));
             }
+            dispatchPendingControlSignals();
             notifier->setEnabled(true);
         });
 
