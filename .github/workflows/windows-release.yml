@@ -53,12 +53,19 @@ jobs:
           toolset: 14.2
           arch: x64
 
+      - name: Set up Python for pinned Qt installer
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13.3'
+
       - name: Install Qt 5.15.2
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1 internal action
         with:
           version: 5.15.2
           arch: win64_msvc2019_64
           cache: true
+          aqtversion: '==3.3.0'
+          py7zrversion: '==1.0.0'
 
       - name: Download pinned historical Qv2ray Windows dependencies
         shell: bash
