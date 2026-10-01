@@ -20,16 +20,13 @@ namespace Qv2ray::components::plugins::policy
             { QStringLiteral("QvPlugin-BuiltinProtocolSupport.dll"), QStringLiteral("qvplugin_builtin_protocol") },
             { QStringLiteral("QvPlugin-BuiltinSubscriptionSupport.dll"), QStringLiteral("builtin_subscription_support") },
         };
-#elif defined(Q_OS_MAC)
-        static const QList<BundledPluginSpec> specs{
-            { QStringLiteral("libQvPlugin-BuiltinProtocolSupport.dylib"), QStringLiteral("qvplugin_builtin_protocol") },
-            { QStringLiteral("libQvPlugin-BuiltinSubscriptionSupport.dylib"), QStringLiteral("builtin_subscription_support") },
-        };
-#else
+#elif defined(Q_OS_LINUX)
         static const QList<BundledPluginSpec> specs{
             { QStringLiteral("libQvPlugin-BuiltinProtocolSupport.so"), QStringLiteral("qvplugin_builtin_protocol") },
             { QStringLiteral("libQvPlugin-BuiltinSubscriptionSupport.so"), QStringLiteral("builtin_subscription_support") },
         };
+#else
+        static const QList<BundledPluginSpec> specs{};
 #endif
         return specs;
     }
@@ -65,12 +62,11 @@ namespace Qv2ray::components::plugins::policy
         QStringList directories;
 #ifdef Q_OS_WIN
         directories << QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins")));
-#elif defined(Q_OS_MAC)
-        directories << QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../Resources/plugins")));
-#else
-        // Trust only locations tied to the installed application or root-managed
-        // system prefixes. User config, AppData/AppConfig and environment-provided
-        // resource paths are intentionally excluded.
+#elif defined(Q_OS_LINUX)
+        // Linux is retained only as an unsupported diagnostic build. Trust only
+        // locations tied to the installed application or root-managed system
+        // prefixes. User config and environment-provided resource paths are
+        // intentionally excluded.
         directories << QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins")));
         directories << QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../share/qv2ray/plugins")));
         directories << QStringLiteral("/usr/local/share/qv2ray/plugins");
