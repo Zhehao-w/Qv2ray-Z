@@ -35,12 +35,12 @@ void MainWindow::MWShowWindow()
     if (!property("modernLayoutDefaultsApplied").toBool())
     {
         setProperty("modernLayoutDefaultsApplied", true);
-        setMinimumSize(800, 600);
-        leftWidget->setMinimumWidth(270);
-        scrollArea->setMinimumWidth(420);
+        setMinimumSize(800, 640);
+        leftWidget->setMinimumWidth(265);
+        scrollArea->setMinimumWidth(400);
         if (width() >= 900 && width() <= 1024)
-            resize(940, qMax(height(), 660));
-        splitter->setSizes({ 285, qMax(width() - 305, 420) });
+            resize(850, qMax(height(), 720));
+        splitter->setSizes({ 280, qMax(width() - 300, 400) });
 
         // Diagnostics are useful in day-to-day operation, so expose them by
         // default while keeping the existing header toggles for manual collapse.

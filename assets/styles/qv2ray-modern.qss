@@ -424,7 +424,7 @@ QLabel#protocolLabel {
     color: #326f9f;
     background: #e7f0f7;
     border-radius: 5px;
-    padding: 2px 7px;
+    padding: 2px 7px 2px 0;
 }
 
 QLabel#groupCaptionLabel,
