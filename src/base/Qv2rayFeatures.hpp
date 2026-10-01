@@ -11,12 +11,7 @@
 #define QVFEATURE_kernel_set_permission         -1
 
 // UI Options
-#define QVFEATURE_ui_has_import_qrcode          -1
 #define QVFEATURE_ui_has_store_state            -1
-
-// Retired compatibility flags. Keep these explicit while legacy UI slots still
-// reference them so QV2RAY_FEATURE() never depends on an undefined identifier.
-#define QVFEATURE_util_has_ntp                   -1
 
 // clang-format on
 
