@@ -11,7 +11,6 @@ on:
       - "src/**"
       - "assets/**"
       - "3rdparty/**"
-      - "translations/**"
       - "libs/**"
       - "cmake/**"
       - "CMakeLists.txt"
@@ -124,6 +123,14 @@ jobs:
             $legacyPluginDlls = Get-ChildItem $legacyPluginDir -File -Filter 'QvPlugin-*.dll' -ErrorAction SilentlyContinue
             if ($legacyPluginDlls) {
               throw 'Deployment unexpectedly contains legacy Qv2ray native plugin DLLs.'
+            }
+          }
+
+          $legacyLanguageDir = Join-Path $deployment 'lang'
+          if (Test-Path $legacyLanguageDir) {
+            $legacyLanguageFiles = Get-ChildItem $legacyLanguageDir -File -Filter '*.qm' -ErrorAction SilentlyContinue
+            if ($legacyLanguageFiles) {
+              throw 'Deployment unexpectedly contains retired Qv2ray translation bundles.'
             }
           }
 
