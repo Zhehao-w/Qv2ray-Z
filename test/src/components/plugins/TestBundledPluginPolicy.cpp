@@ -59,8 +59,9 @@ TEST_CASE("Legacy and arbitrary plugin libraries are rejected by filename")
 
 TEST_CASE("Bundled component search paths exclude user configuration and environment resource paths")
 {
-    qputenv("QV2RAY_RESOURCES_PATH", QByteArray("/tmp/attacker-controlled-resources"));
-    const auto directories = BundledPluginDirectories(QStringLiteral("/opt/qv2ray/bin"));
+    qputenv("QV2RAY_RESOURCES_PATH", QByteArray("attacker-controlled-resources"));
+    const auto applicationDir = QDir::cleanPath(QDir::tempPath() + QStringLiteral("/qv2ray-policy-test/bin"));
+    const auto directories = BundledPluginDirectories(applicationDir);
 
     for (const auto &directory : directories)
     {
@@ -71,12 +72,12 @@ TEST_CASE("Bundled component search paths exclude user configuration and environ
     }
 
 #ifdef Q_OS_WIN
-    REQUIRE(directories == QStringList{ QDir::cleanPath(QStringLiteral("/opt/qv2ray/bin/plugins")) });
+    REQUIRE(directories == QStringList{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins"))) });
 #elif defined(Q_OS_MAC)
-    REQUIRE(directories == QStringList{ QDir::cleanPath(QStringLiteral("/opt/qv2ray/Resources/plugins")) });
+    REQUIRE(directories == QStringList{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../Resources/plugins"))) });
 #else
-    REQUIRE(directories.contains(QDir::cleanPath(QStringLiteral("/opt/qv2ray/bin/plugins"))));
-    REQUIRE(directories.contains(QDir::cleanPath(QStringLiteral("/opt/qv2ray/share/qv2ray/plugins"))));
+    REQUIRE(directories.contains(QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins")))));
+    REQUIRE(directories.contains(QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../share/qv2ray/plugins")))));
     REQUIRE(directories.contains(QStringLiteral("/usr/local/share/qv2ray/plugins")));
     REQUIRE(directories.contains(QStringLiteral("/usr/share/qv2ray/plugins")));
 #endif
