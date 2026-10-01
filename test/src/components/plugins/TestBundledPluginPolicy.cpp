@@ -57,28 +57,29 @@ TEST_CASE("Legacy and arbitrary plugin libraries are rejected by filename")
     REQUIRE_FALSE(BundledPluginIdentityMatches(specs[1].fileName, specs[0].internalName));
 }
 
-TEST_CASE("Bundled component search paths exclude user configuration and environment resource paths")
+TEST_CASE("Bundled component search paths use only trusted application and system locations")
 {
     qputenv("QV2RAY_RESOURCES_PATH", QByteArray("attacker-controlled-resources"));
     const auto applicationDir = QDir::cleanPath(QDir::tempPath() + QStringLiteral("/qv2ray-policy-test/bin"));
     const auto directories = BundledPluginDirectories(applicationDir);
 
-    for (const auto &directory : directories)
-    {
-        REQUIRE_FALSE(directory.contains(QStringLiteral("attacker-controlled-resources")));
-        REQUIRE_FALSE(directory.contains(QStringLiteral("AppData"), Qt::CaseInsensitive));
-        REQUIRE_FALSE(directory.contains(QStringLiteral("AppConfig"), Qt::CaseInsensitive));
-        REQUIRE_FALSE(directory.contains(QStringLiteral("plugin_settings"), Qt::CaseInsensitive));
-    }
-
+    // Compare the complete directory list rather than classifying paths by
+    // substrings. On Windows QDir::tempPath() normally lives below AppData,
+    // which is valid here because it is standing in for applicationDir.
 #ifdef Q_OS_WIN
-    REQUIRE(directories == QStringList{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins"))) });
+    const QStringList expected{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins"))) };
 #elif defined(Q_OS_MAC)
-    REQUIRE(directories == QStringList{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../Resources/plugins"))) });
+    const QStringList expected{ QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../Resources/plugins"))) };
 #else
-    REQUIRE(directories.contains(QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins")))));
-    REQUIRE(directories.contains(QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../share/qv2ray/plugins")))));
-    REQUIRE(directories.contains(QStringLiteral("/usr/local/share/qv2ray/plugins")));
-    REQUIRE(directories.contains(QStringLiteral("/usr/share/qv2ray/plugins")));
+    const QStringList expected{
+        QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("plugins"))),
+        QDir::cleanPath(QDir(applicationDir).absoluteFilePath(QStringLiteral("../share/qv2ray/plugins"))),
+        QStringLiteral("/usr/local/share/qv2ray/plugins"),
+        QStringLiteral("/usr/share/qv2ray/plugins"),
+    };
 #endif
+
+    REQUIRE(directories == expected);
+    for (const auto &directory : directories)
+        REQUIRE_FALSE(directory.contains(QStringLiteral("attacker-controlled-resources")));
 }
