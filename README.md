@@ -7,19 +7,23 @@
 
 Qv2ray-Z is a personal continuation of the discontinued [Qv2ray](https://github.com/Qv2ray/Qv2ray) desktop client, based on the upstream Qv2ray 2.7.0 codebase.
 
-The project is maintained primarily for personal Windows use, with a focus on keeping the original Qt desktop experience compatible with modern official Xray-core releases.
+The project is maintained as a Windows client, with a focus on keeping the original Qt desktop experience compatible with modern official Xray-core releases.
+
+## Supported platform
+
+Qv2ray-Z is maintained and supported for **Windows 10/11 x64** only.
+
+The authoritative build and regression environment is Qt 5.15.2 with MSVC 14.2. Linux builds and CI, where retained, are diagnostic only and are not supported for end users. macOS is deprecated and is no longer built or packaged.
 
 ## Current stable release
 
 **Qv2ray-Z v2.7.0-z2**
 
-Windows x64 is the primary supported and tested platform.
-
-Release packages include:
+Release packages target Windows x64 and include:
 
 - Qv2ray-Z
 - Qt runtime and required plugins
-- Current official Xray-core Windows x64 build
+- Verified official Xray-core Windows x64 build
 - `geoip.dat`
 - `geosite.dat`
 
@@ -73,13 +77,9 @@ Explicit custom routing rules retain higher priority.
 
 Advanced routing controls remain available when needed.
 
-## Private repository behavior
+## Release behavior
 
-This repository is maintained for personal use.
-
-The built-in GitHub release update checker is disabled by default because the repository and releases are private.
-
-Release builds are produced through GitHub Actions and downloaded manually from the private Releases page.
+This repository is maintained for personal use. Release artifacts are Windows x64 builds, and release packaging is kept separate from the diagnostic CI retained for unsupported platforms.
 
 ## Building
 
@@ -95,7 +95,7 @@ The exact build and packaging process is defined in:
 - `.github/workflows/windows-vless-vision-package.yml`
 - `.github/workflows/windows-release.yml`
 
-The Windows package automatically downloads and bundles the latest official stable Xray-core release available at build time.
+The Windows package downloads, verifies, and bundles the official Xray-core release defined by the repository's release inputs.
 
 ## Validation
 
@@ -106,11 +106,15 @@ The repository includes automated checks for:
 - REALITY ML-DSA-65 verification
 - VLESS share-link serialization
 - Current Xray-core configuration compatibility
-- Windows Qt 5.15.2 packaging
+- Windows Qt 5.15.2 application and regression tests
+- Windows packaging
+
+Linux regression runs are retained as manually triggered diagnostics only.
 
 See:
 
 - `.github/workflows/vless-vision-validation.yml`
+- `.github/workflows/data-safety-hardening.yml`
 - `.github/xray-fixtures/`
 - `test/`
 
