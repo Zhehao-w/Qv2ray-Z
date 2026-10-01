@@ -25,27 +25,26 @@ add_definitions(-DQV2RAY_VERSION_BUGFIX=${CPACK_PACKAGE_VERSION_PATCH})
 add_definitions(-DQV2RAY_VERSION_BUILD=${QV2RAY_BUILD_VERSION})
 add_definitions(-DQV2RAY_VERSION_STRING="${QV2RAY_VERSION_STRING}")
 
-# Tweaks and other defaults
-# Setting CMAKE to use loose block and search for find modules in source directory
 set(CMAKE_ALLOW_LOOSE_LOOP_CONSTRUCTS true)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if(MSVC)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-endif()
 
-if(ANDROID)
-    message("Android ABI: ${CMAKE_ANDROID_ARCH}")
-    message("Android SDK: ${ANDROID_SDK}")
-    include(cmake/platforms/android.cmake)
-    include(cmake/platforms/prefixes.cmake)
+# Qv2ray-Z is maintained as a Windows x64 / MSVC QWidget application. Linux
+# remains buildable only as a diagnostic target used by manual CI.
+if(ANDROID OR APPLE)
+    message(FATAL_ERROR "Qv2ray-Z supports Windows x64 only; Linux is retained only for diagnostic builds.")
 endif()
-
-option(USE_MINGW "Use MinGW on Windows" OFF)
 
 if(WIN32)
+    if(NOT MSVC)
+        message(FATAL_ERROR "Qv2ray-Z Windows builds require MSVC.")
+    endif()
+    if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "Qv2ray-Z Windows builds require x64.")
+    endif()
+
+    set(CMAKE_CXX_EXTENSIONS OFF)
     include(cmake/versioninfo/generate_product_version.cmake)
     generate_product_version(
         QV2RAY_RC
@@ -63,25 +62,14 @@ if(WIN32)
         FILE_DESCRIPTION   "Qv2ray-Z Main Application"
         )
     add_definitions(-DUNICODE -D_UNICODE -DNOMINMAX)
+    add_compile_options("/utf-8")
+    add_compile_options("/std:c++17")
+    add_definitions(-D_WIN32_WINNT=0x600 -D_SCL_SECURE_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS)
     set(GUI_TYPE WIN32)
-    if(USE_MINGW)
-        if(NOT DEFINED MinGW_ROOT)
-            set(MinGW_ROOT "C:/msys64/mingw64")
-        endif()
-        set(QV2RAY_PLATFORM_LIBS_BIN_PREFIX ${MinGW_ROOT}/bin)
-        set(QV2RAY_PLATFORM_LIBS_PREFIX ${MinGW_ROOT})
-        set(QV2RAY_PLATFORM_LIBS_NO_DEBUG_SUBDIR ON)
-    else()
-        add_compile_options("/utf-8")
-        add_compile_options("/std:c++17")
-        add_definitions(-D_WIN32_WINNT=0x600 -D_SCL_SECURE_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS)
-        if(CMAKE_CL_64)
-            set(QV2RAY_PLATFORM_LIBS_PREFIX ${CMAKE_SOURCE_DIR}/libs/x64-windows/)
-        else()
-            set(QV2RAY_PLATFORM_LIBS_PREFIX ${CMAKE_SOURCE_DIR}/libs/x86-windows/)
-        endif()
-    endif()
+    set(QV2RAY_PLATFORM_LIBS_PREFIX ${CMAKE_SOURCE_DIR}/libs/x64-windows/)
     include(cmake/platforms/prefixes.cmake)
+elseif(NOT (UNIX AND NOT APPLE))
+    message(FATAL_ERROR "Unsupported Qv2ray-Z build platform.")
 endif()
 
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.17.0")
@@ -114,87 +102,30 @@ QVLOG(QV2RAY_AUTO_DEPLOY)
 option(BUILD_TESTING "Build Tests" OFF)
 QVLOG(BUILD_TESTING)
 
-set(QV2RAY_DEFAULT_VASSETS_PATH "unset" CACHE STRING "Default V2Ray assets path")
+set(QV2RAY_DEFAULT_VASSETS_PATH "unset" CACHE STRING "Default Xray assets path")
 QVLOG(QV2RAY_DEFAULT_VASSETS_PATH)
-
-set(QV2RAY_DEFAULT_VCORE_PATH "unset" CACHE STRING "Default V2Ray core path")
+set(QV2RAY_DEFAULT_VCORE_PATH "unset" CACHE STRING "Default Xray core path")
 QVLOG(QV2RAY_DEFAULT_VCORE_PATH)
 
-option(QV2RAY_DISABLE_AUTO_UPDATE "Disable Update Checker" ON)
-QVLOG(QV2RAY_DISABLE_AUTO_UPDATE)
-
-option(QV2RAY_HAS_BUILTIN_PLUGINS "Build with builtin plugins" ON)
-QVLOG(QV2RAY_HAS_BUILTIN_PLUGINS)
-
 option(QV2RAY_EMBED_TRANSLATIONS "Embed Translations" OFF)
-option(QV2RAY_HAS_SINGLEAPPLICATION "Build With SingleApplication" ON)
-
-set(QV2RAY_UI_TYPE "QWidget" CACHE STRING "Qv2ray GUI Component")
-QVLOG(QV2RAY_UI_TYPE)
-
-option(QV2RAY_USE_V5_CORE "Use V5 Core" ON)
+option(QV2RAY_HAS_BUILTIN_THEMES "Build with built-in themes" ON)
+option(QV2RAY_USE_V5_CORE "Use current Xray/V2Ray v5 API layout" ON)
+QVLOG(QV2RAY_EMBED_TRANSLATIONS)
+QVLOG(QV2RAY_HAS_BUILTIN_THEMES)
 QVLOG(QV2RAY_USE_V5_CORE)
 
-option(QV2RAY_QT6 "Use Qt6" OFF)
+# Maintained frontend/tooling choices are fixed instead of exposing dead build
+# combinations (Android, QML, CLI, Qt6, MinGW, x86, external providers).
+set(QV2RAY_USE_QWIDGET ON)
+set(QV2RAY_SINGLEAPPLICATION_PROVIDER "module")
+set(QV2RAY_QNODEEDITOR_PROVIDER "module")
+set(QV_QT_MAJOR_VERSION 5)
+set(QV_QT_MINOR_VERSION 11)
+set(QV_QT_LIBNAME Qt5)
 
-if(QV2RAY_UI_TYPE STREQUAL "QWidget")
-    set(QV2RAY_USE_QWIDGET ON)
-    set(QV2RAY_USE_QML OFF)
-elseif(QV2RAY_UI_TYPE STREQUAL "QML")
-    set(QV2RAY_USE_QWIDGET OFF)
-    set(QV2RAY_USE_QML ON)
-elseif(QV2RAY_UI_TYPE STREQUAL "CLI")
-    set(QV2RAY_USE_QWIDGET OFF)
-    set(QV2RAY_USE_QML OFF)
-else()
-    message(FATAL_ERROR "The given QV2RAY_UI_TYPE: ${QV2RAY_UI_TYPE} is invalid, expected: QWidget, QML, CLI")
-endif()
-
-if(ANDROID)
-    set(QV2RAY_EMBED_TRANSLATIONS ON)
-    set(QV2RAY_USE_QML ON)
-    set(QV2RAY_USE_QWIDGET OFF)
-    set(QV2RAY_HAS_SINGLEAPPLICATION OFF)
-    set(QV2RAY_QT6 ON)
-    message("-- Use Qt6 for Android build.")
-endif()
-
-QVLOG(QV2RAY_EMBED_TRANSLATIONS)
-QVLOG(QV2RAY_USE_QML)
-QVLOG(QV2RAY_USE_QWIDGET)
-QVLOG(QV2RAY_HAS_SINGLEAPPLICATION)
-
-if(QV2RAY_HAS_SINGLEAPPLICATION)
-    set(QV2RAY_SINGLEAPPLICATION_PROVIDER "module" CACHE STRING "SingleApplication Provider")
-    QVLOG(QV2RAY_SINGLEAPPLICATION_PROVIDER)
-endif()
-
-if(QV2RAY_USE_QML)
-    set(QV2RAY_QT6 ON)
-    message("-- Use Qt6 for QML build.")
-    option(QV2RAY_QML_LIVE_UPDATE "Use QMLLive for live updated QML" OFF)
-    QVLOG(QV2RAY_QML_LIVE_UPDATE)
-elseif(QV2RAY_USE_QWIDGET)
-    option(QV2RAY_HAS_BUILTIN_THEMES "Build with built-in themes" ON)
-    set(QV2RAY_QNODEEDITOR_PROVIDER "module" CACHE STRING "QNodeEditor Provider")
-    QVLOG(QV2RAY_HAS_BUILTIN_THEMES)
-    QVLOG(QV2RAY_QNODEEDITOR_PROVIDER)
-endif()
-
-QVLOG(QV2RAY_QT6)
-
-if(QV2RAY_QT6)
-    cmake_policy(SET CMP0072 NEW)
-    set(QV_QT_MAJOR_VERSION 6)
-    set(QV_QT_MINOR_VERSION 0)
-    set(QV_QT_LIBNAME Qt6)
-    add_definitions(-DQV2RAY_QT6=1)
-else()
-    set(QV_QT_MAJOR_VERSION 5)
-    set(QV_QT_MINOR_VERSION 11)
-    set(QV_QT_LIBNAME Qt5)
-endif()
-
+# The in-app updater is retired in every maintained build. Keep the legacy
+# feature define so the existing Preferences UI cannot expose inert settings.
+add_definitions(-DDISABLE_AUTO_UPDATE)
 
 # ==================================================================================
 # Default Core/Assets Path
@@ -207,9 +138,9 @@ if(QV2RAY_DEFAULT_VASSETS_PATH AND NOT QV2RAY_DEFAULT_VASSETS_PATH STREQUAL "uns
 endif()
 
 # ==================================================================================
-# Embed Translations, Translation Search Path
+# Translations
 # ==================================================================================
-set(QV2RAY_TRANSLATION_PATH "unset" CACHE STRING "Qv2ray translations path")
+set(QV2RAY_TRANSLATION_PATH "unset" CACHE STRING "Default translation path")
 if(QV2RAY_TRANSLATION_PATH AND NOT QV2RAY_TRANSLATION_PATH STREQUAL "unset")
     add_definitions(-DQV2RAY_TRANSLATION_PATH="${QV2RAY_TRANSLATION_PATH}")
 endif()
@@ -220,14 +151,7 @@ if(QV2RAY_EMBED_TRANSLATIONS)
 endif()
 
 # ==================================================================================
-# Disable Auto Update
-# ==================================================================================
-if(QV2RAY_DISABLE_AUTO_UPDATE)
-    add_definitions(-DDISABLE_AUTO_UPDATE)
-endif()
-
-# ==================================================================================
-# Qv2ray Build Info
+# Build info
 # ==================================================================================
 if(QV2RAY_BUILD_INFO)
     set(_QV2RAY_BUILD_INFO_STR_ "${QV2RAY_BUILD_INFO}")
@@ -247,67 +171,40 @@ endif()
 
 set(QV2RAY_BUILD_INFO ${_QV2RAY_BUILD_INFO_STR_})
 set(QV2RAY_BUILD_EXTRA_INFO ${_QV2RAY_BUILD_EXTRA_INFO_STR_})
-
 add_definitions(-D_QV2RAY_BUILD_INFO_STR_="${_QV2RAY_BUILD_INFO_STR_}")
 add_definitions(-D_QV2RAY_BUILD_EXTRA_INFO_STR_="${_QV2RAY_BUILD_EXTRA_INFO_STR_}")
 message("Qv2ray Version: ${_QV2RAY_BUILD_INFO_STR_} - ${_QV2RAY_BUILD_EXTRA_INFO_STR_}")
 
 # ==================================================================================
-# 3rdparty Sources
+# Third-party and generated sources
 # ==================================================================================
 include(cmake/libuv.cmake)
 include(cmake/libcurl.cmake)
-include(cmake/libsemver.cmake)
 include(cmake/backend.cmake)
 include(3rdparty/QJsonStruct/QJsonStruct.cmake)
 
-# ==================================================================================
-# Qv2ray Base, Qt Libraries, Qv2ray GUI Libraries, libThreads
-# ==================================================================================
 find_package(Threads REQUIRED)
-find_package(${QV_QT_LIBNAME} ${QV_QT_MAJOR_VERSION}.${QV_QT_MINOR_VERSION} COMPONENTS Core Network REQUIRED)
-list(APPEND QV2RAY_QT_LIBS ${QV_QT_LIBNAME}::Core ${QV_QT_LIBNAME}::Network)
+find_package(Qt5 ${QV_QT_MAJOR_VERSION}.${QV_QT_MINOR_VERSION} COMPONENTS Core Network Widgets Svg Gui REQUIRED)
+list(APPEND QV2RAY_QT_LIBS Qt5::Core Qt5::Network Qt5::Widgets Qt5::Svg Qt5::Gui)
 
 cmake_policy(SET CMP0071 NEW)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-if(QV2RAY_USE_QML)
-    find_package(${QV_QT_LIBNAME} ${QV_QT_MAJOR_VERSION}.${QV_QT_MINOR_VERSION} COMPONENTS Qml Quick Widgets Svg QuickControls2 Gui REQUIRED)
-    list(APPEND QV2RAY_QT_LIBS
-        ${QV_QT_LIBNAME}::Quick
-        ${QV_QT_LIBNAME}::Qml
-        ${QV_QT_LIBNAME}::Widgets
-        ${QV_QT_LIBNAME}::Svg
-        ${QV_QT_LIBNAME}::QuickControls2
-        ${QV_QT_LIBNAME}::Gui)
-    set(_QV2RAY_HAS_GUI_INTERNAL_ ON)
-elseif(QV2RAY_USE_QWIDGET)
-    find_package(${QV_QT_LIBNAME} ${QV_QT_MAJOR_VERSION}.${QV_QT_MINOR_VERSION} COMPONENTS Widgets Svg Gui REQUIRED)
-    list(APPEND QV2RAY_QT_LIBS
-        ${QV_QT_LIBNAME}::Widgets
-        ${QV_QT_LIBNAME}::Svg
-        ${QV_QT_LIBNAME}::Gui)
-    set(_QV2RAY_HAS_GUI_INTERNAL_ ON)
-else()
-endif()
-
-# Qv2ray baselib sources
+# ==================================================================================
+# Base library
+# ==================================================================================
 include(cmake/components/qv2ray-base.cmake)
 include(src/plugin-interface/QvPluginInterface.cmake)
-
-if(QV2RAY_HAS_SINGLEAPPLICATION)
-    include(cmake/singleapplication.cmake)
-else()
-    add_definitions(-DQV2RAY_NO_SINGLEAPPLICATON)
-endif()
+include(src/plugin-interface/QvGUIPluginInterface.cmake)
+include(cmake/singleapplication.cmake)
 
 add_library(qv2ray_baselib STATIC
     ${QV2RAY_BASE_SOURCES}
     ${SINGLEAPPLICATION_SOURCES}
     ${QVPLUGIN_INTERFACE_HEADERS}
-    ${LIBSEMVER_SOURCES}
+    ${QVGUIPLUGIN_INTERFACE_HEADERS}
     ${PROTO_SRCS}
     ${PROTO_HDRS}
     ${API_GRPC_SRCS}
@@ -335,56 +232,33 @@ target_include_directories(qv2ray_baselib PUBLIC
     )
 
 if(QV2RAY_USE_V5_CORE)
-    message("-- Use V2Ray Core V5")
+    message("-- Use V2Ray/Xray Core V5 API layout")
     target_compile_definitions(qv2ray_baselib PUBLIC QV2RAY_USE_V5_CORE)
 endif()
 
+# First-party protocol and subscription implementations are linked into the
+# process. They no longer create or install native plugin DLLs.
+include(src/plugins/protocols/QvPlugin-BuiltinProtocolSupport.cmake)
+include(src/plugins/subscription-adapters/QvPlugin-BuiltinSubscriptionAdapters.cmake)
+
 # ==================================================================================
-# Qv2ray Builtin Plugins
+# QWidget frontend
 # ==================================================================================
-if(QV2RAY_HAS_BUILTIN_PLUGINS)
-    include(src/plugins/protocols/QvPlugin-BuiltinProtocolSupport.cmake)
-    include(src/plugins/subscription-adapters/QvPlugin-BuiltinSubscriptionAdapters.cmake)
-    #include(src/plugins/utils/QvPlugin-BuiltinUtils.cmake)
+add_definitions(-DQV2RAY_GUI -DQV2RAY_GUI_QWIDGETS)
+include(cmake/qrencode.cmake)
+include(cmake/components/qv2ray-ui.cmake)
+list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_COMMON_SOURCES})
+
+include(cmake/components/qv2ray-ui-widget.cmake)
+list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_WIDGET_SOURCES})
+
+if(QV2RAY_HAS_BUILTIN_THEMES)
+    include(3rdparty/uistyles/uistyles.cmake)
+    list(APPEND QV2RAY_QRC_RESOURCES ${UISTYLE_QRCS})
 endif()
+include(cmake/qnodeeditor.cmake)
+list(APPEND QV2RAY_QRC_RESOURCES ${QNODEEDITOR_QRC_RESOURCES})
 
-# ==================================================================================
-# Qv2ray UI Frontend
-# ==================================================================================
-if(_QV2RAY_HAS_GUI_INTERNAL_)
-    add_definitions(-DQV2RAY_GUI)
-    include(cmake/qrencode.cmake)
-
-    include(cmake/components/qv2ray-ui.cmake)
-    list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_COMMON_SOURCES})
-
-    include(src/plugin-interface/QvGUIPluginInterface.cmake)
-    list(APPEND QV2RAY_UI_SOURCES ${QVGUIPLUGIN_INTERFACE_HEADERS})
-
-    if(QV2RAY_USE_QML)
-        add_definitions(-DQV2RAY_GUI_QML)
-        include(cmake/components/qv2ray-ui-qml.cmake)
-        list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_QML_SOURCES})
-    elseif(QV2RAY_USE_QWIDGET)
-        add_definitions(-DQV2RAY_GUI_QWIDGETS)
-        include(cmake/components/qv2ray-ui-widget.cmake)
-        list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_UI_WIDGET_SOURCES})
-        #
-        if (QV2RAY_HAS_BUILTIN_THEMES)
-            include(3rdparty/uistyles/uistyles.cmake)
-            list(APPEND QV2RAY_QRC_RESOURCES ${UISTYLE_QRCS})
-        endif()
-        #
-        include(cmake/qnodeeditor.cmake)
-        list(APPEND QV2RAY_QRC_RESOURCES ${QNODEEDITOR_QRC_RESOURCES})
-    endif()
-else()
-    add_definitions(-DQV2RAY_CLI)
-    include(cmake/components/qv2ray-cli.cmake)
-    list(APPEND QV2RAY_UI_SOURCES ${QV2RAY_CLI_SOURCES})
-endif()
-
-# Platform Dependent Sources
 include(cmake/components/qv2ray-platform.cmake)
 include(cmake/translations.cmake)
 
@@ -405,22 +279,7 @@ set(QV2RAY_FULL_SOURCES
 
 QVLOG(QV2RAY_QM_FILES)
 QVLOG(QV2RAY_QRC_RESOURCES)
-
-if(QV2RAY_QT6)
-    qt6_add_executable(qv2ray ${GUI_TYPE} ${QV2RAY_FULL_SOURCES})
-    # For Qt5, Android
-    # add_library(qv2ray SHARED ${QV2RAY_FULL_SOURCES})
-else()
-    add_executable(qv2ray ${GUI_TYPE} ${QV2RAY_FULL_SOURCES})
-endif()
-
-# set_target_properties(MAIN PROPERTIES OUTPUT_NAME "qv2ray")
-
-if(ANDROID)
-    qvlog(ANDROID_EXTRA_LIBS)
-    set_property(TARGET qv2ray PROPERTY QT_ANDROID_EXTRA_LIBS ${ANDROID_EXTRA_LIBS})
-    set_property(TARGET qv2ray PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR ${CMAKE_SOURCE_DIR}/assets/android)
-endif()
+add_executable(qv2ray ${GUI_TYPE} ${QV2RAY_FULL_SOURCES})
 
 target_include_directories(qv2ray PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -437,29 +296,25 @@ target_link_libraries(qv2ray PUBLIC
     ${QV2RAY_QRENCODE_LIBRARY}
     )
 
-
 # ==================================================================================
-# Qv2ray Unit Tests
+# Unit tests
 # ==================================================================================
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     include(CTest)
     add_subdirectory(test)
 endif()
 
 # ==================================================================================
-# Platform-dependent installation process and deployment
+# Installation / diagnostic platform packaging
 # ==================================================================================
-if(APPLE)
-    include(cmake/platforms/macos.cmake)
-elseif(UNIX AND NOT APPLE AND NOT WIN32 AND NOT ANDROID)
+if(UNIX AND NOT APPLE AND NOT WIN32)
     include(cmake/platforms/linux.cmake)
 elseif(WIN32)
     include(cmake/platforms/windows.cmake)
 endif()
 
-
 # ==================================================================================
-# Print Qv2ray Build Statistics
+# Build statistics
 # ==================================================================================
 get_target_property(QV2RAY_BASE_LINK_LIBS qv2ray_baselib LINK_LIBRARIES)
 get_target_property(QV2RAY_EXEC_LINK_LIBS qv2ray LINK_LIBRARIES)

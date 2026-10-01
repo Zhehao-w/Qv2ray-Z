@@ -1,190 +1,158 @@
 #include "QvPluginHost.hpp"
 
-#include "BundledPluginPolicy.hpp"
 #include "base/Qv2rayBase.hpp"
 #include "base/Qv2rayLog.hpp"
 #include "core/settings/SettingsBackend.hpp"
+#include "plugins/protocols/BuiltinProtocolPlugin.hpp"
+#include "plugins/subscription-adapters/BuiltinSubscriptionAdapter.hpp"
 #include "utils/QvHelpers.hpp"
-
-#include <QFileInfo>
-#include <QPluginLoader>
 
 #define QV_MODULE_NAME "PluginHost"
 namespace Qv2ray::components::plugins
 {
-    using namespace policy;
+    namespace
+    {
+        constexpr auto ProtocolComponentName = "qvplugin_builtin_protocol";
+        constexpr auto SubscriptionComponentName = "builtin_subscription_support";
+    }
 
     QvPluginHost::QvPluginHost(QObject *parent) : QObject(parent)
     {
-        if (QvCoreApplication->StartupArguments.noPlugins)
-        {
-            LOG("The legacy --no-plugins option is deprecated and ignored; bundled components are required by Qv2ray-Z.");
-        }
         if (!GlobalConfig.pluginConfig.pluginStates.isEmpty())
-        {
             LOG("Legacy plugin enable-state configuration is ignored; external plugins are no longer supported.");
-        }
         if (auto dir = QDir(QV2RAY_PLUGIN_SETTINGS_DIR); !dir.exists())
-        {
             dir.mkpath(QV2RAY_PLUGIN_SETTINGS_DIR);
-        }
         initializePluginHost();
     }
 
     int QvPluginHost::refreshPluginList()
     {
         clearPlugins();
-        LOG("Loading bundled Qv2ray-Z components");
+        LOG("Registering built-in Qv2ray-Z components");
 
-        const auto pluginDirectories = BundledPluginDirectories(QCoreApplication::applicationDirPath());
-        for (const auto &spec : BundledPluginSpecs())
-        {
-            bool loaded = false;
-            for (const auto &pluginDirPath : pluginDirectories)
+        const auto registerComponent = [this](QObject *componentObject, Qv2rayInterface *componentInterface, const QString &expectedInternalName) {
+            if (componentObject == nullptr || componentInterface == nullptr)
+                return false;
+
+            componentObject->setParent(this);
+            QvPluginInfo info;
+            info.libraryPath = tr("Built into qv2ray.exe");
+            info.componentObject = componentObject;
+            info.pluginInterface = componentInterface;
+            info.metadata = componentInterface->GetMetadata();
+
+            if (info.metadata.InternalName != expectedInternalName)
             {
-                const auto pluginFullPath = QDir(pluginDirPath).absoluteFilePath(spec.fileName);
-                if (!QFileInfo(pluginFullPath).isFile())
-                    continue;
-
-                DEBUG("Loading bundled component: " + spec.fileName + " from: " + pluginDirPath);
-                QvPluginInfo info;
-                info.libraryPath = pluginFullPath;
-                info.pluginLoader = new QPluginLoader(pluginFullPath, this);
-
-                QObject *plugin = info.pluginLoader->instance();
-                if (plugin == nullptr)
-                {
-                    LOG("Failed to load bundled component " + spec.fileName + ": " + info.pluginLoader->errorString());
-                    info.pluginLoader->deleteLater();
-                    continue;
-                }
-
-                info.pluginInterface = qobject_cast<Qv2rayInterface *>(plugin);
-                if (info.pluginInterface == nullptr)
-                {
-                    LOG("Bundled component does not implement the Qv2ray plugin interface: " + spec.fileName);
-                    info.pluginLoader->unload();
-                    info.pluginLoader->deleteLater();
-                    continue;
-                }
-
-                if (info.pluginInterface->QvPluginInterfaceVersion != QV2RAY_PLUGIN_INTERFACE_VERSION)
-                {
-                    LOG("Bundled component has an incompatible interface version: " + spec.fileName);
-                    QvMessageBoxWarn(nullptr, tr("Cannot load bundled component"),
-                                     tr("A bundled Qv2ray-Z component was built against an incompatible interface version. Please reinstall Qv2ray-Z."));
-                    info.pluginLoader->unload();
-                    info.pluginLoader->deleteLater();
-                    continue;
-                }
-
-                info.metadata = info.pluginInterface->GetMetadata();
-                if (!BundledPluginIdentityMatches(spec.fileName, info.metadata.InternalName))
-                {
-                    LOG("Bundled component identity mismatch; refusing to load: " + spec.fileName);
-                    info.pluginLoader->unload();
-                    info.pluginLoader->deleteLater();
-                    continue;
-                }
-                if (plugins.contains(info.metadata.InternalName))
-                {
-                    LOG("Bundled component was already loaded: " + info.metadata.InternalName);
-                    info.pluginLoader->unload();
-                    info.pluginLoader->deleteLater();
-                    continue;
-                }
-
-                connect(plugin, SIGNAL(PluginLog(const QString &)), this, SLOT(QvPluginLog(const QString &)));
-                connect(plugin, SIGNAL(PluginErrorMessageBox(const QString &, const QString &)), this,
-                        SLOT(QvPluginMessageBox(const QString &, const QString &)));
-                LOG("Loaded bundled component: \"" + info.metadata.Name + "\"");
-                plugins.insert(info.metadata.InternalName, info);
-                loaded = true;
-                break;
+                LOG("Internal component identity mismatch: expected " + expectedInternalName + ", got " + info.metadata.InternalName);
+                delete componentObject;
+                return false;
+            }
+            if (plugins.contains(info.metadata.InternalName))
+            {
+                LOG("Internal component was already registered: " + info.metadata.InternalName);
+                delete componentObject;
+                return false;
             }
 
-            if (!loaded)
-                LOG("Bundled component not found or could not be loaded: " + spec.internalName);
-        }
+            connect(componentObject, SIGNAL(PluginLog(const QString &)), this, SLOT(QvPluginLog(const QString &)));
+            connect(componentObject, SIGNAL(PluginErrorMessageBox(const QString &, const QString &)), this,
+                    SLOT(QvPluginMessageBox(const QString &, const QString &)));
+            LOG("Registered internal component: \"" + info.metadata.Name + "\"");
+            plugins.insert(info.metadata.InternalName, info);
+            return true;
+        };
+
+        auto protocolComponent = new InternalProtocolSupportPlugin();
+        registerComponent(protocolComponent, static_cast<Qv2rayInterface *>(protocolComponent), ProtocolComponentName);
+
+        auto subscriptionComponent = new InternalSubscriptionSupportPlugin();
+        registerComponent(subscriptionComponent, static_cast<Qv2rayInterface *>(subscriptionComponent), SubscriptionComponentName);
+
         return plugins.count();
     }
 
     void QvPluginHost::QvPluginLog(const QString &log)
     {
-        auto _sender = sender();
-        if (auto _interface = qobject_cast<Qv2rayInterface *>(_sender); _interface)
+        const auto source = sender();
+        for (const auto &plugin : plugins)
         {
-            LOG(_interface->GetMetadata().InternalName, log);
+            if (plugin.componentObject == source)
+            {
+                LOG(plugin.metadata.InternalName, log);
+                return;
+            }
         }
-        else
-        {
-            LOG("UNKNOWN CLIENT: " + log);
-        }
+        LOG("UNKNOWN INTERNAL COMPONENT: " + log);
     }
 
     void QvPluginHost::QvPluginMessageBox(const QString &title, const QString &message)
     {
-        const auto _sender = sender();
-        const auto _interface = qobject_cast<Qv2rayInterface *>(_sender);
-        if (_interface)
-            QvMessageBoxWarn(nullptr, _interface->GetMetadata().Name + " - " + title, message);
-        else
-            QvMessageBoxWarn(nullptr, "Unknown Plugin - " + title, message);
+        const auto source = sender();
+        for (const auto &plugin : plugins)
+        {
+            if (plugin.componentObject == source)
+            {
+                QvMessageBoxWarn(nullptr, plugin.metadata.Name + " - " + title, message);
+                return;
+            }
+        }
+        QvMessageBoxWarn(nullptr, "Unknown Internal Component - " + title, message);
     }
 
     bool QvPluginHost::GetPluginEnabled(const QString &internalName) const
     {
-        return IsBundledPluginInternalName(internalName);
+        return plugins.contains(internalName);
     }
 
     void QvPluginHost::SetPluginEnabled(const QString &internalName, bool isEnabled)
     {
         Q_UNUSED(isEnabled)
-        if (IsBundledPluginInternalName(internalName))
-            LOG("Bundled component enable state is fixed; ignoring state change for: " + internalName);
+        if (plugins.contains(internalName))
+            LOG("Internal component enable state is fixed; ignoring state change for: " + internalName);
         else
-            LOG("External plugin state change ignored because external plugins are no longer supported: " + internalName);
+            LOG("Unknown component state change ignored: " + internalName);
     }
 
     void QvPluginHost::initializePluginHost()
     {
         refreshPluginList();
         for (const auto &plugin : plugins.keys())
-        {
             initializePlugin(plugin);
-        }
     }
 
     void QvPluginHost::clearPlugins()
     {
-        for (auto &&plugin : plugins)
+        const auto names = plugins.keys();
+        for (const auto &name : names)
         {
-            DEBUG("Unloading bundled component: \"" + plugin.metadata.Name + "\"");
-            plugin.pluginLoader->unload();
-            plugin.pluginLoader->deleteLater();
+            auto &plugin = plugins[name];
+            DEBUG("Destroying internal component: \"" + plugin.metadata.Name + "\"");
+            delete plugin.componentObject;
+            plugin.componentObject = nullptr;
+            plugin.pluginInterface = nullptr;
         }
         plugins.clear();
     }
 
     bool QvPluginHost::initializePlugin(const QString &internalName)
     {
-        if (!plugins.contains(internalName) || !IsBundledPluginInternalName(internalName))
+        if (!plugins.contains(internalName))
         {
-            LOG("Refusing to initialize a non-bundled plugin: " + internalName);
+            LOG("Refusing to initialize an unknown internal component: " + internalName);
             return false;
         }
 
         auto &plugin = plugins[internalName];
         if (plugin.isLoaded)
         {
-            LOG("The bundled component \"" + internalName + "\" has already been initialized.");
+            LOG("The internal component \"" + internalName + "\" has already been initialized.");
             return true;
         }
 
         const auto conf = JsonFromString(StringFromFile(QV2RAY_PLUGIN_SETTINGS_DIR + internalName + ".conf"));
         if (!plugin.pluginInterface->InitializePlugin(QV2RAY_PLUGIN_SETTINGS_DIR + internalName + "/", conf))
         {
-            LOG("Bundled component initialization failed: " + internalName);
+            LOG("Internal component initialization failed: " + internalName);
             return false;
         }
         plugin.isLoaded = true;
@@ -197,7 +165,7 @@ namespace Qv2ray::components::plugins
         {
             if (plugins[name].isLoaded)
             {
-                LOG("Saving bundled component settings for: \"" + name + "\"");
+                LOG("Saving internal component settings for: \"" + name + "\"");
                 auto &conf = plugins[name].pluginInterface->GetSettngs();
                 StringToFile(JsonToString(conf), QV2RAY_PLUGIN_SETTINGS_DIR + name + ".conf");
             }
@@ -260,14 +228,12 @@ namespace Qv2ray::components::plugins
                 auto serializer = plugin.pluginInterface->GetOutboundHandler();
                 bool thisPluginCanHandle = false;
                 for (const auto &prefix : serializer->SupportedLinkPrefixes())
-                {
                     thisPluginCanHandle = thisPluginCanHandle || sharelink.startsWith(prefix);
-                }
                 if (thisPluginCanHandle)
                 {
-                    auto opt = plugin.pluginLoader->instance()->property(QV2RAY_PLUGIN_INTERNAL_PROPERTY_KEY).value<Qv2rayPluginOption>();
+                    auto opt = plugin.componentObject->property(QV2RAY_PLUGIN_INTERNAL_PROPERTY_KEY).value<Qv2rayPluginOption>();
                     opt[OPTION_SET_TLS_DISABLE_SYSTEM_CERTS] = GlobalConfig.advancedConfig.disableSystemRoot;
-                    plugin.pluginLoader->instance()->setProperty(QV2RAY_PLUGIN_INTERNAL_PROPERTY_KEY, QVariant::fromValue(opt));
+                    plugin.componentObject->setProperty(QV2RAY_PLUGIN_INTERNAL_PROPERTY_KEY, QVariant::fromValue(opt));
                     const auto &[protocol, outboundSettings] = serializer->DeserializeOutbound(sharelink, aliasPrefix, errMessage);
                     if (errMessage->isEmpty())
                     {
@@ -308,9 +274,7 @@ namespace Qv2ray::components::plugins
             {
                 auto serializer = plugin.pluginInterface->GetOutboundHandler();
                 if (serializer && serializer->SupportedProtocols().contains(protocol))
-                {
                     serializer->SetOutboundInfo(protocol, info, o);
-                }
             }
         }
     }

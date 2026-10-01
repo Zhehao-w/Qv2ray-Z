@@ -1,9 +1,8 @@
 #pragma once
 
-#include "QvPluginInterface.hpp"
+#include "plugin-interface/QvPluginInterface.hpp"
 
 #include <QObject>
-#include <QtPlugin>
 
 using namespace Qv2rayPlugin;
 
@@ -11,12 +10,9 @@ class InternalProtocolSupportPlugin
     : public QObject
     , public Qv2rayInterface
 {
-    Q_INTERFACES(Qv2rayPlugin::Qv2rayInterface)
-    Q_PLUGIN_METADATA(IID Qv2rayInterface_IID)
     Q_OBJECT
   public:
-    //
-    // Basic metainfo of this plugin
+    // Compile-time metadata retained for the internal component registry.
     const QvPluginMetadata GetMetadata() const override
     {
         return { "Builtin Protocol Support",                                                  //

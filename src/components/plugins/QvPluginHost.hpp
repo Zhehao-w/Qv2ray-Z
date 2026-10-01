@@ -6,8 +6,6 @@
 #include <QObject>
 #include <memory>
 
-class QPluginLoader;
-
 using namespace Qv2rayPlugin;
 namespace Qv2ray::components::plugins
 {
@@ -17,8 +15,8 @@ namespace Qv2ray::components::plugins
         bool isLoaded = false;
         QString libraryPath;
         QvPluginMetadata metadata;
-        QPluginLoader *pluginLoader;
-        Qv2rayInterface *pluginInterface;
+        QObject *componentObject = nullptr;
+        Qv2rayInterface *pluginInterface = nullptr;
         bool hasComponent(PluginComponentType t)
         {
             return metadata.Components.contains(t);
@@ -86,7 +84,7 @@ namespace Qv2ray::components::plugins
         bool initializePlugin(const QString &internalName);
         void clearPlugins();
 
-        // Internal name, plugin info
+        // Internal name -> first-party in-process component info.
         QHash<QString, QvPluginInfo> plugins;
     };
 

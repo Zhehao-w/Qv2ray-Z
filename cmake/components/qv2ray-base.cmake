@@ -47,9 +47,6 @@ set(QV2RAY_BASE_SOURCES
     ${QV2RAY_BASEDIR_COMPONENTS}/latency/unix/ICMPPing.cpp
     ${QV2RAY_BASEDIR_COMPONENTS}/latency/unix/ICMPPing.hpp
     #
-    ${QV2RAY_BASEDIR_COMPONENTS}/ntp/QvNTPClient.cpp
-    ${QV2RAY_BASEDIR_COMPONENTS}/ntp/QvNTPClient.hpp
-    #
     ${QV2RAY_BASEDIR_COMPONENTS}/plugins/QvPluginHost.cpp
     ${QV2RAY_BASEDIR_COMPONENTS}/plugins/QvPluginHost.hpp
     #
@@ -61,9 +58,6 @@ set(QV2RAY_BASE_SOURCES
     #
     ${QV2RAY_BASEDIR_COMPONENTS}/route/RouteSchemeIO.cpp
     ${QV2RAY_BASEDIR_COMPONENTS}/route/RouteSchemeIO.hpp
-    #
-    ${QV2RAY_BASEDIR_COMPONENTS}/update/UpdateChecker.cpp
-    ${QV2RAY_BASEDIR_COMPONENTS}/update/UpdateChecker.hpp
     #
     ${QV2RAY_BASEDIR_CORE}/connection/ConnectionIO.cpp
     ${QV2RAY_BASEDIR_CORE}/connection/ConnectionIO.hpp

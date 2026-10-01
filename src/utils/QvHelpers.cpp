@@ -1,6 +1,5 @@
 #include "QvHelpers.hpp"
 
-#include "3rdparty/puresource/src/PureJson.hpp"
 #include "base/Qv2rayBase.hpp"
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -8,6 +7,66 @@
 #endif
 
 #define QV_MODULE_NAME "Utils"
+
+namespace
+{
+    QString RemoveJsonComments(const QString &source)
+    {
+        QString result;
+        result.reserve(source.size());
+
+        bool inBlockComment = false;
+        bool inString = false;
+        bool escaped = false;
+
+        for (qsizetype i = 0; i < source.size(); ++i)
+        {
+            const auto current = source.at(i);
+            const auto next = (i + 1 < source.size()) ? source.at(i + 1) : QChar{};
+
+            if (inBlockComment)
+            {
+                if (current == '*' && next == '/')
+                {
+                    inBlockComment = false;
+                    ++i;
+                }
+                else if (current == '\r' || current == '\n')
+                {
+                    result.append(current);
+                }
+                continue;
+            }
+
+            if (!inString && current == '/' && next == '/')
+            {
+                while (i < source.size() && source.at(i) != '\r' && source.at(i) != '\n')
+                    ++i;
+                if (i < source.size())
+                    result.append(source.at(i));
+                continue;
+            }
+
+            if (!inString && current == '/' && next == '*')
+            {
+                inBlockComment = true;
+                ++i;
+                continue;
+            }
+
+            result.append(current);
+            if (current == '"' && !escaped)
+                inString = !inString;
+
+            if (inString && current == '\\' && !escaped)
+                escaped = true;
+            else
+                escaped = false;
+        }
+
+        return result;
+    }
+} // namespace
 
 namespace Qv2ray::common
 {
@@ -149,7 +208,7 @@ namespace Qv2ray::common
 
     QJsonObject JsonFromString(const QString &string)
     {
-        auto removeComment = RemoveComment(string.trimmed()).trimmed();
+        auto removeComment = RemoveJsonComments(string.trimmed()).trimmed();
         if (removeComment != string.trimmed())
         {
             LOG("Some comments have been removed from the json.");

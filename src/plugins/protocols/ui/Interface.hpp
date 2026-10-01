@@ -61,6 +61,6 @@ class ProtocolGUIInterface : public PluginGUIInterface
     }
     QIcon Icon() const override
     {
-        return QIcon(":/assets/qv2ray.png");
+        return QIcon(":/assets/icons/qv2ray.png");
     }
 };
