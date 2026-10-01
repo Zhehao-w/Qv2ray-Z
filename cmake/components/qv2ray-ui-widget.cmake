@@ -21,7 +21,6 @@ set(_QV2RAY_UI_FORMS
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_MainWindow.ui
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PreferencesWindow.ui
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PluginManager.ui
-    ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_ScreenShot_Core.ui
     #
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/widgets/complex/ChainEditorWidget.ui
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/widgets/complex/RoutingEditorWidget.ui
@@ -66,7 +65,6 @@ set(_QV2RAY_UI_SOURCES
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/common/WidgetUIBase.hpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/common/QJsonModel.hpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/common/QJsonModel.cpp
-    ${QV2RAY_QWIDGETS_UI_BASEDIR}/styles/StyleManager.cpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/styles/StyleManager.cpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/styles/StyleManager.hpp
     # Models
@@ -116,8 +114,6 @@ set(_QV2RAY_UI_SOURCES
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PreferencesWindow.cpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PluginManager.hpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PluginManager.cpp
-    ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_ScreenShot_Core.hpp
-    ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_ScreenShot_Core.cpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_GroupManager.hpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_GroupManager.cpp
     )
