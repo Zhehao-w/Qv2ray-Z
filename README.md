@@ -85,18 +85,19 @@ Explicit custom routing rules keep higher priority, and advanced routing control
 
 ## Releases
 
-Windows releases are produced from versioned Git tags.
+Windows releases are produced from standard semantic-version Git tags.
 
 A release tag must use the form:
 
 ```text
-v<major>.<minor>.<patch>-z<number>
+v<major>.<minor>.<patch>
 ```
+
+The GitHub Release is named `Qv2ray-Z v<major>.<minor>.<patch>`.
 
 Before tagging, the source version and release notes must already exist in `dev`:
 
 - `makespec/VERSION`
-- `makespec/VERSIONSUFFIX`
 - `docs/release-notes/<version>.md`
 
 A typical Codespaces release flow is:
@@ -104,14 +105,14 @@ A typical Codespaces release flow is:
 ```bash
 git switch dev
 git pull --ff-only
-git tag -a v2.7.0-z3 -m "Qv2ray-Z v2.7.0-z3"
-git push origin v2.7.0-z3
+git tag -a v2.7.0 -m "Qv2ray-Z v2.7.0"
+git push origin v2.7.0
 ```
 
 Pushing the tag automatically starts `.github/workflows/windows-release.yml`. The workflow verifies that:
 
 - the tag format is valid
-- the tag version matches the source version
+- the tag version matches `makespec/VERSION`
 - matching release notes exist
 - the tagged commit belongs to `dev` history
 - the Windows package builds successfully
@@ -120,6 +121,8 @@ Pushing the tag automatically starts `.github/workflows/windows-release.yml`. Th
 - packaged Qv2ray-Z and Xray binaries pass smoke checks
 
 If validation succeeds, GitHub Actions creates the versioned ZIP, writes its SHA256 checksum, and publishes the GitHub Release automatically.
+
+Historical `v2.7.0-z1` and `v2.7.0-z2` tags remain available, but new Qv2ray-Z releases use standard `vX.Y.Z` tags.
 
 ## Release contents
 
