@@ -1,5 +1,6 @@
 #include "w_PreferencesWindow.hpp"
 
+#include "components/ntp/QvNTPClient.hpp"
 #include "components/translations/QvTranslator.hpp"
 #include "core/connection/ConnectionIO.hpp"
 #include "core/handler/ConfigHandler.hpp"
@@ -122,7 +123,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
         //
         httpAuthUsernameTxt->setEnabled(has_http && httpSettings.useAuth);
         httpAuthPasswordTxt->setEnabled(has_http && httpSettings.useAuth);
-        //
         httpAuthUsernameTxt->setText(httpSettings.account.user);
         httpAuthPasswordTxt->setText(httpSettings.account.pass);
         //
@@ -164,7 +164,7 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
         socksOverrideTLSCB->setChecked(socksSettings.destOverride.contains("tls"));
         socksOverrideFakeDNSCB->setChecked(socksSettings.destOverride.contains("fakedns"));
         socksOverrideFakeDNSOthersCB->setChecked(socksSettings.destOverride.contains("fakedns+others"));
-        socksSniffingMetadataOnlyCB->setChecked(socksSettings.metadataOnly);
+        socksSniffingMetadataOnly->setChecked(socksSettings.metadataOnly);
     }
     {
         const auto &tProxySettings = CurrentConfig.inboundConfig.tProxySettings;
@@ -306,228 +306,884 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     }
     //
     {
-        if (CurrentConfig.autoStartId >= 0 && CurrentConfig.autoStartId < ConnectionManager->connections.count())
-            autoStartConnCombo->setCurrentText(ConnectionManager->connections[CurrentConfig.autoStartId].name);
-        else
-            CurrentConfig.autoStartId = AUTO_CONNECTION_ID_NONE;
+        dnsSettingsWidget = new DnsSettingsWidget(this);
+        dnsSettingsWidget->SetDNSObject(CurrentConfig.defaultRouteConfig.dnsConfig, CurrentConfig.defaultRouteConfig.fakeDNSConfig);
+        dnsSettingsLayout->addWidget(dnsSettingsWidget);
+        //
+        routeSettingsWidget = new RouteSettingsMatrixWidget(CurrentConfig.kernelConfig.AssetsPath(), this);
+        routeSettingsWidget->SetRouteConfig(CurrentConfig.defaultRouteConfig.routeConfig);
+        advRouteSettingsLayout->addWidget(routeSettingsWidget);
     }
     //
+#ifdef DISABLE_AUTO_UPDATE
+    updateSettingsGroupBox->setEnabled(false);
+    updateSettingsGroupBox->setToolTip(tr("Update is disabled by your vendor."));
+#endif
+    //
+    updateChannelCombo->setCurrentIndex(CurrentConfig.updateConfig.updateChannel);
+    cancelIgnoreVersionBtn->setEnabled(!CurrentConfig.updateConfig.ignoredVersion.isEmpty());
+    ignoredNextVersion->setText(CurrentConfig.updateConfig.ignoredVersion);
+    //
+    //
     {
-        if (!GlobalConfig.subscriptions.isEmpty())
+        noAutoConnectRB->setChecked(CurrentConfig.autoStartBehavior == AUTO_CONNECTION_NONE);
+        lastConnectedRB->setChecked(CurrentConfig.autoStartBehavior == AUTO_CONNECTION_LAST_CONNECTED);
+        fixedAutoConnectRB->setChecked(CurrentConfig.autoStartBehavior == AUTO_CONNECTION_FIXED);
+        //
+        SET_AUTOSTART_UI_ENABLED(CurrentConfig.autoStartBehavior == AUTO_CONNECTION_FIXED);
+        //
+        if (CurrentConfig.autoStartId.isEmpty())
         {
-            autoStartSubsCombo->addItem(tr("None"));
-            autoStartSubsCombo->addItems(GlobalConfig.subscriptions.values());
+            CurrentConfig.autoStartId.groupId = DefaultGroupId;
+        }
+        //
+        const auto &autoStartConnId = CurrentConfig.autoStartId.connectionId;
+        const auto &autoStartGroupId = CurrentConfig.autoStartId.groupId;
+        //
+        for (const auto &group : ConnectionManager->AllGroups()) //
+            autoStartSubsCombo->addItem(GetDisplayName(group), group.toString());
+
+        autoStartSubsCombo->setCurrentText(GetDisplayName(autoStartGroupId));
+
+        for (const auto &conn : ConnectionManager->GetConnections(autoStartGroupId))
+            autoStartConnCombo->addItem(GetDisplayName(conn), conn.toString());
+
+        autoStartConnCombo->setCurrentText(GetDisplayName(autoStartConnId));
+    }
+    // FP Settings
+    if (CurrentConfig.defaultRouteConfig.forwardProxyConfig.type.trimmed().isEmpty())
+    {
+        CurrentConfig.defaultRouteConfig.forwardProxyConfig.type = "http";
+    }
+
+    fpGroupBox->setChecked(CurrentConfig.defaultRouteConfig.forwardProxyConfig.enableForwardProxy);
+    fpUsernameTx->setText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.username);
+    fpPasswordTx->setText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.password);
+    fpAddressTx->setText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.serverAddress);
+    fpTypeCombo->setCurrentText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.type);
+    fpPortSB->setValue(CurrentConfig.defaultRouteConfig.forwardProxyConfig.port);
+    fpUseAuthCB->setChecked(CurrentConfig.defaultRouteConfig.forwardProxyConfig.useAuth);
+    fpUsernameTx->setEnabled(fpUseAuthCB->isChecked());
+    fpPasswordTx->setEnabled(fpUseAuthCB->isChecked());
+    //
+    maxLogLinesSB->setValue(CurrentConfig.uiConfig.maximumLogLines);
+    jumpListCountSB->setValue(CurrentConfig.uiConfig.maxJumpListCount);
+    //
+    setSysProxyCB->setChecked(CurrentConfig.inboundConfig.systemProxySettings.setSystemProxy);
+    //
+    finishedLoading = true;
+}
+
+QvMessageBusSlotImpl(PreferencesWindow)
+{
+    switch (msg)
+    {
+        MBShowDefaultImpl;
+        MBHideDefaultImpl;
+        MBRetranslateDefaultImpl;
+        case UPDATE_COLORSCHEME: break;
+    }
+}
+
+PreferencesWindow::~PreferencesWindow(){};
+
+std::optional<QString> PreferencesWindow::checkTProxySettings() const
+{
+    if (CurrentConfig.inboundConfig.useTPROXY)
+    {
+        if (!IsIPv4Address(CurrentConfig.inboundConfig.tProxySettings.tProxyIP))
+        {
+            return tr("Invalid tproxy listening ipv4 address.");
+        }
+        else if (CurrentConfig.inboundConfig.tProxySettings.tProxyV6IP != "" && !IsIPv6Address(CurrentConfig.inboundConfig.tProxySettings.tProxyV6IP))
+        {
+            return tr("Invalid tproxy listening ipv6 address.");
         }
     }
-    switch (CurrentConfig.autoStartBehavior)
-    {
-        case AUTO_CONNECTION_NONE:
-            noAutoConnectRB->setChecked(true);
-            break;
-        case AUTO_CONNECTION_FIXED:
-            autoConnectRB->setChecked(true);
-            break;
-        case AUTO_CONNECTION_LAST_CONNECTED:
-            autoLastConnectedRB->setChecked(true);
-            break;
-    }
-    SET_AUTOSTART_UI_ENABLED(CurrentConfig.autoStartBehavior == AUTO_CONNECTION_FIXED)
+    return std::nullopt;
+}
 
-    //
-    // System Proxy Settings
+void PreferencesWindow::on_buttonBox_accepted()
+{
+    // Note:
+    // A signal-slot connection from buttonbox_accpted to QDialog::accepted()
+    // has been removed. To prevent closing this Dialog.
+    QSet<int> ports;
+    auto size = 0;
+
+    if (CurrentConfig.inboundConfig.useHTTP)
     {
-        systemProxyTypeComboBox->addItem(tr("Automatic (PAC)"), Qv2rayConfig_SystemProxy::PAC_PROXY);
-        systemProxyTypeComboBox->addItem(tr("Global"), Qv2rayConfig_SystemProxy::GLOBAL_PROXY);
-        const auto &systemProxySettings = CurrentConfig.inboundConfig.systemProxySettings;
-        systemProxyTypeComboBox->setCurrentIndex(systemProxyTypeComboBox->findData(systemProxySettings.proxyType));
+        size++;
+        ports << CurrentConfig.inboundConfig.httpSettings.port;
     }
 
-    //
-    // Quiet mode
-    //
-    // Tabs
-    // Removed legacy General settings that map to deprecated/obsolete Xray behavior.
-    // Keep Networking, Inbound, Kernel, Connections, Subscription, Advanced and About.
-    while (tabWidget->count() > 0)
+    if (CurrentConfig.inboundConfig.useSocks)
     {
-        bool removed = false;
-        for (int i = 0; i < tabWidget->count(); ++i)
+        size++;
+        ports << CurrentConfig.inboundConfig.socksSettings.port;
+    }
+
+    if (CurrentConfig.inboundConfig.useTPROXY)
+    {
+        size++;
+        ports << CurrentConfig.inboundConfig.tProxySettings.port;
+    }
+
+    if (!QvCoreApplication->StartupArguments.noAPI)
+    {
+        size++;
+        ports << CurrentConfig.kernelConfig.statsPort;
+    }
+
+    if (ports.size() != size)
+    {
+        // Duplicates detected.
+        QvMessageBoxWarn(this, tr("Preferences"), tr("Duplicated port numbers detected, please check the port number settings."));
+    }
+    else if (!IsValidIPAddress(CurrentConfig.inboundConfig.listenip))
+    {
+        QvMessageBoxWarn(this, tr("Preferences"), tr("Invalid inbound listening address."));
+    }
+    else if (const auto err = checkTProxySettings(); err.has_value())
+    {
+        QvMessageBoxWarn(this, tr("Preferences"), *err);
+    }
+    else if (!dnsSettingsWidget->CheckIsValidDNS())
+    {
+        QvMessageBoxWarn(this, tr("Preferences"), tr("Invalid DNS settings."));
+    }
+    else
+    {
+        if (CurrentConfig.uiConfig.language != GlobalConfig.uiConfig.language)
         {
-            const auto label = tabWidget->tabText(i).toLower();
-            if (label.contains("general") || label.contains("通用") || label.contains("一般") || label.contains("общ"))
+            // Install translator
+            if (Qv2rayTranslator->InstallTranslation(CurrentConfig.uiConfig.language))
             {
-                tabWidget->removeTab(i);
-                removed = true;
-                break;
+                UIMessageBus.EmitGlobalSignal(QvMBMessage::RETRANSLATE);
+                QApplication::processEvents();
             }
         }
-        if (!removed)
-            break;
+        CurrentConfig.defaultRouteConfig.routeConfig = routeSettingsWidget->GetRouteConfig();
+        if (!(CurrentConfig.defaultRouteConfig.routeConfig == GlobalConfig.defaultRouteConfig.routeConfig))
+        {
+            NEEDRESTART
+        }
+        const auto &[dns, fakedns] = dnsSettingsWidget->GetDNSObject();
+        CurrentConfig.defaultRouteConfig.dnsConfig = dns;
+        CurrentConfig.defaultRouteConfig.fakeDNSConfig = fakedns;
+        if (!(CurrentConfig.defaultRouteConfig.dnsConfig == GlobalConfig.defaultRouteConfig.dnsConfig))
+        {
+            NEEDRESTART
+        }
+        //
+        //
+        if (CurrentConfig.uiConfig.theme != GlobalConfig.uiConfig.theme)
+        {
+            StyleManager->ApplyStyle(CurrentConfig.uiConfig.theme);
+        }
+        GlobalConfig.loadJson(CurrentConfig.toJson());
+        SaveGlobalSettings();
+        UIMessageBus.EmitGlobalSignal(QvMBMessage::UPDATE_COLORSCHEME);
+        if (NeedRestart && !KernelInstance->CurrentConnection().isEmpty())
+        {
+            const auto message = tr("You may need to reconnect to apply the settings now.") + NEWLINE +              //
+                                 tr("Otherwise they will be applied next time you connect to a server.") + NEWLINE + //
+                                 NEWLINE +                                                                           //
+                                 tr("Do you want to reconnect now?");
+            const auto askResult = QvMessageBoxAsk(this, tr("Reconnect Required"), message);
+            if (askResult == Yes)
+            {
+                ConnectionManager->RestartConnection();
+                this->setEnabled(false);
+            }
+        }
+        accept();
     }
-    //
-    UpdateColorScheme();
 }
 
-void PreferencesWindow::UpdateColorScheme()
-{
-    textBrowser->setStyleSheet("QTextBrowser{background-color: rgba(0,0,0,0)}");
-}
-
-PreferencesWindow::~PreferencesWindow()
-{
-}
-
-void PreferencesWindow::SaveCurrentConfig()
-{
-    // Inbound Settings
-    {
-        CurrentConfig.inboundConfig.listenip = listenIPTxt->text();
-        CurrentConfig.inboundConfig.httpSettings.port = httpPortLE->value();
-        CurrentConfig.inboundConfig.httpSettings.useAuth = httpAuthCB->isChecked();
-        CurrentConfig.inboundConfig.httpSettings.account.user = httpAuthUsernameTxt->text();
-        CurrentConfig.inboundConfig.httpSettings.account.pass = httpAuthPasswordTxt->text();
-        //
-        CurrentConfig.inboundConfig.httpSettings.sniffing = httpSniffingCB->isChecked();
-        CurrentConfig.inboundConfig.httpSettings.destOverride.clear();
-        if (httpOverrideHTTPCB->isChecked())
-            CurrentConfig.inboundConfig.httpSettings.destOverride << "http";
-        if (httpOverrideTLSCB->isChecked())
-            CurrentConfig.inboundConfig.httpSettings.destOverride << "tls";
-        if (httpOverrideFakeDNSCB->isChecked())
-            CurrentConfig.inboundConfig.httpSettings.destOverride << "fakedns";
-        if (httpOverrideFakeDNSOthersCB->isChecked())
-            CurrentConfig.inboundConfig.httpSettings.destOverride << "fakedns+others";
-    }
-    {
-        CurrentConfig.inboundConfig.socksSettings.port = socksPortLE->value();
-        CurrentConfig.inboundConfig.socksSettings.useAuth = socksAuthCB->isChecked();
-        CurrentConfig.inboundConfig.socksSettings.account.user = socksAuthUsernameTxt->text();
-        CurrentConfig.inboundConfig.socksSettings.account.pass = socksAuthPasswordTxt->text();
-        //
-        CurrentConfig.inboundConfig.socksSettings.sniffing = socksSniffingCB->isChecked();
-        CurrentConfig.inboundConfig.socksSettings.destOverride.clear();
-        if (socksOverrideHTTPCB->isChecked())
-            CurrentConfig.inboundConfig.socksSettings.destOverride << "http";
-        if (socksOverrideTLSCB->isChecked())
-            CurrentConfig.inboundConfig.socksSettings.destOverride << "tls";
-        if (socksOverrideFakeDNSCB->isChecked())
-            CurrentConfig.inboundConfig.socksSettings.destOverride << "fakedns";
-        if (socksOverrideFakeDNSOthersCB->isChecked())
-            CurrentConfig.inboundConfig.socksSettings.destOverride << "fakedns+others";
-        //
-        CurrentConfig.inboundConfig.socksSettings.enableUDP = socksUDPCB->isChecked();
-        CurrentConfig.inboundConfig.socksSettings.localIP = socksUDPIP->text();
-    }
-    {
-        CurrentConfig.inboundConfig.tProxySettings.tProxyIP = tproxyListenAddr->text();
-        CurrentConfig.inboundConfig.tProxySettings.tProxyV6IP = tproxyListenV6Addr->text();
-        CurrentConfig.inboundConfig.tProxySettings.port = tProxyPort->value();
-        CurrentConfig.inboundConfig.tProxySettings.hasTCP = tproxyEnableTCP->isChecked();
-        CurrentConfig.inboundConfig.tProxySettings.hasUDP = tproxyEnableUDP->isChecked();
-        //
-        CurrentConfig.inboundConfig.tProxySettings.sniffing = tproxySniffingCB->isChecked();
-        CurrentConfig.inboundConfig.tProxySettings.destOverride.clear();
-        if (tproxyOverrideHTTPCB->isChecked())
-            CurrentConfig.inboundConfig.tProxySettings.destOverride << "http";
-        if (tproxyOverrideTLSCB->isChecked())
-            CurrentConfig.inboundConfig.tProxySettings.destOverride << "tls";
-        if (tproxyOverrideFakeDNSCB->isChecked())
-            CurrentConfig.inboundConfig.tProxySettings.destOverride << "fakedns";
-        if (tproxyOverrideFakeDNSOthersCB->isChecked())
-            CurrentConfig.inboundConfig.tProxySettings.destOverride << "fakedns+others";
-        tproxySniffingMetadataOnlyCB->setChecked(CurrentConfig.inboundConfig.tProxySettings.metadataOnly);
-
-        CurrentConfig.inboundConfig.tProxySettings.mode = tproxyMode->currentText();
-    }
-    CurrentConfig.inboundConfig.browserForwarderSettings.address = browserForwarderAddressTxt->text();
-    CurrentConfig.inboundConfig.browserForwarderSettings.port = browserForwarderPortSB->value();
-    CurrentConfig.outboundConfig.mark = outboundMark->value();
-    CurrentConfig.defaultRouteConfig.connectionConfig.dnsIntercept = dnsIntercept->isChecked();
-    CurrentConfig.defaultRouteConfig.connectionConfig.v2rayFreedomDNS = dnsFreedomCb->isChecked();
-    //
-    // Kernel settings
-    CurrentConfig.kernelConfig.SetKernelPath(vCorePathTxt->text(), vCoreAssetsPathTxt->text());
-    CurrentConfig.kernelConfig.enableAPI = enableAPI->isChecked();
-    CurrentConfig.kernelConfig.statsPort = statsPortBox->value();
-    CurrentConfig.uiConfig.graphConfig.useOutboundStats = V2RayOutboundStatsCB->isChecked();
-    CurrentConfig.uiConfig.graphConfig.hasDirectStats = hasDirectStatisticsCB->isChecked();
-    //
-    CurrentConfig.pluginConfig.v2rayIntegration = pluginKernelV2RayIntegrationCB->isChecked();
-    CurrentConfig.pluginConfig.portAllocationStart = pluginKernelPortAllocateCB->value();
-    // Connection Settings
-    CurrentConfig.defaultRouteConfig.connectionConfig.bypassCN = bypassCNCb->isChecked();
-    CurrentConfig.defaultRouteConfig.connectionConfig.bypassBT = bypassBTCb->isChecked();
-    CurrentConfig.defaultRouteConfig.connectionConfig.bypassLAN = bypassPrivateCb->isChecked();
-    //
-    //
-    CurrentConfig.networkConfig.latencyTestingMethod = latencyTCPingRB->isChecked() ? TCPING : (latencyICMPingRB->isChecked() ? ICMPING : REALPING);
-    CurrentConfig.networkConfig.latencyRealPingTestURL = latencyRealPingTestURLTxt->text();
-    //
-    //
-    //
-    CurrentConfig.uiConfig.useOldShareLinkFormat = useOldShareLinkFormatCB->isChecked();
-    CurrentConfig.uiConfig.startMinimized = startMinimizedCB->isChecked();
-    CurrentConfig.uiConfig.exitByCloseEvent = exitByCloseEventCB->isChecked();
-    //
-    //
-    // Advanced settings.
-    CurrentConfig.advancedConfig.testLatencyPeriodically = setTestLatencyCB->isChecked();
-    CurrentConfig.advancedConfig.testLatencyOnConnected = setTestLatencyOnConnectedCB->isChecked();
-    CurrentConfig.advancedConfig.disableSystemRoot = disableSystemRootCB->isChecked();
-    //
-    // UI settings
-    CurrentConfig.uiConfig.language = languageComboBox->currentText();
-    CurrentConfig.uiConfig.theme = themeCombo->currentText();
-    CurrentConfig.uiConfig.useDarkTheme = darkThemeCB->isChecked();
-    CurrentConfig.uiConfig.useDarkTrayIcon = darkTrayCB->isChecked();
-    CurrentConfig.uiConfig.useGlyphTrayIcon = glyphTrayCB->isChecked();
-    CurrentConfig.logLevel = LogType(logLevelComboBox->currentIndex());
-    //
-    CurrentConfig.uiConfig.quietMode = !quietModeCB->isChecked();
-    //
-    // Auto start settings
-    //
-    if (noAutoConnectRB->isChecked())
-        CurrentConfig.autoStartBehavior = AUTO_CONNECTION_NONE;
-    else if (autoConnectRB->isChecked())
-        CurrentConfig.autoStartBehavior = AUTO_CONNECTION_FIXED;
-    else if (autoLastConnectedRB->isChecked())
-        CurrentConfig.autoStartBehavior = AUTO_CONNECTION_LAST_CONNECTED;
-    CurrentConfig.autoStartId = autoStartConnCombo->currentIndex();
-    //
-    // System Proxy settings
-    CurrentConfig.inboundConfig.systemProxySettings.proxyType = Qv2rayConfig_SystemProxy::ProxyType(systemProxyTypeComboBox->currentData().toInt());
-    //
-    // Network Settings
-    {
-        CurrentConfig.networkConfig.type = qvProxyTypeCombo->currentText();
-        CurrentConfig.networkConfig.address = qvProxyAddressTxt->text();
-        CurrentConfig.networkConfig.port = qvProxyPortCB->value();
-        CurrentConfig.networkConfig.proxyType = qvProxyNoProxy->isChecked()
-                                                    ? Qv2rayConfig_Network::QVPROXY_NONE
-                                                    : (qvProxySystemProxy->isChecked() ? Qv2rayConfig_Network::QVPROXY_SYSTEM : Qv2rayConfig_Network::QVPROXY_CUSTOM);
-        CurrentConfig.networkConfig.userAgent = qvNetworkUATxt->currentText();
-    }
-    //
-    GlobalConfig.loadJson(CurrentConfig.toJson());
-    SaveGlobalSettings();
-}
-
-void PreferencesWindow::on_autoLastConnectedRB_clicked()
+void PreferencesWindow::on_httpAuthCB_stateChanged(int checked)
 {
     NEEDRESTART
-    autoStartConnCombo->setDisabled(true);
+    bool enabled = checked == Qt::Checked;
+    httpAuthUsernameTxt->setEnabled(enabled);
+    httpAuthPasswordTxt->setEnabled(enabled);
+    CurrentConfig.inboundConfig.httpSettings.useAuth = enabled;
 }
 
-void PreferencesWindow::on_autoConnectRB_clicked()
+void PreferencesWindow::on_socksAuthCB_stateChanged(int checked)
 {
     NEEDRESTART
-    autoStartConnCombo->setEnabled(true);
+    bool enabled = checked == Qt::Checked;
+    socksAuthUsernameTxt->setEnabled(enabled);
+    socksAuthPasswordTxt->setEnabled(enabled);
+    CurrentConfig.inboundConfig.socksSettings.useAuth = enabled;
 }
 
-void PreferencesWindow::on_recheckCNConnectionBtn_clicked()
+void PreferencesWindow::on_languageComboBox_currentTextChanged(const QString &arg1)
 {
-    QvMessageBoxInfo(this, tr("Maintenance Mode"), tr("Legacy connectivity probes are no longer part of the supported Windows product path."));
+    LOADINGCHECK
+    CurrentConfig.uiConfig.language = arg1;
+}
+
+void PreferencesWindow::on_logLevelComboBox_currentIndexChanged(int index)
+{
+    NEEDRESTART
+    CurrentConfig.logLevel = index;
+}
+
+void PreferencesWindow::on_vCoreAssetsPathTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.kernelConfig.AssetsPath(arg1);
+}
+
+void PreferencesWindow::on_listenIPTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.listenip = arg1;
+
+    if (arg1 == "" || IsValidIPAddress(arg1))
+    {
+        BLACK(listenIPTxt);
+    }
+    else
+    {
+        RED(listenIPTxt);
+    }
+
+    // pacAccessPathTxt->setText("http://" + arg1 + ":" +
+    // QSTRN(pacPortSB->value()) + "/pac");
+}
+
+void PreferencesWindow::on_httpAuthUsernameTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.httpSettings.account.user = arg1;
+}
+
+void PreferencesWindow::on_httpAuthPasswordTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.httpSettings.account.pass = arg1;
+}
+
+void PreferencesWindow::on_socksAuthUsernameTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.socksSettings.account.user = arg1;
+}
+
+void PreferencesWindow::on_socksAuthPasswordTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.socksSettings.account.pass = arg1;
+}
+
+void PreferencesWindow::on_latencyRealPingTestURLTxt_textEdited(const QString &arg1)
+{
+    CurrentConfig.networkConfig.latencyRealPingTestURL = arg1;
+}
+
+void PreferencesWindow::on_proxyDefaultCb_stateChanged(int arg1)
+{
+    NEEDRESTART
+    CurrentConfig.defaultRouteConfig.connectionConfig.enableProxy = !(arg1 == Qt::Checked);
+}
+
+void PreferencesWindow::on_selectVAssetBtn_clicked()
+{
+    NEEDRESTART
+    QString dir = QFileDialog::getExistingDirectory(this, tr("Open V2Ray assets folder"), QDir::currentPath());
+
+    if (!dir.isEmpty())
+    {
+        vCoreAssetsPathTxt->setText(dir);
+        on_vCoreAssetsPathTxt_textEdited(dir);
+    }
+}
+
+void PreferencesWindow::on_selectVCoreBtn_clicked()
+{
+    QString core = QFileDialog::getOpenFileName(this, tr("Open V2Ray core file"), QDir::currentPath());
+
+    if (!core.isEmpty())
+    {
+        vCorePathTxt->setText(core);
+        on_vCorePathTxt_textEdited(core);
+    }
+}
+
+void PreferencesWindow::on_vCorePathTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.kernelConfig.KernelPath(arg1);
+}
+
+void PreferencesWindow::on_aboutQt_clicked()
+{
+    QApplication::aboutQt();
+}
+
+void PreferencesWindow::on_cancelIgnoreVersionBtn_clicked()
+{
+    CurrentConfig.updateConfig.ignoredVersion.clear();
+    cancelIgnoreVersionBtn->setEnabled(false);
+}
+
+void PreferencesWindow::on_bypassCNCb_stateChanged(int arg1)
+{
+    NEEDRESTART
+    CurrentConfig.defaultRouteConfig.connectionConfig.bypassCN = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_bypassBTCb_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 == Qt::Checked)
+    {
+        QvMessageBoxInfo(this, tr("Note"),
+                         tr("To recognize the protocol of a connection, one must enable sniffing option in inbound proxy.") + NEWLINE +
+                             tr("tproxy inbound's sniffing is enabled by default."));
+    }
+    CurrentConfig.defaultRouteConfig.connectionConfig.bypassBT = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_statsPortBox_valueChanged(int arg1)
+{
+    NEEDRESTART
+    CurrentConfig.kernelConfig.statsPort = arg1;
+}
+
+void PreferencesWindow::on_socksPortLE_valueChanged(int arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.socksSettings.port = arg1;
+}
+
+void PreferencesWindow::on_httpPortLE_valueChanged(int arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.httpSettings.port = arg1;
+}
+
+void PreferencesWindow::on_socksUDPCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.socksSettings.enableUDP = arg1 == Qt::Checked;
+    socksUDPIP->setEnabled(arg1 == Qt::Checked);
+}
+
+void PreferencesWindow::on_socksUDPIP_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.socksSettings.localIP = arg1;
+
+    if (IsValidIPAddress(arg1))
+    {
+        BLACK(socksUDPIP);
+    }
+    else
+    {
+        RED(socksUDPIP);
+    }
+}
+
+void PreferencesWindow::on_themeCombo_currentTextChanged(const QString &arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.theme = arg1;
+}
+
+void PreferencesWindow::on_darkThemeCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.useDarkTheme = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_darkTrayCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.useDarkTrayIcon = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_glyphTrayCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.useGlyphTrayIcon = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_setSysProxyCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.systemProxySettings.setSystemProxy = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_autoStartSubsCombo_currentIndexChanged(int arg1)
+{
+    LOADINGCHECK
+    if (arg1 == -1)
+    {
+        CurrentConfig.autoStartId.clear();
+        autoStartConnCombo->clear();
+    }
+    else
+    {
+        auto list = ConnectionManager->GetConnections(GroupId(autoStartSubsCombo->currentData().toString()));
+        autoStartConnCombo->clear();
+
+        for (const auto &id : list)
+        {
+            autoStartConnCombo->addItem(GetDisplayName(id), id.toString());
+        }
+    }
+}
+
+void PreferencesWindow::on_autoStartConnCombo_currentIndexChanged(int arg1)
+{
+    LOADINGCHECK
+    if (arg1 == -1)
+    {
+        CurrentConfig.autoStartId.clear();
+    }
+    else
+    {
+        CurrentConfig.autoStartId.groupId = GroupId(autoStartSubsCombo->currentData().toString());
+        CurrentConfig.autoStartId.connectionId = ConnectionId(autoStartConnCombo->currentData().toString());
+    }
+}
+
+void PreferencesWindow::on_startWithLoginCB_stateChanged(int arg1)
+{
+    bool isEnabled = arg1 == Qt::Checked;
+    SetLaunchAtLoginStatus(isEnabled);
+
+    if (GetLaunchAtLoginStatus() != isEnabled)
+    {
+        QvMessageBoxWarn(this, tr("Start with boot"), tr("Failed to set auto start option."));
+    }
+
+    SetAutoStartButtonsState(GetLaunchAtLoginStatus());
+}
+
+void PreferencesWindow::SetAutoStartButtonsState(bool isAutoStart)
+{
+    startWithLoginCB->setChecked(isAutoStart);
+}
+
+void PreferencesWindow::on_fpTypeCombo_currentIndexChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.defaultRouteConfig.forwardProxyConfig.type = fpTypeCombo->itemText(arg1).toLower();
+}
+
+void PreferencesWindow::on_fpAddressTx_textEdited(const QString &arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.defaultRouteConfig.forwardProxyConfig.serverAddress = arg1;
+
+    if (IsValidIPAddress(arg1))
+    {
+        BLACK(fpAddressTx);
+    }
+    else
+    {
+        RED(fpAddressTx);
+    }
+}
+
+void PreferencesWindow::on_fpUseAuthCB_stateChanged(int arg1)
+{
+    bool authEnabled = arg1 == Qt::Checked;
+    CurrentConfig.defaultRouteConfig.forwardProxyConfig.useAuth = authEnabled;
+    fpUsernameTx->setEnabled(authEnabled);
+    fpPasswordTx->setEnabled(authEnabled);
+}
+
+void PreferencesWindow::on_fpUsernameTx_textEdited(const QString &arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.defaultRouteConfig.forwardProxyConfig.username = arg1;
+}
+
+void PreferencesWindow::on_fpPasswordTx_textEdited(const QString &arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.defaultRouteConfig.forwardProxyConfig.password = arg1;
+}
+
+void PreferencesWindow::on_fpPortSB_valueChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.defaultRouteConfig.forwardProxyConfig.port = arg1;
+}
+
+void PreferencesWindow::on_checkVCoreSettings_clicked()
+{
+    auto vcorePath = vCorePathTxt->text();
+    auto vAssetsPath = vCoreAssetsPathTxt->text();
+
+#if QV2RAY_FEATURE(kernel_check_filename)
+    // prevent some bullshit situations.
+    if (const auto vCorePathSmallCased = vcorePath.toLower(); vCorePathSmallCased.endsWith("qv2ray") || vCorePathSmallCased.endsWith("qv2ray.exe"))
+    {
+        const auto content = tr("You may be about to set V2Ray core incorrectly to Qv2ray itself, which is absolutely not correct.\r\n"
+                                "This won't trigger a fork bomb, however, since Qv2ray works in singleton mode.\r\n"
+                                "If your V2Ray core filename happened to be 'qv2ray'-something, you are totally free to ignore this warning.");
+        QvMessageBoxWarn(this, tr("Watch Out!"), content);
+    }
+#if !defined(QV2RAY_USE_V5_CORE)
+    else if (vCorePathSmallCased.endsWith("v2ctl") || vCorePathSmallCased.endsWith("v2ctl.exe"))
+    {
+        const auto content = tr("You may be about to set V2Ray core incorrectly to V2Ray Control executable, which is absolutely not correct.\r\n"
+                                "The filename of V2Ray core is usually 'v2ray' or 'v2ray.exe'. Make sure to choose it wisely.\r\n"
+                                "If you insist to proceed, we're not providing with any support.");
+        QvMessageBoxWarn(this, tr("Watch Out!"), content);
+    }
+#endif
+#endif
+
+    if (const auto &&[result, msg] = V2RayKernelInstance::ValidateKernel(vcorePath, vAssetsPath); !result)
+    {
+        QvMessageBoxWarn(this, tr("V2Ray Core Settings"), *msg);
+    }
+#if QV2RAY_FEATURE(kernel_check_output)
+    else if (!msg->toLower().contains("v2ray") && !msg->toLower().contains("xray"))
+    {
+        const auto content = tr("This does not seem like an output from V2Ray Core.") + NEWLINE +                         //
+                             tr("If you are looking for plugins settings, you should go to plugin settings.") + NEWLINE + //
+                             tr("Output:") + NEWLINE +                                                                    //
+                             NEWLINE + *msg;
+        QvMessageBoxWarn(this, tr("'V2Ray Core' Settings"), content);
+    }
+#endif
+    else
+    {
+        const auto content = tr("V2Ray path configuration check passed.") + NEWLINE + NEWLINE + tr("Current version of V2Ray is: ") + NEWLINE + *msg;
+        QvMessageBoxInfo(this, tr("V2Ray Core Settings"), content);
+    }
+}
+
+void PreferencesWindow::on_httpGroupBox_clicked(bool checked)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.useHTTP = checked;
+    httpAuthUsernameTxt->setEnabled(checked && CurrentConfig.inboundConfig.httpSettings.useAuth);
+    httpAuthPasswordTxt->setEnabled(checked && CurrentConfig.inboundConfig.httpSettings.useAuth);
+    httpOverrideHTTPCB->setEnabled(checked && CurrentConfig.inboundConfig.httpSettings.sniffing);
+    httpOverrideTLSCB->setEnabled(checked && CurrentConfig.inboundConfig.httpSettings.sniffing);
+    httpOverrideFakeDNSCB->setEnabled(checked && CurrentConfig.inboundConfig.httpSettings.sniffing);
+    httpOverrideFakeDNSOthersCB->setEnabled(checked && CurrentConfig.inboundConfig.httpSettings.sniffing);
+}
+
+void PreferencesWindow::on_socksGroupBox_clicked(bool checked)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.useSocks = checked;
+    socksUDPIP->setEnabled(checked && CurrentConfig.inboundConfig.socksSettings.enableUDP);
+    socksAuthUsernameTxt->setEnabled(checked && CurrentConfig.inboundConfig.socksSettings.useAuth);
+    socksAuthPasswordTxt->setEnabled(checked && CurrentConfig.inboundConfig.socksSettings.useAuth);
+    socksOverrideHTTPCB->setEnabled(checked && CurrentConfig.inboundConfig.socksSettings.sniffing);
+    socksOverrideTLSCB->setEnabled(checked && CurrentConfig.inboundConfig.socksSettings.sniffing);
+    socksOverrideFakeDNSCB->setEnabled(checked && CurrentConfig.inboundConfig.socksSettings.sniffing);
+    socksOverrideFakeDNSOthersCB->setEnabled(checked && CurrentConfig.inboundConfig.socksSettings.sniffing);
+}
+
+void PreferencesWindow::on_fpGroupBox_clicked(bool checked)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.defaultRouteConfig.forwardProxyConfig.enableForwardProxy = checked;
+}
+
+void PreferencesWindow::on_maxLogLinesSB_valueChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.uiConfig.maximumLogLines = arg1;
+}
+
+void PreferencesWindow::on_enableAPI_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.kernelConfig.enableAPI = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_updateChannelCombo_currentIndexChanged(int index)
+{
+    LOADINGCHECK
+    CurrentConfig.updateConfig.updateChannel = (Qv2rayConfig_Update::UpdateChannel) index;
+    CurrentConfig.updateConfig.ignoredVersion.clear();
+}
+
+void PreferencesWindow::on_pluginKernelV2RayIntegrationCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    if (KernelInstance->ActivePluginKernelsCount() > 0)
+        NEEDRESTART;
+    CurrentConfig.pluginConfig.v2rayIntegration = arg1 == Qt::Checked;
+    pluginKernelPortAllocateCB->setEnabled(arg1 == Qt::Checked);
+}
+
+void PreferencesWindow::on_pluginKernelPortAllocateCB_valueChanged(int arg1)
+{
+    LOADINGCHECK
+    if (KernelInstance->ActivePluginKernelsCount() > 0)
+        NEEDRESTART;
+    CurrentConfig.pluginConfig.portAllocationStart = arg1;
+}
+
+void PreferencesWindow::on_qvProxyAddressTxt_textEdited(const QString &arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.networkConfig.address = arg1;
+}
+
+void PreferencesWindow::on_qvProxyTypeCombo_currentTextChanged(const QString &arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.networkConfig.type = arg1.toLower();
+}
+
+void PreferencesWindow::on_qvProxyPortCB_valueChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.networkConfig.port = arg1;
+}
+
+void PreferencesWindow::on_setTestlatencyCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    if (arg1 == Qt::Checked)
+    {
+        QvMessageBoxWarn(this, tr("Dangerous Operation"), tr("This will (probably) make it easy to fingerprint your connection."));
+    }
+    CurrentConfig.advancedConfig.testLatencyPeriodically = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_setTestlatencyOnConnectedCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    if (arg1 == Qt::Checked)
+    {
+        QvMessageBoxWarn(this, tr("Dangerous Operation"), tr("This will (probably) make it easy to fingerprint your connection."));
+    }
+    CurrentConfig.advancedConfig.testLatencyOnConnected = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.quietMode = arg1 != Qt::Checked;
+}
+
+void PreferencesWindow::on_tproxyGroupBox_toggled(bool arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.useTPROXY = arg1;
+    tproxyOverrideHTTPCB->setEnabled(arg1 && CurrentConfig.inboundConfig.tProxySettings.sniffing);
+    tproxyOverrideTLSCB->setEnabled(arg1 && CurrentConfig.inboundConfig.tProxySettings.sniffing);
+    tproxyOverrideFakeDNSCB->setEnabled(arg1 && CurrentConfig.inboundConfig.tProxySettings.sniffing);
+    tproxyOverrideFakeDNSOthersCB->setEnabled(arg1 && CurrentConfig.inboundConfig.tProxySettings.sniffing);
+}
+
+void PreferencesWindow::on_tProxyPort_valueChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.port = arg1;
+}
+
+void PreferencesWindow::on_tproxyEnableTCP_toggled(bool checked)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.hasTCP = checked;
+}
+
+void PreferencesWindow::on_tproxyEnableUDP_toggled(bool checked)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.hasUDP = checked;
+}
+
+void PreferencesWindow::on_tproxySniffingCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.sniffing = arg1 == Qt::Checked;
+    tproxySniffingMetadataOnlyCB->setEnabled(arg1 == Qt::Checked);
+    tproxyOverrideHTTPCB->setEnabled(arg1 == Qt::Checked);
+    tproxyOverrideTLSCB->setEnabled(arg1 == Qt::Checked);
+    tproxyOverrideFakeDNSCB->setEnabled(arg1 == Qt::Checked);
+    tproxyOverrideFakeDNSOthersCB->setEnabled(arg1 == Qt::Checked);
+}
+
+void PreferencesWindow::on_tproxyOverrideHTTPCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.removeAll("http");
+    else if (!CurrentConfig.inboundConfig.tProxySettings.destOverride.contains("http"))
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.append("http");
+}
+
+void PreferencesWindow::on_tproxyOverrideTLSCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.removeAll("tls");
+    else if (!CurrentConfig.inboundConfig.tProxySettings.destOverride.contains("tls"))
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.append("tls");
+}
+
+void PreferencesWindow::on_tproxyMode_currentTextChanged(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.mode = arg1;
+}
+
+void PreferencesWindow::on_tproxyListenAddr_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.tProxyIP = arg1;
+    if (arg1 == "" || IsIPv4Address(arg1))
+        BLACK(tproxyListenAddr);
+    else
+        RED(tproxyListenAddr);
+}
+
+void PreferencesWindow::on_tproxyListenV6Addr_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.tProxyV6IP = arg1;
+    if (arg1 == "" || IsIPv6Address(arg1))
+        BLACK(tproxyListenV6Addr);
+    else
+        RED(tproxyListenV6Addr);
+}
+
+void PreferencesWindow::on_jumpListCountSB_valueChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.maxJumpListCount = arg1;
+}
+
+void PreferencesWindow::on_outboundMark_valueChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.outboundConfig.mark = arg1;
+}
+
+void PreferencesWindow::on_dnsIntercept_toggled(bool checked)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.defaultRouteConfig.connectionConfig.dnsIntercept = checked;
+}
+
+void PreferencesWindow::on_qvProxyCustomProxy_clicked()
+{
+    CurrentConfig.networkConfig.proxyType = Qv2rayConfig_Network::QVPROXY_CUSTOM;
+    SET_PROXY_UI_ENABLE(true);
+    qvProxyNoProxy->setChecked(false);
+    qvProxySystemProxy->setChecked(false);
+    qvProxyCustomProxy->setChecked(true);
+}
+
+void PreferencesWindow::on_qvProxySystemProxy_clicked()
+{
+    CurrentConfig.networkConfig.proxyType = Qv2rayConfig_Network::QVPROXY_SYSTEM;
+    SET_PROXY_UI_ENABLE(false);
+    qvProxyNoProxy->setChecked(false);
+    qvProxyCustomProxy->setChecked(false);
+    qvProxySystemProxy->setChecked(true);
+}
+
+void PreferencesWindow::on_qvProxyNoProxy_clicked()
+{
+    CurrentConfig.networkConfig.proxyType = Qv2rayConfig_Network::QVPROXY_NONE;
+    SET_PROXY_UI_ENABLE(false);
+    qvProxySystemProxy->setChecked(false);
+    qvProxyCustomProxy->setChecked(false);
+    qvProxyNoProxy->setChecked(true);
+}
+
+void PreferencesWindow::on_dnsFreedomCb_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.defaultRouteConfig.connectionConfig.v2rayFreedomDNS = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_httpSniffingCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.httpSettings.sniffing = arg1 == Qt::Checked;
+    httpSniffingMetadataOnly->setEnabled(arg1 == Qt::Checked);
+    httpOverrideHTTPCB->setEnabled(arg1 == Qt::Checked);
+    httpOverrideTLSCB->setEnabled(arg1 == Qt::Checked);
+    httpOverrideFakeDNSCB->setEnabled(arg1 == Qt::Checked);
+    httpOverrideFakeDNSOthersCB->setEnabled(arg1 == Qt::Checked);
+}
+
+void PreferencesWindow::on_httpOverrideHTTPCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.httpSettings.destOverride.removeAll("http");
+    else if (!CurrentConfig.inboundConfig.httpSettings.destOverride.contains("http"))
+        CurrentConfig.inboundConfig.httpSettings.destOverride.append("http");
+}
+
+void PreferencesWindow::on_httpOverrideTLSCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.httpSettings.destOverride.removeAll("tls");
+    else if (!CurrentConfig.inboundConfig.httpSettings.destOverride.contains("tls"))
+        CurrentConfig.inboundConfig.httpSettings.destOverride.append("tls");
+}
+
+void PreferencesWindow::on_socksSniffingCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.socksSettings.sniffing = arg1 == Qt::Checked;
+    socksSniffingMetadataOnly->setEnabled(arg1 == Qt::Checked);
+    socksOverrideHTTPCB->setEnabled(arg1 == Qt::Checked);
+    socksOverrideTLSCB->setEnabled(arg1 == Qt::Checked);
+    socksOverrideFakeDNSCB->setEnabled(arg1 == Qt::Checked);
+    socksOverrideFakeDNSOthersCB->setEnabled(arg1 == Qt::Checked);
+}
+
+void PreferencesWindow::on_socksOverrideHTTPCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.socksSettings.destOverride.removeAll("http");
+    else if (!CurrentConfig.inboundConfig.socksSettings.destOverride.contains("http"))
+        CurrentConfig.inboundConfig.socksSettings.destOverride.append("http");
+}
+
+void PreferencesWindow::on_socksOverrideTLSCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.socksSettings.destOverride.removeAll("tls");
+    else if (!CurrentConfig.inboundConfig.socksSettings.destOverride.contains("tls"))
+        CurrentConfig.inboundConfig.socksSettings.destOverride.append("tls");
 }
 
 void PreferencesWindow::on_pushButton_clicked()
@@ -541,11 +1197,31 @@ void PreferencesWindow::on_pushButton_clicked()
     const auto ntpServer = QInputDialog::getItem(this, ntpTitle, ntpHint, ntpServerList, 0, true, &ok).trimmed();
     if (!ok)
         return;
-    auto client = new QvNTPClient(this);
-    connect(client, &QvNTPClient::timeUpdated, this,
-            [this, client, ntpTitle](QDateTime time) { QvMessageBoxInfo(this, ntpTitle, tr("Time: %1").arg(time.toString())); });
-    LOG("Getting host info: " + ntpServer)
-    auto hostInfo = QHostInfo::fromName(ntpServer);
+
+    auto client = new ntp::NtpClient(this);
+    connect(client, &ntp::NtpClient::replyReceived, [&](const QHostAddress &, quint16, const ntp::NtpReply &reply) {
+        const int offsetSecTotal = reply.localClockOffset() / 1000;
+        if (offsetSecTotal >= 90 || offsetSecTotal <= -90)
+        {
+            const auto inaccurateWarning = tr("Your time offset is %1 seconds, which is too high.") + NEWLINE + //
+                                           tr("Please synchronize your system to use the VMess protocol.");
+            QvMessageBoxWarn(this, tr("Time Inaccurate"), inaccurateWarning.arg(offsetSecTotal));
+        }
+        else if (offsetSecTotal > 15 || offsetSecTotal < -15)
+        {
+            const auto smallErrorWarning = tr("Your time offset is %1 seconds, which is a little high.") + NEWLINE + //
+                                           tr("VMess protocol may still work, but we suggest you synchronize your clock.");
+            QvMessageBoxInfo(this, tr("Time Somewhat Inaccurate"), smallErrorWarning.arg(offsetSecTotal));
+        }
+        else
+        {
+            const auto accurateInfo = tr("Your time offset is %1 seconds, which looks good.") + NEWLINE + //
+                                      tr("VMess protocol may not suffer from time inaccuracy.");
+            QvMessageBoxInfo(this, tr("Time Accurate"), accurateInfo.arg(offsetSecTotal));
+        }
+    });
+
+    const auto hostInfo = QHostInfo::fromName(ntpServer);
     if (hostInfo.error() == QHostInfo::NoError)
         client->sendRequest(hostInfo.addresses().first(), 123);
     else
@@ -557,236 +1233,76 @@ void PreferencesWindow::on_pushButton_clicked()
 
 void PreferencesWindow::on_noAutoConnectRB_clicked()
 {
+    LOADINGCHECK
+    CurrentConfig.autoStartBehavior = AUTO_CONNECTION_NONE;
+    SET_AUTOSTART_UI_ENABLED(false);
+    SET_AUTOSTART_START_MINIMIZED_ENABLED(false);
+}
+
+void PreferencesWindow::on_lastConnectedRB_clicked()
+{
+    LOADINGCHECK
+    CurrentConfig.autoStartBehavior = AUTO_CONNECTION_LAST_CONNECTED;
+    SET_AUTOSTART_UI_ENABLED(false);
+    SET_AUTOSTART_START_MINIMIZED_ENABLED(true);
+}
+
+void PreferencesWindow::on_fixedAutoConnectRB_clicked()
+{
+    LOADINGCHECK
+    CurrentConfig.autoStartBehavior = AUTO_CONNECTION_FIXED;
+    SET_AUTOSTART_UI_ENABLED(true);
+    SET_AUTOSTART_START_MINIMIZED_ENABLED(true);
+}
+
+void PreferencesWindow::on_latencyTCPingRB_clicked()
+{
+    LOADINGCHECK
+    CurrentConfig.networkConfig.latencyTestingMethod = TCPING;
+    latencyICMPingRB->setChecked(false);
+    latencyTCPingRB->setChecked(true);
+}
+
+void PreferencesWindow::on_latencyICMPingRB_clicked()
+{
+    LOADINGCHECK
+    CurrentConfig.networkConfig.latencyTestingMethod = ICMPING;
+    latencyICMPingRB->setChecked(true);
+    latencyTCPingRB->setChecked(false);
+}
+
+void PreferencesWindow::on_qvNetworkUATxt_editTextChanged(const QString &arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.networkConfig.userAgent = arg1;
+}
+
+void PreferencesWindow::on_V2RayOutboundStatsCB_stateChanged(int arg1)
+{
+    hasDirectStatisticsCB->setEnabled(arg1 == Qt::Checked);
+    LOADINGCHECK
     NEEDRESTART
-    autoStartConnCombo->setDisabled(true);
+    CurrentConfig.uiConfig.graphConfig.useOutboundStats = arg1 == Qt::Checked;
 }
 
-void PreferencesWindow::on_checkVCoreVersion_clicked()
-{
-    const auto paths = V2RayKernelInstance::EffectiveKernelPaths(CurrentConfig.kernelConfig.KernelPath(), CurrentConfig.kernelConfig.AssetsPath());
-    const auto kernelPath = paths.executable;
-    if (!kernelPath.isEmpty())
-    {
-        QProcess process;
-        process.start(kernelPath, { "version" });
-        if (!process.waitForStarted(3000))
-        {
-            QvMessageBoxWarn(this, tr("Kernel Version"), tr("Failed to start Xray: %1").arg(process.errorString()));
-            return;
-        }
-        if (!process.waitForFinished(5000))
-        {
-            process.kill();
-            process.waitForFinished(1000);
-            QvMessageBoxWarn(this, tr("Kernel Version"), tr("Timed out while checking Xray version."));
-            return;
-        }
-        const auto output = QString::fromUtf8(process.readAllStandardOutput()) + QString::fromUtf8(process.readAllStandardError());
-        QvMessageBoxInfo(this, tr("Kernel Version"), output.trimmed());
-    }
-    else
-    {
-        QvMessageBoxWarn(this, tr("Kernel Version"), tr("Cannot Find Xray Core"));
-    }
-}
-
-void PreferencesWindow::on_pluginKernelV2RayIntegrationCB_stateChanged(int arg1)
+void PreferencesWindow::on_hasDirectStatisticsCB_stateChanged(int arg1)
 {
     NEEDRESTART
-    pluginKernelPortAllocateCB->setEnabled(arg1 == Qt::Checked);
+    LOADINGCHECK
+    CurrentConfig.uiConfig.graphConfig.hasDirectStats = arg1 == Qt::Checked;
 }
 
-void PreferencesWindow::on_connectionReorderButtons_clicked()
-{
-    QvMessageBoxInfo(this, tr("Connection Order"), tr("Connection reordering is no longer exposed by the maintained Windows interface."));
-}
-
-void PreferencesWindow::on_languageComboBox_currentTextChanged(const QString &arg1)
+void PreferencesWindow::on_useOldShareLinkFormatCB_stateChanged(int arg1)
 {
     LOADINGCHECK
-    CurrentConfig.uiConfig.language = arg1;
-    NeedRestart = true;
+    CurrentConfig.uiConfig.useOldShareLinkFormat = arg1 == Qt::Checked;
 }
 
-void PreferencesWindow::on_themeCombo_currentTextChanged(const QString &arg1)
+void PreferencesWindow::on_bypassPrivateCb_clicked(bool checked)
 {
     LOADINGCHECK
-    CurrentConfig.uiConfig.theme = arg1;
-    NeedRestart = true;
-}
-
-void PreferencesWindow::on_darkThemeCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.useDarkTheme = arg1 == Qt::Checked;
-    QvMessageBusEmit(ChangeColorScheme);
-}
-
-void PreferencesWindow::on_darkTrayCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.useDarkTrayIcon = arg1 == Qt::Checked;
-    QvMessageBusEmit(ChangeColorScheme);
-}
-
-void PreferencesWindow::on_glyphTrayCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.useGlyphTrayIcon = arg1 == Qt::Checked;
-    QvMessageBusEmit(ChangeColorScheme);
-}
-
-void PreferencesWindow::on_buttonBox_clicked(QAbstractButton *button)
-{
-    if (buttonBox->buttonRole(button) == QDialogButtonBox::AcceptRole || buttonBox->buttonRole(button) == QDialogButtonBox::ApplyRole)
-    {
-        LOG("Saving settings from config window.")
-        SaveCurrentConfig();
-        emit SettingsChanged();
-        if (NeedRestart)
-        {
-            QvMessageBoxWarn(this, tr("Some settings requires restart."), tr("Qv2ray will restart to take effect immediately."));
-            QvCoreApplication->RestartApplication();
-        }
-    }
-}
-
-void PreferencesWindow::on_quietModeCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.quietMode = arg1 == Qt::Unchecked;
-}
-
-void PreferencesWindow::on_qvProxyNoProxy_clicked()
-{
-    LOADINGCHECK
-    CurrentConfig.networkConfig.proxyType = Qv2rayConfig_Network::QVPROXY_NONE;
-    SET_PROXY_UI_ENABLE(false)
-}
-
-void PreferencesWindow::on_qvProxySystemProxy_clicked()
-{
-    LOADINGCHECK
-    CurrentConfig.networkConfig.proxyType = Qv2rayConfig_Network::QVPROXY_SYSTEM;
-    SET_PROXY_UI_ENABLE(false)
-}
-
-void PreferencesWindow::on_qvProxyCustomProxy_clicked()
-{
-    LOADINGCHECK
-    CurrentConfig.networkConfig.proxyType = Qv2rayConfig_Network::QVPROXY_CUSTOM;
-    SET_PROXY_UI_ENABLE(true)
-}
-
-void PreferencesWindow::on_systemProxyTypeComboBox_currentIndexChanged(int index)
-{
-    LOADINGCHECK
-    CurrentConfig.inboundConfig.systemProxySettings.proxyType = Qv2rayConfig_SystemProxy::ProxyType(systemProxyTypeComboBox->itemData(index).toInt());
-}
-
-void PreferencesWindow::on_socksGroupBox_clicked(bool checked)
-{
-    LOADINGCHECK
-    CurrentConfig.inboundConfig.useSocks = checked;
-    socksAuthCB->setEnabled(checked);
-    socksUDPCB->setEnabled(checked);
-    socksAuthUsernameTxt->setEnabled(checked && socksAuthCB->isChecked());
-    socksAuthPasswordTxt->setEnabled(checked && socksAuthCB->isChecked());
-    socksUDPIP->setEnabled(checked && socksUDPCB->isChecked());
-    socksSniffingMetadataOnly->setEnabled(checked && socksSniffingCB->isChecked());
-    socksOverrideHTTPCB->setEnabled(checked && socksSniffingCB->isChecked());
-    socksOverrideTLSCB->setEnabled(checked && socksSniffingCB->isChecked());
-    socksOverrideFakeDNSCB->setEnabled(checked && socksSniffingCB->isChecked());
-    socksOverrideFakeDNSOthersCB->setEnabled(checked && socksSniffingCB->isChecked());
-}
-
-void PreferencesWindow::on_socksAuthCB_clicked(bool checked)
-{
-    LOADINGCHECK
-    socksAuthUsernameTxt->setEnabled(checked);
-    socksAuthPasswordTxt->setEnabled(checked);
-}
-
-void PreferencesWindow::on_socksUDPCB_clicked(bool checked)
-{
-    LOADINGCHECK
-    socksUDPIP->setEnabled(checked);
-}
-
-void PreferencesWindow::on_socksSniffingCB_clicked(bool checked)
-{
-    LOADINGCHECK
-    socksSniffingMetadataOnly->setEnabled(checked);
-    socksOverrideHTTPCB->setEnabled(checked);
-    socksOverrideTLSCB->setEnabled(checked);
-    socksOverrideFakeDNSCB->setEnabled(checked);
-    socksOverrideFakeDNSOthersCB->setEnabled(checked);
-}
-
-void PreferencesWindow::on_httpGroupBox_clicked(bool checked)
-{
-    LOADINGCHECK
-    CurrentConfig.inboundConfig.useHTTP = checked;
-    httpAuthCB->setEnabled(checked);
-    httpAuthUsernameTxt->setEnabled(checked && httpAuthCB->isChecked());
-    httpAuthPasswordTxt->setEnabled(checked && httpAuthCB->isChecked());
-    httpSniffingMetadataOnly->setEnabled(checked && httpSniffingCB->isChecked());
-    httpOverrideHTTPCB->setEnabled(checked && httpSniffingCB->isChecked());
-    httpOverrideTLSCB->setEnabled(checked && httpSniffingCB->isChecked());
-    httpOverrideFakeDNSCB->setEnabled(checked && httpSniffingCB->isChecked());
-    httpOverrideFakeDNSOthersCB->setEnabled(checked && httpSniffingCB->isChecked());
-}
-
-void PreferencesWindow::on_httpAuthCB_clicked(bool checked)
-{
-    LOADINGCHECK
-    httpAuthUsernameTxt->setEnabled(checked);
-    httpAuthPasswordTxt->setEnabled(checked);
-}
-
-void PreferencesWindow::on_httpSniffingCB_clicked(bool checked)
-{
-    LOADINGCHECK
-    httpSniffingMetadataOnly->setEnabled(checked);
-    httpOverrideHTTPCB->setEnabled(checked);
-    httpOverrideTLSCB->setEnabled(checked);
-    httpOverrideFakeDNSCB->setEnabled(checked);
-    httpOverrideFakeDNSOthersCB->setEnabled(checked);
-}
-
-void PreferencesWindow::on_tproxyGroupBox_clicked(bool checked)
-{
-    LOADINGCHECK
-    CurrentConfig.inboundConfig.useTPROXY = checked;
-    tproxyEnableTCP->setEnabled(checked);
-    tproxyEnableUDP->setEnabled(checked);
-    tproxySniffingMetadataOnlyCB->setEnabled(checked && tproxySniffingCB->isChecked());
-    tproxyOverrideHTTPCB->setEnabled(checked && tproxySniffingCB->isChecked());
-    tproxyOverrideTLSCB->setEnabled(checked && tproxySniffingCB->isChecked());
-    tproxyOverrideFakeDNSCB->setEnabled(checked && tproxySniffingCB->isChecked());
-    tproxyOverrideFakeDNSOthersCB->setEnabled(checked && tproxySniffingCB->isChecked());
-}
-
-void PreferencesWindow::on_tproxySniffingCB_clicked(bool checked)
-{
-    LOADINGCHECK
-    tproxySniffingMetadataOnlyCB->setEnabled(checked);
-    tproxyOverrideHTTPCB->setEnabled(checked);
-    tproxyOverrideTLSCB->setEnabled(checked);
-    tproxyOverrideFakeDNSCB->setEnabled(checked);
-    tproxyOverrideFakeDNSOthersCB->setEnabled(checked);
-}
-
-void PreferencesWindow::on_setTestLatencyOnConnectedCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.advancedConfig.testLatencyOnConnected = arg1 == Qt::Checked;
-}
-
-void PreferencesWindow::on_setTestLatencyCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.advancedConfig.testLatencyPeriodically = arg1 == Qt::Checked;
+    NEEDRESTART
+    CurrentConfig.defaultRouteConfig.connectionConfig.bypassLAN = checked;
 }
 
 void PreferencesWindow::on_disableSystemRootCB_stateChanged(int arg1)
@@ -795,6 +1311,106 @@ void PreferencesWindow::on_disableSystemRootCB_stateChanged(int arg1)
     CurrentConfig.advancedConfig.disableSystemRoot = arg1 == Qt::Checked;
 }
 
-void PreferencesWindow::on_buttonBox_accepted()
+void PreferencesWindow::on_openConfigDirCB_clicked()
 {
+    QvCoreApplication->OpenURL(QV2RAY_CONFIG_DIR);
+}
+
+void PreferencesWindow::on_startMinimizedCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.startMinimized = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_exitByCloseEventCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    CurrentConfig.uiConfig.exitByCloseEvent = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_httpSniffingMetadataOnly_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.httpSettings.metadataOnly = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_socksSniffingMetadataOnly_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.socksSettings.metadataOnly = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_tproxySniffingMetadataOnlyCB_stateChanged(int arg1)
+{
+    LOADINGCHECK
+    NEEDRESTART
+    CurrentConfig.inboundConfig.tProxySettings.metadataOnly = arg1 == Qt::Checked;
+}
+
+void PreferencesWindow::on_socksOverrideFakeDNSCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.socksSettings.destOverride.removeAll("fakedns");
+    else if (!CurrentConfig.inboundConfig.socksSettings.destOverride.contains("fakedns"))
+        CurrentConfig.inboundConfig.socksSettings.destOverride.append("fakedns");
+}
+
+void PreferencesWindow::on_socksOverrideFakeDNSOthersCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.socksSettings.destOverride.removeAll("fakedns+others");
+    else if (!CurrentConfig.inboundConfig.socksSettings.destOverride.contains("fakedns+others"))
+        CurrentConfig.inboundConfig.socksSettings.destOverride.append("fakedns+others");
+}
+
+void PreferencesWindow::on_httpOverrideFakeDNSCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.httpSettings.destOverride.removeAll("fakedns");
+    else if (!CurrentConfig.inboundConfig.httpSettings.destOverride.contains("fakedns"))
+        CurrentConfig.inboundConfig.httpSettings.destOverride.append("fakedns");
+}
+
+void PreferencesWindow::on_httpOverrideFakeDNSOthersCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.httpSettings.destOverride.removeAll("fakedns+others");
+    else if (!CurrentConfig.inboundConfig.httpSettings.destOverride.contains("fakedns+others"))
+        CurrentConfig.inboundConfig.httpSettings.destOverride.append("fakedns+others");
+}
+
+void PreferencesWindow::on_tproxyOverrideFakeDNSCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.removeAll("fakedns");
+    else if (!CurrentConfig.inboundConfig.tProxySettings.destOverride.contains("fakedns"))
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.append("fakedns");
+}
+
+void PreferencesWindow::on_tproxyOverrideFakeDNSOthersCB_stateChanged(int arg1)
+{
+    NEEDRESTART
+    if (arg1 != Qt::Checked)
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.removeAll("fakedns+others");
+    else if (!CurrentConfig.inboundConfig.tProxySettings.destOverride.contains("fakedns+others"))
+        CurrentConfig.inboundConfig.tProxySettings.destOverride.append("fakedns+others");
+}
+
+void PreferencesWindow::on_browserForwarderAddressTxt_textEdited(const QString &arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.browserForwarderSettings.address = arg1;
+}
+
+void PreferencesWindow::on_browserForwarderPortSB_valueChanged(int arg1)
+{
+    NEEDRESTART
+    CurrentConfig.inboundConfig.browserForwarderSettings.port = arg1;
 }
