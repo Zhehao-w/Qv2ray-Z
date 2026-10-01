@@ -11,13 +11,13 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Plugin Manager</string>
+   <string>Bundled Components</string>
   </property>
   <layout class="QGridLayout" name="gridLayout" columnstretch="0,1">
    <item row="0" column="0">
     <widget class="QLabel" name="label">
      <property name="text">
-      <string>Plugins</string>
+      <string>Bundled Components</string>
      </property>
     </widget>
    </item>
@@ -29,14 +29,14 @@
      <item>
       <widget class="QPushButton" name="openPluginFolder">
        <property name="text">
-        <string>Open Local Plugin Folder</string>
+        <string>Bundled Component Location</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QToolButton" name="toolButton">
        <property name="toolTip">
-        <string>Online help about plugins</string>
+        <string>Bundled components are part of Qv2ray-Z</string>
        </property>
        <property name="text">
         <string>?</string>
@@ -62,7 +62,7 @@
      </property>
      <widget class="QWidget" name="tabWidgetPage1">
       <attribute name="title">
-       <string>Plugin Metadata</string>
+       <string>Component Metadata</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout_2" columnstretch="1,0">
        <item row="0" column="0">
@@ -330,7 +330,7 @@
      </widget>
      <widget class="QWidget" name="tab">
       <attribute name="title">
-       <string>Plugin Settings</string>
+       <string>Component Settings</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,0">
        <item>
@@ -338,7 +338,7 @@
          <item row="0" column="0">
           <widget class="QLabel" name="pluginUnloadLabel">
            <property name="text">
-            <string>Plugin Not Loaded</string>
+            <string>Bundled Component Not Loaded</string>
            </property>
            <property name="alignment">
             <set>Qt::AlignCenter</set>
