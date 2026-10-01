@@ -111,11 +111,9 @@ bool Qv2rayPlatformApplication::Initialize()
 #endif
 #endif
 
-    // Qv2ray-Z is English-only. Keep a tiny compatibility object until the
-    // legacy Preferences form is replaced, but never inspect the OS locale or
-    // load a QTranslator/resource bundle.
-    Qv2rayTranslator = std::make_unique<QvTranslator>();
     LocateConfiguration();
+    // Runtime translation support is retired. Keep the serialized legacy field
+    // normalized so older configurations remain deterministic when rewritten.
     GlobalConfig.uiConfig.language = QStringLiteral("en_US");
 #ifdef Q_OS_WIN
     using namespace Qv2ray::components::proxy::safety;

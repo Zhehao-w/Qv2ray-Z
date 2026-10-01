@@ -46,7 +46,6 @@ class PreferencesWindow
     void on_buttonBox_accepted();
     void on_httpAuthCB_stateChanged(int arg1);
     void on_socksAuthCB_stateChanged(int arg1);
-    void on_languageComboBox_currentTextChanged(const QString &arg1);
     void on_logLevelComboBox_currentIndexChanged(int index);
     void on_vCoreAssetsPathTxt_textEdited(const QString &arg1);
     void on_listenIPTxt_textEdited(const QString &arg1);
@@ -120,7 +119,6 @@ class PreferencesWindow
     void on_tproxySniffingCB_stateChanged(int arg1);
     void on_tproxyOverrideHTTPCB_stateChanged(int arg1);
     void on_tproxyOverrideTLSCB_stateChanged(int arg1);
-    void on_pushButton_clicked();
     void on_noAutoConnectRB_clicked();
     void on_lastConnectedRB_clicked();
     void on_fixedAutoConnectRB_clicked();
