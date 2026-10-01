@@ -15,7 +15,6 @@ on:
       - "cmake/**"
       - "CMakeLists.txt"
       - "makespec/VERSION"
-      - "makespec/VERSIONSUFFIX"
   push:
     branches:
       - dev
@@ -149,7 +148,7 @@ jobs:
             Copy-Item $source $deployment -Force
           }
 
-          $sourceVersion = ((Get-Content 'makespec/VERSION' -Raw).Trim() + (Get-Content 'makespec/VERSIONSUFFIX' -Raw).Trim())
+          $sourceVersion = (Get-Content 'makespec/VERSION' -Raw).Trim()
           $buildManifest = [ordered]@{
             schema_version = 1
             qv2ray_version = $sourceVersion
