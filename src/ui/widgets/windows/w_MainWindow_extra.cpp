@@ -35,12 +35,12 @@ void MainWindow::MWShowWindow()
     if (!property("modernLayoutDefaultsApplied").toBool())
     {
         setProperty("modernLayoutDefaultsApplied", true);
-        setMinimumSize(760, 580);
-        leftWidget->setMinimumWidth(240);
+        setMinimumSize(800, 600);
+        leftWidget->setMinimumWidth(270);
         scrollArea->setMinimumWidth(420);
-        if (width() > 900 && width() <= 1024)
-            resize(900, qMax(height(), 620));
-        splitter->setSizes({ 250, qMax(width() - 270, 420) });
+        if (width() >= 900 && width() <= 1024)
+            resize(940, qMax(height(), 660));
+        splitter->setSizes({ 285, qMax(width() - 305, 420) });
 
         // Diagnostics are useful in day-to-day operation, so expose them by
         // default while keeping the existing header toggles for manual collapse.
@@ -328,7 +328,10 @@ void MainWindow::UpdateActionTranslations()
     action_RCM_ResetStats->setText(tr("Clear Usage Data"));
     action_RCM_DeleteConnection->setText(tr("Delete Connection"));
     //
-    sortMenu->setTitle(tr("Sort connection list."));
+    sortBtn->setToolTip(tr("View and sort connections"));
+    sortMenu->setTitle(tr("View and sort connections"));
+    sortAction_ViewFlat->setText(tr("Flat connection list"));
+    sortAction_ViewGrouped->setText(tr("Grouped connection list"));
     sortAction_SortByName_Asc->setText(tr("By connection name, A-Z"));
     sortAction_SortByName_Dsc->setText(tr("By connection name, Z-A"));
     sortAction_SortByPing_Asc->setText(tr("By latency, Ascending"));

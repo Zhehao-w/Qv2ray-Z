@@ -68,7 +68,7 @@
             <item row="1" column="0">
              <widget class="QLabel" name="label_36">
               <property name="text">
-               <string>Adapt Dark Tray Theme</string>
+               <string>Dark taskbar icon set</string>
               </property>
               <property name="textFormat">
                <enum>Qt::PlainText</enum>
@@ -192,7 +192,7 @@
             <item row="2" column="0">
              <widget class="QLabel" name="label_47">
               <property name="text">
-               <string>Adapt Glyph Tray Icon</string>
+               <string>Glyph-style tray icons</string>
               </property>
              </widget>
             </item>

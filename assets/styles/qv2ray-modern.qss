@@ -321,6 +321,28 @@ QPushButton#connectBtn:pressed {
     border-color: #2c6699;
 }
 
+QPushButton#connectBtn[connectionState="disconnect"] {
+    color: #ffffff;
+    background: #c7655a;
+    border-color: #c7655a;
+}
+
+QPushButton#connectBtn[connectionState="disconnect"]:hover {
+    background: #b95950;
+    border-color: #b95950;
+}
+
+QPushButton#connectBtn[connectionState="disconnect"]:pressed {
+    background: #a95048;
+    border-color: #a95048;
+}
+
+QPushButton#connectBtn:disabled {
+    color: #8f8f95;
+    background: #e8e8ec;
+    border-color: #ddddE2;
+}
+
 QLineEdit#connectionFilterTxt {
     min-height: 30px;
     background: #ffffff;

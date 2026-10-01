@@ -4,6 +4,8 @@
 #include "ui/widgets/common/WidgetUIBase.hpp"
 #include "utils/QvHelpers.hpp"
 
+#include <QStyle>
+
 constexpr auto INDEX_CONNECTION = 0;
 constexpr auto INDEX_GROUP = 1;
 
@@ -27,14 +29,19 @@ QvMessageBusSlotImpl(ConnectionInfoWidget)
 void ConnectionInfoWidget::setConnectionAction(bool connected)
 {
     // Keep the primary action text-only. The legacy start/stop SVGs do not
-    // render reliably against the maintained blue primary-button palette.
+    // render reliably against the maintained primary-button palette.
     connectBtn->setIcon(QIcon());
+    connectBtn->setProperty("connectionState", connected ? "disconnect" : "connect");
     connectBtn->setText(connected ? tr("Disconnect") : tr("Connect"));
+    connectBtn->style()->unpolish(connectBtn);
+    connectBtn->style()->polish(connectBtn);
 }
 
 void ConnectionInfoWidget::updateConnectionAction()
 {
-    const auto isCurrentItem = KernelInstance->CurrentConnection() == ConnectionGroupPair{ connectionId, groupId };
+    const auto hasConnection = connectionId != NullConnectionId && groupId != NullGroupId;
+    const auto isCurrentItem = hasConnection && KernelInstance->CurrentConnection() == ConnectionGroupPair{ connectionId, groupId };
+    connectBtn->setEnabled(hasConnection);
     setConnectionAction(isCurrentItem);
 }
 
@@ -69,10 +76,10 @@ void ConnectionInfoWidget::ShowDetails(const ConnectionGroupPair &_identifier)
 
     editBtn->setEnabled(isConnection);
     editJsonBtn->setEnabled(isConnection);
-    connectBtn->setEnabled(isConnection);
     editBtn->setVisible(isConnection);
     editJsonBtn->setVisible(isConnection);
-    connectBtn->setVisible(isConnection);
+    connectBtn->setVisible(true);
+    updateConnectionAction();
     stackedWidget->setCurrentIndex(isConnection ? INDEX_CONNECTION : INDEX_GROUP);
 
     if (isConnection)
@@ -85,7 +92,6 @@ void ConnectionInfoWidget::ShowDetails(const ConnectionGroupPair &_identifier)
         Q_UNUSED(protocol)
         addressLabel->setText(host);
         portLabel->setNum(port);
-        updateConnectionAction();
     }
     else
     {
@@ -126,6 +132,8 @@ void ConnectionInfoWidget::OnGroupRenamed(const GroupId &id, const QString &oldN
 
 void ConnectionInfoWidget::on_connectBtn_clicked()
 {
+    if (connectionId == NullConnectionId || groupId == NullGroupId)
+        return;
     if (ConnectionManager->IsConnected({ connectionId, groupId }))
         ConnectionManager->StopConnection();
     else

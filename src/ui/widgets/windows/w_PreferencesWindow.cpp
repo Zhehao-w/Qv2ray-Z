@@ -90,7 +90,11 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     themeCombo->setCurrentText(CurrentConfig.uiConfig.theme);
     darkThemeCB->setChecked(CurrentConfig.uiConfig.useDarkTheme);
     darkTrayCB->setChecked(CurrentConfig.uiConfig.useDarkTrayIcon);
+    darkTrayCB->setToolTip(
+        tr("Use the tray icon set intended for a dark Windows taskbar. This changes tray-icon contrast only, not the application theme."));
     glyphTrayCB->setChecked(CurrentConfig.uiConfig.useGlyphTrayIcon);
+    glyphTrayCB->setToolTip(
+        tr("Use simplified glyph variants for the disconnected, connected and system-proxy tray states."));
     languageComboBox->setCurrentText(CurrentConfig.uiConfig.language);
     logLevelComboBox->setCurrentIndex(CurrentConfig.logLevel);
     // Present the setting with the same polarity as the stored value: checked
