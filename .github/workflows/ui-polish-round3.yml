@@ -1,0 +1,144 @@
+name: Apply third UI polish pass
+
+on:
+  push:
+    branches:
+      - ui/main-window-modernization
+    paths:
+      - ".github/workflows/ui-polish-round3.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ui/main-window-modernization
+          fetch-depth: 0
+
+      - name: Apply compact layout and connection-state polish
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          # Move Flat/Grouped out of the cramped search row and into the existing sort menu.
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.hpp",
+              "#include <QHostAddress>\n#include <QComboBox>\n#include <QMainWindow>",
+              "#include <QHostAddress>\n#include <QMainWindow>")
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.hpp",
+              "    ConnectionInfoWidget *infoWidget;\n    QComboBox *connectionViewCombo = nullptr;\n    //",
+              "    ConnectionInfoWidget *infoWidget;\n    //")
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.hpp",
+              "    DECL_ACTION(sortMenu, sortAction_SortByName_Asc);",
+              "    DECL_ACTION(sortMenu, sortAction_ViewFlat);\n    DECL_ACTION(sortMenu, sortAction_ViewGrouped);\n    DECL_ACTION(sortMenu, sortAction_SortByName_Asc);")
+
+          old_view = '''    modelHelper = new ConnectionListHelper(connectionTreeView);\n    connectionViewCombo = new QComboBox(leftWidget);\n    connectionViewCombo->setToolTip(tr("Choose a flat list or the traditional grouped tree"));\n    connectionViewCombo->addItem(tr("Flat"), false);\n    connectionViewCombo->addItem(tr("Grouped"), true);\n    connectionViewCombo->setCurrentIndex(GlobalConfig.uiConfig.groupedConnectionView ? 1 : 0);\n    horizontalLayout_6->insertWidget(1, connectionViewCombo);\n    modelHelper->SetGrouped(GlobalConfig.uiConfig.groupedConnectionView);\n    collapseGroupsBtn->setVisible(GlobalConfig.uiConfig.groupedConnectionView);\n    connect(connectionViewCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {\n        const auto grouped = connectionViewCombo->itemData(index).toBool();\n        GlobalConfig.uiConfig.groupedConnectionView = grouped;\n        modelHelper->SetGrouped(grouped);\n        collapseGroupsBtn->setVisible(grouped);\n        if (grouped && !lastConnected.isEmpty())\n            connectionTreeView->expand(modelHelper->GetGroupIndex(lastConnected.groupId));\n    });'''
+          new_view = '''    modelHelper = new ConnectionListHelper(connectionTreeView);\n    modelHelper->SetGrouped(GlobalConfig.uiConfig.groupedConnectionView);\n    collapseGroupsBtn->setVisible(GlobalConfig.uiConfig.groupedConnectionView);\n    sortAction_ViewFlat->setCheckable(true);\n    sortAction_ViewGrouped->setCheckable(true);\n    sortAction_ViewFlat->setChecked(!GlobalConfig.uiConfig.groupedConnectionView);\n    sortAction_ViewGrouped->setChecked(GlobalConfig.uiConfig.groupedConnectionView);'''
+          replace_once("src/ui/widgets/windows/w_MainWindow.cpp", old_view, new_view)
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow.cpp",
+              "    constexpr auto sizeRatioA = 0.382;",
+              "    constexpr auto sizeRatioA = 0.31;")
+
+          old_sort = '''    // Sort Menu\n    //\n    sortMenu->addAction(sortAction_SortByName_Asc);\n    sortMenu->addAction(sortAction_SortByName_Dsc);\n    sortMenu->addSeparator();\n    sortMenu->addAction(sortAction_SortByData_Asc);\n    sortMenu->addAction(sortAction_SortByData_Dsc);\n    sortMenu->addSeparator();\n    sortMenu->addAction(sortAction_SortByPing_Asc);\n    sortMenu->addAction(sortAction_SortByPing_Dsc);\n    //\n    connect(sortAction_SortByName_Asc, &QAction::triggered, [this] { SortConnectionList(ROLE_DISPLAYNAME, true); });'''
+          new_sort = '''    // View / Sort Menu\n    //\n    sortMenu->addAction(sortAction_ViewFlat);\n    sortMenu->addAction(sortAction_ViewGrouped);\n    sortMenu->addSeparator();\n    sortMenu->addAction(sortAction_SortByName_Asc);\n    sortMenu->addAction(sortAction_SortByName_Dsc);\n    sortMenu->addSeparator();\n    sortMenu->addAction(sortAction_SortByData_Asc);\n    sortMenu->addAction(sortAction_SortByData_Dsc);\n    sortMenu->addSeparator();\n    sortMenu->addAction(sortAction_SortByPing_Asc);\n    sortMenu->addAction(sortAction_SortByPing_Dsc);\n    //\n    const auto setGroupedView = [this](bool grouped) {\n        GlobalConfig.uiConfig.groupedConnectionView = grouped;\n        modelHelper->SetGrouped(grouped);\n        collapseGroupsBtn->setVisible(grouped);\n        sortAction_ViewFlat->setChecked(!grouped);\n        sortAction_ViewGrouped->setChecked(grouped);\n        if (grouped && !lastConnected.isEmpty())\n            connectionTreeView->expand(modelHelper->GetGroupIndex(lastConnected.groupId));\n    };\n    connect(sortAction_ViewFlat, &QAction::triggered, [setGroupedView](bool) { setGroupedView(false); });\n    connect(sortAction_ViewGrouped, &QAction::triggered, [setGroupedView](bool) { setGroupedView(true); });\n    connect(sortAction_SortByName_Asc, &QAction::triggered, [this] { SortConnectionList(ROLE_DISPLAYNAME, true); });'''
+          replace_once("src/ui/widgets/windows/w_MainWindow.cpp", old_sort, new_sort)
+
+          # Slightly longer default footprint, with a little more room for the connection list.
+          old_size = '''        setMinimumSize(760, 580);\n        leftWidget->setMinimumWidth(240);\n        scrollArea->setMinimumWidth(420);\n        if (width() > 900 && width() <= 1024)\n            resize(900, qMax(height(), 620));\n        splitter->setSizes({ 250, qMax(width() - 270, 420) });'''
+          new_size = '''        setMinimumSize(800, 600);\n        leftWidget->setMinimumWidth(270);\n        scrollArea->setMinimumWidth(420);\n        if (width() >= 900 && width() <= 1024)\n            resize(940, qMax(height(), 660));\n        splitter->setSizes({ 285, qMax(width() - 305, 420) });'''
+          replace_once("src/ui/widgets/windows/w_MainWindow_extra.cpp", old_size, new_size)
+          replace_once(
+              "src/ui/widgets/windows/w_MainWindow_extra.cpp",
+              '''    sortMenu->setTitle(tr("Sort connection list."));\n    sortAction_SortByName_Asc->setText(tr("By connection name, A-Z"));''',
+              '''    sortBtn->setToolTip(tr("View and sort connections"));\n    sortMenu->setTitle(tr("View and sort connections"));\n    sortAction_ViewFlat->setText(tr("Flat connection list"));\n    sortAction_ViewGrouped->setText(tr("Grouped connection list"));\n    sortAction_SortByName_Asc->setText(tr("By connection name, A-Z"));''')
+
+          # Keep the primary connection action stable and truthful even before anything is selected.
+          replace_once(
+              "src/ui/widgets/widgets/ConnectionInfoWidget.cpp",
+              '#include "utils/QvHelpers.hpp"\n',
+              '#include "utils/QvHelpers.hpp"\n\n#include <QStyle>\n')
+          old_action = '''void ConnectionInfoWidget::setConnectionAction(bool connected)\n{\n    // Keep the primary action text-only. The legacy start/stop SVGs do not\n    // render reliably against the maintained blue primary-button palette.\n    connectBtn->setIcon(QIcon());\n    connectBtn->setText(connected ? tr("Disconnect") : tr("Connect"));\n}\n\nvoid ConnectionInfoWidget::updateConnectionAction()\n{\n    const auto isCurrentItem = KernelInstance->CurrentConnection() == ConnectionGroupPair{ connectionId, groupId };\n    setConnectionAction(isCurrentItem);\n}'''
+          new_action = '''void ConnectionInfoWidget::setConnectionAction(bool connected)\n{\n    // Keep the primary action text-only. The legacy start/stop SVGs do not\n    // render reliably against the maintained primary-button palette.\n    connectBtn->setIcon(QIcon());\n    connectBtn->setProperty("connectionState", connected ? "disconnect" : "connect");\n    connectBtn->setText(connected ? tr("Disconnect") : tr("Connect"));\n    connectBtn->style()->unpolish(connectBtn);\n    connectBtn->style()->polish(connectBtn);\n}\n\nvoid ConnectionInfoWidget::updateConnectionAction()\n{\n    const auto hasConnection = connectionId != NullConnectionId && groupId != NullGroupId;\n    const auto isCurrentItem = hasConnection && KernelInstance->CurrentConnection() == ConnectionGroupPair{ connectionId, groupId };\n    connectBtn->setEnabled(hasConnection);\n    setConnectionAction(isCurrentItem);\n}'''
+          replace_once("src/ui/widgets/widgets/ConnectionInfoWidget.cpp", old_action, new_action)
+          old_details = '''    editBtn->setEnabled(isConnection);\n    editJsonBtn->setEnabled(isConnection);\n    connectBtn->setEnabled(isConnection);\n    editBtn->setVisible(isConnection);\n    editJsonBtn->setVisible(isConnection);\n    connectBtn->setVisible(isConnection);\n    stackedWidget->setCurrentIndex(isConnection ? INDEX_CONNECTION : INDEX_GROUP);'''
+          new_details = '''    editBtn->setEnabled(isConnection);\n    editJsonBtn->setEnabled(isConnection);\n    editBtn->setVisible(isConnection);\n    editJsonBtn->setVisible(isConnection);\n    connectBtn->setVisible(true);\n    updateConnectionAction();\n    stackedWidget->setCurrentIndex(isConnection ? INDEX_CONNECTION : INDEX_GROUP);'''
+          replace_once("src/ui/widgets/widgets/ConnectionInfoWidget.cpp", old_details, new_details)
+          replace_once(
+              "src/ui/widgets/widgets/ConnectionInfoWidget.cpp",
+              '''        portLabel->setNum(port);\n        updateConnectionAction();''',
+              '''        portLabel->setNum(port);''')
+          replace_once(
+              "src/ui/widgets/widgets/ConnectionInfoWidget.cpp",
+              '''void ConnectionInfoWidget::on_connectBtn_clicked()\n{\n    if (ConnectionManager->IsConnected({ connectionId, groupId }))''',
+              '''void ConnectionInfoWidget::on_connectBtn_clicked()\n{\n    if (connectionId == NullConnectionId || groupId == NullGroupId)\n        return;\n    if (ConnectionManager->IsConnected({ connectionId, groupId }))''')
+
+          # Connect = blue, Disconnect = distinct muted red, no selection = neutral disabled.
+          qss_path = Path("assets/styles/qv2ray-modern.qss")
+          qss = qss_path.read_text(encoding="utf-8")
+          marker = '''QPushButton#newConnectionBtn:pressed,\nQPushButton#connectBtn:pressed {\n    background: #2c6699;\n    border-color: #2c6699;\n}\n'''
+          addition = marker + '''\nQPushButton#connectBtn[connectionState="disconnect"] {\n    color: #ffffff;\n    background: #c7655a;\n    border-color: #c7655a;\n}\n\nQPushButton#connectBtn[connectionState="disconnect"]:hover {\n    background: #b95950;\n    border-color: #b95950;\n}\n\nQPushButton#connectBtn[connectionState="disconnect"]:pressed {\n    background: #a95048;\n    border-color: #a95048;\n}\n\nQPushButton#connectBtn:disabled {\n    color: #8f8f95;\n    background: #e8e8ec;\n    border-color: #ddddE2;\n}\n'''
+          if qss.count(marker) != 1:
+              raise SystemExit(f"qss marker count {qss.count(marker)}")
+          qss_path.write_text(qss.replace(marker, addition, 1), encoding="utf-8")
+
+          # Clarify the two still-functional tray appearance switches.
+          replace_once(
+              "src/ui/widgets/windows/w_PreferencesWindow.ui",
+              "<string>Adapt Dark Tray Theme</string>",
+              "<string>Dark taskbar icon set</string>")
+          replace_once(
+              "src/ui/widgets/windows/w_PreferencesWindow.ui",
+              "<string>Adapt Glyph Tray Icon</string>",
+              "<string>Glyph-style tray icons</string>")
+          replace_once(
+              "src/ui/widgets/windows/w_PreferencesWindow.cpp",
+              '''    darkTrayCB->setChecked(CurrentConfig.uiConfig.useDarkTrayIcon);\n    glyphTrayCB->setChecked(CurrentConfig.uiConfig.useGlyphTrayIcon);''',
+              '''    darkTrayCB->setChecked(CurrentConfig.uiConfig.useDarkTrayIcon);\n    darkTrayCB->setToolTip(\n        tr("Use the tray icon set intended for a dark Windows taskbar. This changes tray-icon contrast only, not the application theme."));\n    glyphTrayCB->setChecked(CurrentConfig.uiConfig.useGlyphTrayIcon);\n    glyphTrayCB->setToolTip(\n        tr("Use simplified glyph variants for the disconnected, connected and system-proxy tray states."));''')
+
+          ET.parse("src/ui/widgets/windows/w_MainWindow.ui")
+          ET.parse("src/ui/widgets/windows/w_PreferencesWindow.ui")
+          PY
+
+          git diff --check
+          git rm .github/workflows/ui-polish-round3.yml
+          git config user.name "Zhehao Wang"
+          git config user.email "31388024+Zhehao-w@users.noreply.github.com"
+          git add assets/styles/qv2ray-modern.qss \
+                  src/ui/widgets/widgets/ConnectionInfoWidget.cpp \
+                  src/ui/widgets/windows/w_MainWindow.cpp \
+                  src/ui/widgets/windows/w_MainWindow.hpp \
+                  src/ui/widgets/windows/w_MainWindow_extra.cpp \
+                  src/ui/widgets/windows/w_PreferencesWindow.cpp \
+                  src/ui/widgets/windows/w_PreferencesWindow.ui
+          git commit -m "Polish connection list controls and action states"
+          git push origin HEAD:ui/main-window-modernization
+
+      - name: Dispatch maintained validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run data-safety-hardening.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run vless-vision-validation.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
+          gh workflow run windows-vless-vision-package.yml --repo "$GITHUB_REPOSITORY" --ref ui/main-window-modernization
