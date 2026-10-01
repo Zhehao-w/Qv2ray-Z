@@ -1,6 +1,6 @@
 #pragma once
 
-#include "base/models/QvConfigIdentifier.hpp"
+#include "core/CoreUtils.hpp"
 
 #include <algorithm>
 
