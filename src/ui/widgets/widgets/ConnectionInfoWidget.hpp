@@ -36,6 +36,7 @@ class ConnectionInfoWidget
 
   private:
     void updateColorScheme();
+    void setConnectionAction(bool connected);
     void updateConnectionAction();
     QvMessageBusSlotDecl;
     ConnectionId connectionId = NullConnectionId;
