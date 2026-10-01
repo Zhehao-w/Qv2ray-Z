@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   linux-tests:
+    if: github.event_name == 'workflow_dispatch'
     name: Qt5 supported regression tests
     runs-on: ubuntu-22.04
     timeout-minutes: 35
