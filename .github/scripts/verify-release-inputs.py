@@ -13,6 +13,9 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SHA_REF = re.compile(r"^[0-9a-f]{40}$")
 USES = re.compile(r"^\s*uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
 
+QT_INTERNAL_ACTION = "jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730"
+SETUP_PYTHON_ACTION = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"
+
 
 def fail(message: str) -> None:
     raise SystemExit(f"release input verification failed: {message}")
@@ -62,6 +65,20 @@ installer_text = XRAY_INSTALLER.read_text(encoding="utf-8")
 for marker in ("release-dependencies.json", "Get-FileHash", "Xray checksum mismatch"):
     if marker not in installer_text:
         fail(f"shared Windows Xray installer is missing required verification marker: {marker}")
+
+for name in ("data-safety-hardening.yml", "windows-release.yml", "windows-vless-vision-package.yml"):
+    text = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
+    if "jurplel/install-qt-action@" in text:
+        fail(f"{name}: outer install-qt-action composite contains nested floating action references; use the pinned internal action")
+    for marker in (
+        QT_INTERNAL_ACTION,
+        SETUP_PYTHON_ACTION,
+        "python-version: '3.13.3'",
+        "aqtversion: '==3.3.0'",
+        "py7zrversion: '==1.0.0'",
+    ):
+        if marker not in text:
+            fail(f"{name}: pinned Qt installer chain is missing {marker}")
 
 for name in ("windows-release.yml", "windows-vless-vision-package.yml"):
     text = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
