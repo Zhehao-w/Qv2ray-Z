@@ -1,8 +1,6 @@
 /* Qv2ray-Z maintained Qt5 visual system. */
 
 QWidget {
-    font-family: "Segoe UI";
-    font-size: 9pt;
     color: #1f1f1f;
 }
 
@@ -17,7 +15,6 @@ QGroupBox {
     border-radius: 8px;
     margin-top: 12px;
     padding: 12px 10px 10px 10px;
-    font-weight: 600;
 }
 
 QGroupBox::title {
@@ -25,6 +22,7 @@ QGroupBox::title {
     left: 10px;
     padding: 0 4px;
     background: #ffffff;
+    font-weight: 600;
 }
 
 QPushButton,
