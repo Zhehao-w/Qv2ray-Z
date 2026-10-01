@@ -63,6 +63,7 @@ ConnectionInfoWidget::ConnectionInfoWidget(QWidget *parent) : QWidget(parent)
     connect(ConnectionManager, &QvConfigHandler::OnConnected, this, &ConnectionInfoWidget::OnConnected);
     connect(ConnectionManager, &QvConfigHandler::OnDisconnected, this, &ConnectionInfoWidget::OnDisConnected);
     connect(ConnectionManager, &QvConfigHandler::OnGroupRenamed, this, &ConnectionInfoWidget::OnGroupRenamed);
+    connect(ConnectionManager, &QvConfigHandler::OnConnectionRenamed, this, &ConnectionInfoWidget::OnConnectionRenamed);
     connect(ConnectionManager, &QvConfigHandler::OnConnectionModified, this, &ConnectionInfoWidget::OnConnectionModified);
     connect(ConnectionManager, &QvConfigHandler::OnConnectionLinkedWithGroup, this, &ConnectionInfoWidget::OnConnectionModified_Pair);
     connect(ConnectionManager, &QvConfigHandler::OnConnectionRemovedFromGroup, this, &ConnectionInfoWidget::OnConnectionModified_Pair);
@@ -128,6 +129,13 @@ void ConnectionInfoWidget::OnGroupRenamed(const GroupId &id, const QString &oldN
         if (connectionId == NullConnectionId)
             connNameLabel->setText(newName);
     }
+}
+
+void ConnectionInfoWidget::OnConnectionRenamed(const ConnectionId &id, const QString &oldName, const QString &newName)
+{
+    Q_UNUSED(oldName)
+    if (connectionId == id)
+        connNameLabel->setText(newName);
 }
 
 void ConnectionInfoWidget::on_connectBtn_clicked()
