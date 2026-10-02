@@ -1,7 +1,11 @@
 #pragma once
 #include <QObject>
 
-#define QvMessageBusConnect(CLASSNAME) connect(&UIMessageBus, &QvMessageBusObject::QvSendMessage, this, &CLASSNAME::on_QvMessageReceived)
+#define QvMessageBusConnect(CLASSNAME)                                                                                                                \
+    connect(&UIMessageBus, &QvMessageBusObject::QvSendMessage, this, [this](const QvMBMessage &msg) {                                                \
+        if (msg != RETRANSLATE)                                                                                                                      \
+            this->QvMessageBusSlotIdentifier(msg);                                                                                                   \
+    })
 
 #define QvMessageBusSlotSig const QvMBMessage &msg
 #define QvMessageBusSlotIdentifier on_QvMessageReceived
@@ -19,10 +23,10 @@
         this->setWindowOpacity(0);                                                                                                                   \
         break;
 
+// Runtime language switching is retired. This source-compatibility case is a
+// no-op, and both the connection boundary and EmitGlobalSignal reject it.
 #define MBRetranslateDefaultImpl                                                                                                                     \
-    case RETRANSLATE:                                                                                                                                \
-        this->retranslateUi(this);                                                                                                                   \
-        break;
+    case RETRANSLATE: break;
 
 #define MBUpdateColorSchemeDefaultImpl                                                                                                               \
     case UPDATE_COLORSCHEME: this->updateColorScheme(); break;
@@ -36,7 +40,7 @@ namespace Qv2ray::ui::messaging
         SHOW_WINDOWS,
         /// Hide all windows.
         HIDE_WINDOWS,
-        /// Retranslate User Interface.
+        /// Reserved legacy value. Runtime retranslation is not dispatched.
         RETRANSLATE,
         /// Change Color Scheme
         UPDATE_COLORSCHEME
@@ -50,6 +54,8 @@ namespace Qv2ray::ui::messaging
         explicit QvMessageBusObject(){};
         void EmitGlobalSignal(const QvMBMessage &msg)
         {
+            if (msg == RETRANSLATE)
+                return;
             emit QvSendMessage(msg);
         }
       signals:

@@ -48,30 +48,9 @@ void Qv2rayWidgetApplication::onMessageReceived(quint32 clientId, QByteArray _ms
         return;
 
     const auto msg = Qv2rayStartupArguments::fromJson(JsonFromString(_msg));
-    LOG("Client ID:", clientId, ", message received, version:", msg.buildVersion);
+    LOG("Client ID:", clientId, ", message received.");
     DEBUG(_msg);
     //
-    if (msg.buildVersion > QV2RAY_VERSION_BUILD)
-    {
-        const auto newPath = msg.fullArgs.first();
-        QString message;
-        message += tr("A new version of Qv2ray is starting:") + NEWLINE;
-        message += NEWLINE;
-        message += tr("New version information: ") + NEWLINE;
-        message += tr("Version: %1:%2").arg(msg.version).arg(msg.buildVersion) + NEWLINE;
-        message += tr("Path: %1").arg(newPath) + NEWLINE;
-        message += NEWLINE;
-        message += tr("Do you want to exit and launch that new version?");
-
-        const auto result = QvMessageBoxAsk(nullptr, tr("New version detected"), message);
-        if (result == Yes)
-        {
-            StartupArguments._qvNewVersionPath = newPath;
-            SetExitReason(EXIT_NEW_VERSION_TRIGGER);
-            QCoreApplication::quit();
-        }
-    }
-
     for (const auto &argument : msg.arguments)
     {
         switch (argument)

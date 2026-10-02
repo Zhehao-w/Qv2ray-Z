@@ -116,19 +116,6 @@ namespace Qv2ray::base::config
                             F(v2CorePath_win, v2AssetsPath_win))
     };
 
-    struct Qv2rayConfig_Update
-    {
-        enum UpdateChannel
-        {
-            CHANNEL_STABLE = 0,
-            CHANNEL_TESTING = 1
-        };
-        UpdateChannel updateChannel = CHANNEL_STABLE;
-        QString ignoredVersion;
-        JSONSTRUCT_COMPARE(Qv2rayConfig_Update, updateChannel, ignoredVersion)
-        JSONSTRUCT_REGISTER(Qv2rayConfig_Update, F(ignoredVersion, updateChannel))
-    };
-
     struct Qv2rayConfig_Advanced
     {
         bool testLatencyPeriodically = false;
@@ -184,7 +171,6 @@ namespace Qv2ray::base::config
         Qv2rayConfig_UI uiConfig;
         Qv2rayConfig_Plugin pluginConfig;
         Qv2rayConfig_Kernel kernelConfig;
-        Qv2rayConfig_Update updateConfig;
         Qv2rayConfig_Network networkConfig;
         QvConfig_Inbounds inboundConfig;
         QvConfig_Outbounds outboundConfig;
@@ -201,10 +187,10 @@ namespace Qv2ray::base::config
         Q_DISABLE_COPY_MOVE(Qv2rayConfigObject);
 #endif
         JSONSTRUCT_COMPARE(Qv2rayConfigObject, config_version, logLevel, autoStartId, lastConnectedId, autoStartBehavior, uiConfig, pluginConfig,
-                           kernelConfig, updateConfig, networkConfig, inboundConfig, outboundConfig, advancedConfig, defaultRouteConfig)
+                           kernelConfig, networkConfig, inboundConfig, outboundConfig, advancedConfig, defaultRouteConfig)
         JSONSTRUCT_REGISTER_NOCOPYMOVE(Qv2rayConfigObject,                                                                   //
                                        A(config_version, autoStartId, lastConnectedId, autoStartBehavior, logLevel),         //
-                                       A(uiConfig, advancedConfig, pluginConfig, updateConfig, kernelConfig, networkConfig), //
+                                       A(uiConfig, advancedConfig, pluginConfig, kernelConfig, networkConfig),               //
                                        A(inboundConfig, outboundConfig, defaultRouteConfig))
     };
 } // namespace Qv2ray::base::config

@@ -19,7 +19,6 @@ namespace Qv2ray
     enum Qv2rayExitReason
     {
         EXIT_NORMAL = 0,
-        EXIT_NEW_VERSION_TRIGGER = EXIT_NORMAL,
         EXIT_SECONDARY_INSTANCE = EXIT_NORMAL,
         EXIT_INITIALIZATION_FAILED = -1,
         EXIT_PRECONDITION_FAILED = -2,
@@ -36,8 +35,11 @@ namespace Qv2ray
             DISCONNECT = 4
         };
         QList<Argument> arguments;
+        // Legacy wire metadata is still sent so a newer secondary instance can
+        // safely hand commands to an older primary. Maintained Qv2ray-Z does not
+        // consume these fields for updater behavior.
         QString version;
-        int buildVersion;
+        int buildVersion = 0;
         QString data;
         QList<QString> links;
         QList<QString> fullArgs;
@@ -48,7 +50,6 @@ namespace Qv2ray
         bool noPlugins;
         bool exitQv2ray;
         //
-        QString _qvNewVersionPath;
         JSONSTRUCT_REGISTER(Qv2rayStartupArguments, F(arguments, data, version, links, fullArgs, buildVersion))
     };
 

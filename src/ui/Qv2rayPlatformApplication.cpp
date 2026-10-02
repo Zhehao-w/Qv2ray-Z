@@ -24,7 +24,7 @@ QStringList Qv2rayPlatformApplication::CheckPrerequisites()
     QStringList errors;
     if (!QSslSocket::supportsSsl())
     {
-        // Check OpenSSL version for auto-update and subscriptions
+        // Subscriptions require TLS support.
         const auto osslReqVersion = QSslSocket::sslLibraryBuildVersionString();
         const auto osslCurVersion = QSslSocket::sslLibraryVersionString();
         LOG("Current OpenSSL version: " + osslCurVersion);
@@ -75,6 +75,9 @@ bool Qv2rayPlatformApplication::Initialize()
     connect(this, &SingleApplication::receivedMessage, this, &Qv2rayPlatformApplication::onMessageReceived, Qt::QueuedConnection);
     if (isSecondary())
     {
+        // Older Qv2ray primaries expect these fields in the single-instance
+        // message. They are wire compatibility only; maintained Qv2ray-Z does
+        // not use them to relaunch an updater or replacement executable.
         StartupArguments.version = QV2RAY_VERSION_STRING;
         StartupArguments.buildVersion = QV2RAY_VERSION_BUILD;
         StartupArguments.fullArgs = arguments();

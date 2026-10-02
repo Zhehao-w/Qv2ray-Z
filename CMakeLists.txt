@@ -118,10 +118,6 @@ set(QV_QT_MAJOR_VERSION 5)
 set(QV_QT_MINOR_VERSION 11)
 set(QV_QT_LIBNAME Qt5)
 
-# The in-app updater is retired in every maintained build. Keep the legacy
-# feature define so the existing Preferences UI cannot expose inert settings.
-add_definitions(-DDISABLE_AUTO_UPDATE)
-
 # ==================================================================================
 # Default Core/Assets Path
 # ==================================================================================
