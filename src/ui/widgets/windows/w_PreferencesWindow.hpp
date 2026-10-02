@@ -125,7 +125,6 @@ class PreferencesWindow
     void on_qvNetworkUATxt_editTextChanged(const QString &arg1);
     void on_V2RayOutboundStatsCB_stateChanged(int arg1);
     void on_hasDirectStatisticsCB_stateChanged(int arg1);
-    void on_useOldShareLinkFormatCB_stateChanged(int arg1);
     void on_bypassPrivateCb_clicked(bool checked);
     void on_disableSystemRootCB_stateChanged(int arg1);
     void on_openConfigDirCB_clicked();
@@ -140,8 +139,6 @@ class PreferencesWindow
     void on_httpOverrideFakeDNSOthersCB_stateChanged(int arg1);
     void on_tproxyOverrideFakeDNSCB_stateChanged(int arg1);
     void on_tproxyOverrideFakeDNSOthersCB_stateChanged(int arg1);
-    void on_browserForwarderAddressTxt_textEdited(const QString &arg1);
-    void on_browserForwarderPortSB_valueChanged(int arg1);
 
   private:
     DnsSettingsWidget *dnsSettingsWidget;
