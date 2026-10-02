@@ -73,7 +73,7 @@ namespace Qv2ray::core::connection
                 server.users.first().security = "auto";
             }
 
-            const static auto getQueryValue = [&query](const QString &key, const QString &defaultValue)
+            const auto getQueryValue = [&query](const QString &key, const QString &defaultValue)
             {
                 if (query.hasQueryItem(key))
                     return query.queryItemValue(key, QUrl::FullyDecoded);
