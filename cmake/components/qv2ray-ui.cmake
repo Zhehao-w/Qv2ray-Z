@@ -13,9 +13,6 @@ set(QV2RAY_UI_COMMON_SOURCES
     ${QV2RAY_UI_COMMON_BASEDIR}/QvMessageBus.hpp
     ${QV2RAY_UI_COMMON_BASEDIR}/QvMessageBus.cpp
     #
-    ${QV2RAY_UI_COMMON_BASEDIR}/darkmode/DarkmodeDetector.cpp
-    ${QV2RAY_UI_COMMON_BASEDIR}/darkmode/DarkmodeDetector.hpp
-    #
     ${QV2RAY_UI_COMMON_BASEDIR}/speedchart/speedwidget.cpp
     ${QV2RAY_UI_COMMON_BASEDIR}/speedchart/speedwidget.hpp
     )

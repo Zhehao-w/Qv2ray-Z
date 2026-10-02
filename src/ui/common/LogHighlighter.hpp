@@ -61,7 +61,7 @@ namespace Qv2ray::ui
         Q_OBJECT
 
       public:
-        explicit SyntaxHighlighter(bool darkMode, QTextDocument *parent = nullptr);
+        explicit SyntaxHighlighter(QTextDocument *parent = nullptr);
 
       protected:
         void highlightBlock(const QString &text) override;
