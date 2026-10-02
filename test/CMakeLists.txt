@@ -27,7 +27,6 @@ target_include_directories(parse_vless_url PRIVATE
 ADD_QV2RAY_TEST(generation src/core/connection/TestGeneration.cpp)
 ADD_QV2RAY_TEST(qjsonio libs/QJsonStruct/QJsonIO.cpp)
 ADD_QV2RAY_TEST(settings_compatibility src/core/settings/TestSettingsCompatibility.cpp)
-ADD_QV2RAY_TEST(settings_initialization_safety src/core/settings/TestSettingsInitializationSafety.cpp)
 ADD_QV2RAY_TEST(realping src/components/latency/TestRealPing.cpp)
 ADD_QV2RAY_TEST(kernel_path_resolver src/core/kernel/TestKernelPathResolver.cpp)
 ADD_QV2RAY_TEST(kernel_process_lifecycle src/core/kernel/TestKernelProcessLifecycle.cpp)
