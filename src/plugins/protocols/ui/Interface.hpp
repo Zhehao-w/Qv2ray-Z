@@ -1,4 +1,3 @@
-#include "PluginSettingsWidget.hpp"
 #include "QvGUIPluginInterface.hpp"
 //
 #include "inbound/dokodemo-door.hpp"
@@ -31,7 +30,7 @@ class ProtocolGUIInterface : public PluginGUIInterface
     }
     std::unique_ptr<QvPluginSettingsWidget> createSettingsWidgets() const override
     {
-        return std::make_unique<SimplePluginSettingsWidget>();
+        return nullptr;
     }
     QList<typed_plugin_editor> createInboundEditors() const override
     {

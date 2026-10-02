@@ -18,8 +18,6 @@ namespace Qv2ray::components::plugins
 
     QvPluginHost::QvPluginHost(QObject *parent) : QObject(parent)
     {
-        if (!GlobalConfig.pluginConfig.pluginStates.isEmpty())
-            LOG("Legacy plugin enable-state configuration is ignored; external plugins are no longer supported.");
         if (auto dir = QDir(QV2RAY_PLUGIN_SETTINGS_DIR); !dir.exists())
             dir.mkpath(QV2RAY_PLUGIN_SETTINGS_DIR);
         initializePluginHost();
@@ -36,7 +34,6 @@ namespace Qv2ray::components::plugins
 
             componentObject->setParent(this);
             QvPluginInfo info;
-            info.libraryPath = tr("Built into qv2ray.exe");
             info.componentObject = componentObject;
             info.pluginInterface = componentInterface;
             info.metadata = componentInterface->GetMetadata();
@@ -97,20 +94,6 @@ namespace Qv2ray::components::plugins
             }
         }
         QvMessageBoxWarn(nullptr, "Unknown Internal Component - " + title, message);
-    }
-
-    bool QvPluginHost::GetPluginEnabled(const QString &internalName) const
-    {
-        return plugins.contains(internalName);
-    }
-
-    void QvPluginHost::SetPluginEnabled(const QString &internalName, bool isEnabled)
-    {
-        Q_UNUSED(isEnabled)
-        if (plugins.contains(internalName))
-            LOG("Internal component enable state is fixed; ignoring state change for: " + internalName);
-        else
-            LOG("Unknown component state change ignored: " + internalName);
     }
 
     void QvPluginHost::initializePluginHost()
@@ -301,44 +284,5 @@ namespace Qv2ray::components::plugins
             }
         }
         return "";
-    }
-
-    const QStringList GetPluginComponentsString(const QList<PluginGuiComponentType> &types)
-    {
-        QStringList typesList;
-        if (types.isEmpty())
-            typesList << QObject::tr("None");
-        for (auto type : types)
-        {
-            switch (type)
-            {
-                case GUI_COMPONENT_SETTINGS: typesList << QObject::tr("Settings Widget"); break;
-                case GUI_COMPONENT_INBOUND_EDITOR: typesList << QObject::tr("Inbound Editor"); break;
-                case GUI_COMPONENT_OUTBOUND_EDITOR: typesList << QObject::tr("Outbound Editor"); break;
-                case GUI_COMPONENT_MAINWINDOW_WIDGET: typesList << QObject::tr("MainWindow Widget"); break;
-                default: typesList << QObject::tr("Unknown type."); break;
-            }
-        }
-        return typesList;
-    }
-
-    const QStringList GetPluginComponentsString(const QList<PluginComponentType> &types)
-    {
-        QStringList typesList;
-        if (types.isEmpty())
-            typesList << QObject::tr("None");
-        for (auto type : types)
-        {
-            switch (type)
-            {
-                case COMPONENT_KERNEL: typesList << QObject::tr("Kernel"); break;
-                case COMPONENT_OUTBOUND_HANDLER: typesList << QObject::tr("Outbound Handler/Parser"); break;
-                case COMPONENT_SUBSCRIPTION_ADAPTER: typesList << QObject::tr("Subscription Adapter"); break;
-                case COMPONENT_EVENT_HANDLER: typesList << QObject::tr("Event Handler"); break;
-                case COMPONENT_GUI: typesList << QObject::tr("GUI Components"); break;
-                default: typesList << QObject::tr("Unknown type."); break;
-            }
-        }
-        return typesList;
     }
 } // namespace Qv2ray::components::plugins

@@ -13,7 +13,6 @@ namespace Qv2ray::components::plugins
     {
       public:
         bool isLoaded = false;
-        QString libraryPath;
         QvPluginMetadata metadata;
         QObject *componentObject = nullptr;
         Qv2rayInterface *pluginInterface = nullptr;
@@ -29,8 +28,6 @@ namespace Qv2ray::components::plugins
       public:
         explicit QvPluginHost(QObject *parent = nullptr);
         ~QvPluginHost();
-        bool GetPluginEnabled(const QString &internalName) const;
-        void SetPluginEnabled(const QString &internalName, bool isEnabled);
         void SavePluginSettings() const;
 
         QvPluginInfo *GetPlugin(const QString &internalName)
@@ -77,7 +74,7 @@ namespace Qv2ray::components::plugins
       private:
         bool shouldUsePlugin(const QString &internalName) const
         {
-            return GetPluginEnabled(internalName) && plugins[internalName].isLoaded;
+            return plugins.contains(internalName) && plugins[internalName].isLoaded;
         }
         void initializePluginHost();
         int refreshPluginList();
@@ -88,8 +85,6 @@ namespace Qv2ray::components::plugins
         QHash<QString, QvPluginInfo> plugins;
     };
 
-    const QStringList GetPluginComponentsString(const QList<PluginGuiComponentType> &types);
-    const QStringList GetPluginComponentsString(const QList<PluginComponentType> &types);
     inline ::Qv2ray::components::plugins::QvPluginHost *PluginHost = nullptr;
 
 } // namespace Qv2ray::components::plugins

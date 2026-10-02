@@ -2,7 +2,7 @@
 
 ## Scope
 
-This audit documents the maintained Qv2ray-Z plugin boundary after external native plugin support was retired. It covers the active build graph, runtime registration, plugin-related UI/config remnants, and Windows packaging guardrails. It does not attempt a configuration-schema migration or a broad language/i18n cleanup.
+This audit documents the maintained Qv2ray-Z plugin boundary after external native plugin support was retired. It covers the active build graph, runtime registration, plugin-related UI/config remnants, and Windows packaging guardrails. It does not attempt a broad language/i18n cleanup.
 
 ## Current trust boundary
 
@@ -28,24 +28,27 @@ This is a focused architecture regression guard, not a general static-analysis c
 
 ## Focused cleanup completed
 
-The post-audit cleanup removed the dead plugin surfaces that could be proven unnecessary without changing maintained protocol/subscription behavior or configuration compatibility:
+The post-audit cleanup removed dead plugin surfaces that could be proven unnecessary without changing maintained protocol/subscription behavior:
 
 1. The inactive `src/plugins/utils/**` tree, including its historical `MODULE` target and platform plugin install rules, was removed from the source tree.
 2. The retired `w_PluginManager` implementation and `.ui` form were removed from the build/source surface together with the historical `open plugin` command branch and private `on_pluginsBtn_clicked` MainWindow slot. No Plugin Manager compatibility tombstone remains.
 3. The StyleManager polish hook that existed only to hide the already-absent `pluginsBtn` control was removed.
+4. The retired `pluginStates` enable/disable state is no longer part of the live configuration schema. QJsonStruct ignores unknown legacy keys, so existing config files remain readable while future saves stop persisting the dead field; a regression test covers that behavior.
+5. Plugin Manager-only host display metadata/component-label helpers and the fixed enable/disable compatibility API were removed.
+6. The built-in protocol component's empty settings form was removed. Its GUI interface now returns no settings widget while retaining all inbound/outbound editors.
 
-The first-party `QvPluginHost` dispatch path, protocol/subscription components, their settings widgets, and the compile-time plugin interface remain active and intentionally unchanged.
+The first-party `QvPluginHost` dispatch path, protocol/subscription components, their persisted component settings, and the compile-time plugin interface remain active.
 
 ## Remaining compatibility surface
 
-The following items remain deliberately out of this focused cleanup because they are active compile-time APIs or persistent compatibility surfaces:
+The following items remain because they are active compile-time APIs or persistent compatibility surfaces:
 
 1. `QvPluginHost`, plugin-interface types, and several paths/APIs still use historical plugin naming even though their runtime role is now internal component dispatch.
-2. `Qv2rayConfig_Plugin::pluginStates` remains for old configuration compatibility. `QvPluginHost` ignores legacy enable-state data for external plugins instead of restoring external loading.
-3. `QV2RAY_PLUGIN_SETTINGS_DIR` remains as the settings location for the built-in components. Whether to rename/migrate that persistent path belongs to the later compatibility/schema audit.
-4. The pinned `src/plugin-interface` dependency remains because protocol/subscription implementations still consume its active compile-time contracts.
+2. `QV2RAY_PLUGIN_SETTINGS_DIR` and `plugin_settings/` remain the settings location for the built-in components. Renaming that persistent path would require an explicit migration and is not part of this cleanup.
+3. The pinned `src/plugin-interface` dependency remains because protocol/subscription implementations still consume its active compile-time contracts.
+4. `Qv2rayConfig_Plugin` remains because `v2rayIntegration` and `portAllocationStart` are still active kernel settings despite the historical struct name.
 
-Renaming or removing the active/persistent structures should be handled by the later compatibility/schema audit rather than folded into attack-surface cleanup.
+Renaming active/persistent structures should be handled separately and only with an explicit compatibility plan.
 
 ## i18n/resource note
 

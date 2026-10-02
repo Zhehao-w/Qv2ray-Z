@@ -36,9 +36,6 @@ set(BUILTIN_PROTOCOL_PLUGIN_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/core/OutboundHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/core/OutboundHandler.hpp
     ${CMAKE_CURRENT_LIST_DIR}/ui/Interface.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/ui/PluginSettingsWidget.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/ui/PluginSettingsWidget.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/ui/PluginSettingsWidget.ui
     )
 
 list(APPEND PLUGIN_TRANSLATION_SOURCES ${BUILTIN_PROTOCOL_PLUGIN_SOURCES})
