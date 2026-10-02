@@ -2,8 +2,8 @@
 #
 # The current product model deliberately keeps the historical plugin interface
 # vocabulary for first-party components while removing the external native
-# plugin trust boundary. Keep these checks close to the active CMake graph so
-# every supported/diagnostic configure verifies the invariant.
+# plugin trust boundary. Run this check only after the complete top-level build
+# graph has been configured so later/indirect includes cannot evade it.
 
 function(qv2ray_verify_internal_component_boundary source_root)
     set(expected_internal_components
@@ -24,17 +24,10 @@ function(qv2ray_verify_internal_component_boundary source_root)
         endif()
     endforeach()
 
-    # This legacy target still has an inert historical MODULE recipe in the
-    # source tree. The focused cleanup PR will remove it; until then neither a
-    # direct top-level include nor an already-active target is allowed.
-    file(READ "${source_root}/CMakeLists.txt" top_level_cmake_source)
-    string(FIND "${top_level_cmake_source}"
-        "include(src/plugins/utils/QvPlugin-BuiltinUtils.cmake)"
-        legacy_utils_include_index)
-    if(NOT legacy_utils_include_index EQUAL -1)
-        message(FATAL_ERROR
-            "Plugin boundary violation: legacy QvPlugin-BuiltinUtils must not be included by the top-level build.")
-    endif()
+    # The legacy utils recipe still exists in the source tree until the focused
+    # cleanup PR removes it. Because this function runs after the full top-level
+    # graph is configured, any direct, quoted, or indirect include that creates
+    # the old MODULE target is caught by the target graph itself.
     if(TARGET QvPlugin-BuiltinUtils)
         message(FATAL_ERROR
             "Plugin boundary violation: legacy QvPlugin-BuiltinUtils must not be an active build target.")
