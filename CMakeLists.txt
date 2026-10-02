@@ -223,6 +223,11 @@ endif()
 include(src/plugins/protocols/QvPlugin-BuiltinProtocolSupport.cmake)
 include(src/plugins/subscription-adapters/QvPlugin-BuiltinSubscriptionAdapters.cmake)
 
+# Validate the complete maintained plugin/component graph after all supported
+# first-party component targets have been registered.
+include(cmake/plugin-boundary.cmake)
+qv2ray_verify_internal_component_boundary("${CMAKE_SOURCE_DIR}")
+
 # ==================================================================================
 # QWidget frontend
 # ==================================================================================
