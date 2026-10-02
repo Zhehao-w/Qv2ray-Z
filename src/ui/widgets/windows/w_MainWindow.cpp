@@ -109,7 +109,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     connectionInfoLayout->addWidget(infoWidget);
     //
     masterLogBrowser->setDocument(vCoreLogDocument);
-    vCoreLogHighlighter = new SyntaxHighlighter(GlobalConfig.uiConfig.useDarkTheme, masterLogBrowser->document());
+    vCoreLogHighlighter = new SyntaxHighlighter(masterLogBrowser->document());
     // For charts
     speedChartWidget = new SpeedWidget(this);
     speedChart->addWidget(speedChartWidget);

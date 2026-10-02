@@ -6,25 +6,15 @@
 
 namespace Qv2ray::ui
 {
-    SyntaxHighlighter::SyntaxHighlighter(bool, QTextDocument *parent) : QSyntaxHighlighter(parent)
+    SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent) : QSyntaxHighlighter(parent)
     {
-        constexpr bool darkMode = false;
         HighlightingRule rule;
 
-        if (darkMode)
-        {
-            tcpudpFormat.setForeground(QColor(0, 200, 230));
-            ipHostFormat.setForeground(Qt::yellow);
-            warningFormat.setForeground(QColor(255, 160, 15));
-        }
-        else
-        {
-            ipHostFormat.setForeground(Qt::black);
-            ipHostFormat.setFontWeight(QFont::Bold);
-            warningFormat.setForeground(Qt::white);
-            tcpudpFormat.setForeground(QColor(0, 52, 130));
-            warningFormat.setBackground(QColor(255, 160, 15));
-        }
+        ipHostFormat.setForeground(Qt::black);
+        ipHostFormat.setFontWeight(QFont::Bold);
+        warningFormat.setForeground(Qt::white);
+        tcpudpFormat.setForeground(QColor(0, 52, 130));
+        warningFormat.setBackground(QColor(255, 160, 15));
 
         for (const auto &pattern : { "tcp", "udp" })
         {
@@ -34,12 +24,12 @@ namespace Qv2ray::ui
             highlightingRules.append(rule);
         }
 
-        dateFormat.setForeground(darkMode ? Qt::cyan : Qt::darkCyan);
+        dateFormat.setForeground(Qt::darkCyan);
         rule.pattern = QRegularExpression("\\d\\d\\d\\d/\\d\\d/\\d\\d");
         rule.format = dateFormat;
         highlightingRules.append(rule);
         //
-        timeFormat.setForeground(darkMode ? Qt::cyan : Qt::darkCyan);
+        timeFormat.setForeground(Qt::darkCyan);
         rule.pattern = QRegularExpression("\\d\\d:\\d\\d:\\d\\d");
         rule.format = timeFormat;
         highlightingRules.append(rule);
@@ -49,7 +39,7 @@ namespace Qv2ray::ui
         rule.format = debugFormat;
         highlightingRules.append(rule);
         //
-        infoFormat.setForeground(darkMode ? Qt::lightGray : Qt::darkCyan);
+        infoFormat.setForeground(Qt::darkCyan);
         rule.pattern = QRegularExpression("\\[[Ii]nfo\\]" TO_EOL);
         rule.format = infoFormat;
         highlightingRules.append(rule);
@@ -92,7 +82,7 @@ namespace Qv2ray::ui
         rule.format = rejectedFormat;
         highlightingRules.append(rule);
         //
-        v2rayComponentFormat.setForeground(darkMode ? darkGreenColor : Qt::darkYellow);
+        v2rayComponentFormat.setForeground(Qt::darkYellow);
         rule.pattern = QRegularExpression(R"( (\w+\/)+\w+: )");
         rule.format = v2rayComponentFormat;
         highlightingRules.append(rule);
@@ -109,12 +99,12 @@ namespace Qv2ray::ui
         rule.format = failedFormat;
         highlightingRules.append(rule);
         //
-        qvAppLogFormat.setForeground(darkMode ? Qt::cyan : Qt::darkCyan);
+        qvAppLogFormat.setForeground(Qt::darkCyan);
         rule.pattern = QRegularExpression("\\[[A-Z]*\\]:");
         rule.format = qvAppLogFormat;
         highlightingRules.append(rule);
         //
-        qvAppDebugLogFormat.setForeground(darkMode ? Qt::yellow : Qt::darkYellow);
+        qvAppDebugLogFormat.setForeground(Qt::darkYellow);
         rule.pattern = QRegularExpression(R"( \[\w+\] )");
         rule.format = qvAppDebugLogFormat;
         highlightingRules.append(rule);
