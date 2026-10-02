@@ -92,7 +92,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
 
 #if 0
     const auto setSplitterSize = [&](QJsonValue val) { splitter->setSizes({ val.toArray()[0].toInt(), val.toArray()[1].toInt() }); };
-    addStateOptions("splitterSizes", { [&] { return QJsonArray{ splitter->sizes()[0], splitter->sizes()[1] }; }, setSplitterSize });
+    addStateOptions("splitterSizes", { [&] { return QJsonArray{ splitter->sizes()[0].toInt(), splitter->sizes()[1].toInt() }; }, setSplitterSize });
 
     const auto setSpeedWidgetVisibility = [&](QJsonValue val) { speedChartHolderWidget->setVisible(val.toBool()); };
     const auto setLogWidgetVisibility = [&](QJsonValue val) { masterLogBrowser->setVisible(val.toBool()); };
@@ -110,7 +110,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     connectionInfoLayout->addWidget(infoWidget);
     //
     masterLogBrowser->setDocument(vCoreLogDocument);
-    vCoreLogHighlighter = new SyntaxHighlighter(GlobalConfig.uiConfig.useDarkTheme, masterLogBrowser->document());
+    vCoreLogHighlighter = new SyntaxHighlighter(false, masterLogBrowser->document());
     // For charts
     speedChartWidget = new SpeedWidget(this);
     speedChart->addWidget(speedChartWidget);
@@ -597,7 +597,6 @@ void MainWindow::Action_DeleteConnections()
 {
     QList<ConnectionGroupPair> connlist;
     QList<GroupId> groupsList;
-
     for (const auto &item : connectionTreeView->selectionModel()->selectedIndexes())
     {
         const auto widget = GetIndexWidget(item);
