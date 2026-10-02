@@ -53,7 +53,6 @@ class MainWindow
     void on_clearChartBtn_clicked();
     void on_masterLogBrowser_textChanged();
     //
-    void on_pluginsBtn_clicked();
     void on_collapseGroupsBtn_clicked();
     void on_newConnectionBtn_clicked();
     void on_newComplexConnectionBtn_clicked();
