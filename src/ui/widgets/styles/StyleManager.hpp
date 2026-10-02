@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QObject>
-#include <QStringList>
 
 namespace Qv2ray::ui::styles
 {
@@ -13,18 +12,6 @@ namespace Qv2ray::ui::styles
       public:
         explicit QvStyleManager(QObject *parent = nullptr);
         void ApplyStyle();
-
-        // Transitional source compatibility while the legacy Preferences form
-        // is removed in this branch. These APIs do not restore theme selection.
-        inline QStringList AllStyles() const
-        {
-            return { QStringLiteral("Qv2ray-Z") };
-        }
-        inline bool ApplyStyle(const QString &)
-        {
-            ApplyStyle();
-            return true;
-        }
 
       protected:
         bool eventFilter(QObject *watched, QEvent *event) override;
