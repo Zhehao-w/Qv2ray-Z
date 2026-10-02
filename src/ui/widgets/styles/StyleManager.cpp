@@ -7,7 +7,6 @@
 #include <QEvent>
 #include <QFile>
 #include <QPalette>
-#include <QSet>
 #include <QStyleFactory>
 #include <QWidget>
 
@@ -68,17 +67,8 @@ namespace Qv2ray::ui::styles
             const auto topLevelName = topLevel ? topLevel->objectName() : QString{};
             const auto objectName = widget->objectName();
 
-            static const QSet<QString> retiredPreferencesObjects = {
-                // Multi-theme UI is retired. Qv2ray-Z has one maintained look.
-                QStringLiteral("darkThemeLabel"),
-                QStringLiteral("darkThemeCB"),
-                QStringLiteral("label_35"),
-                QStringLiteral("themeCombo"),
-            };
-
-            const bool retiredPreference = topLevelName == QStringLiteral("PreferencesWindow") && retiredPreferencesObjects.contains(objectName);
             const bool retiredMainWindowControl = topLevelName == QStringLiteral("MainWindow") && objectName == QStringLiteral("pluginsBtn");
-            if (retiredPreference || retiredMainWindowControl)
+            if (retiredMainWindowControl)
                 widget->hide();
         }
         return QObject::eventFilter(watched, event);

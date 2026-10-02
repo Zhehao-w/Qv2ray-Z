@@ -34,9 +34,6 @@ namespace
 {
     constexpr auto NODE_TAB_ROUTE_EDITOR = 0;
     constexpr auto NODE_TAB_CHAIN_EDITOR = 1;
-    constexpr auto DarkConnectionStyle = R"({"ConnectionStyle": {"ConstructionColor": "gray","NormalColor": "black","SelectedColor": "gray",
-                                         "SelectedHaloColor": "deepskyblue","HoveredColor": "deepskyblue","LineWidth": 3.0,
-                                         "ConstructionLineWidth": 2.0,"PointDiameter": 10.0,"UseDataDefinedColors": true}})";
     constexpr auto LightNodeStyle = R"({"NodeStyle": {"NormalBoundaryColor": "darkgray","SelectedBoundaryColor": "deepskyblue",
                                     "GradientColor0": "mintcream","GradientColor1": "mintcream","GradientColor2": "mintcream",
                                     "GradientColor3": "mintcream","ShadowColor": [200, 200, 200],"FontColor": [10, 10, 10],
@@ -60,21 +57,11 @@ namespace
 
 void RouteEditor::updateColorScheme()
 {
-    // Setup icons according to the theme settings.
     addInboundBtn->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("add")));
     addOutboundBtn->setIcon(QIcon(QV2RAY_COLORSCHEME_FILE("add")));
-    if (GlobalConfig.uiConfig.useDarkTheme)
-    {
-        QtNodes::NodeStyle::reset();
-        QtNodes::FlowViewStyle::reset();
-        ConnectionStyle::setConnectionStyle(DarkConnectionStyle);
-    }
-    else
-    {
-        QtNodes::NodeStyle::setNodeStyle(LightNodeStyle);
-        QtNodes::FlowViewStyle::setStyle(LightViewStyle);
-        ConnectionStyle::setConnectionStyle(LightConnectionStyle);
-    }
+    QtNodes::NodeStyle::setNodeStyle(LightNodeStyle);
+    QtNodes::FlowViewStyle::setStyle(LightViewStyle);
+    ConnectionStyle::setConnectionStyle(LightConnectionStyle);
 }
 
 RouteEditor::RouteEditor(QJsonObject connection, QWidget *parent) : QvDialog("RouteEditor", parent), root(connection), original(connection)

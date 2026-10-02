@@ -23,7 +23,7 @@
 
 Qv2ray-Z is a personal continuation of the discontinued [Qv2ray](https://github.com/Qv2ray/Qv2ray) desktop client, based on the upstream Qv2ray 2.7.0 codebase.
 
-The project keeps the familiar Qt desktop workflow while narrowing maintenance around a modern Windows + Xray setup. The priorities are correctness, security, stability, reproducible releases, a smaller legacy attack surface, and practical day-to-day usability.
+The project keeps the familiar Qt desktop workflow while narrowing maintenance around a modern Windows + Xray setup. The priorities are correctness, security, stability, a smaller legacy attack surface, and practical day-to-day usability.
 
 Qv2ray-Z is not intended to restore every historical Qv2ray platform, plugin, protocol, or compatibility mode.
 
@@ -31,14 +31,22 @@ Qv2ray-Z is not intended to restore every historical Qv2ray platform, plugin, pr
 
 **Supported:** Windows 10/11 x64
 
-The authoritative build environment is:
+Qv2ray-Z is maintained and packaged for Windows with an official Xray-core Windows x64 build. macOS is deprecated and is not packaged; Linux is not a supported release target.
 
-- Qt 5.15.2
-- MSVC 14.2
-- Windows Server 2022
-- official Xray-core Windows x64 releases
+## Download and run
 
-Linux CI, where retained, is diagnostic only. macOS is deprecated and is not built or packaged.
+Download the current Windows package from the [Releases](https://github.com/Zhehao-w/Qv2ray-Z/releases) page, extract the ZIP, and launch Qv2ray-Z from the extracted folder.
+
+The release package includes:
+
+- Qv2ray-Z
+- the required Qt runtime and plugins
+- a verified official Xray-core Windows x64 binary
+- `geoip.dat`
+- `geosite.dat`
+- release build metadata
+
+The bundled Xray binary and assets are ready for normal use. Advanced users can still point Qv2ray-Z at custom core or asset paths from Preferences when needed.
 
 ## Modern Xray support
 
@@ -52,9 +60,22 @@ The maintained configuration paths currently include:
 - REALITY ML-DSA-65 verification (`pqv` / `mldsa65Verify`)
 - modern VLESS share-link import and export
 - bundled Xray executable discovery
-- validation against current official Xray-core releases
+- compatibility with current official Xray-core releases
 
 Unsupported legacy XTLS modes from the original codebase have been removed from normal configuration generation.
+
+## Import and daily use
+
+Qv2ray-Z keeps the familiar Qv2ray connection workflow while focusing the maintained UI on commonly used paths:
+
+- import modern VLESS share links
+- import supported configuration files through the advanced import flow
+- connect, disconnect, and switch connections from the main window or tray
+- enable the Windows system proxy from the application when desired
+- use simplified routing presets or advanced custom routing rules
+- manage subscriptions with the retained subscription workflow
+
+The maintained application UI is English-only.
 
 ## Desktop improvements
 
@@ -66,7 +87,6 @@ Qv2ray-Z keeps the desktop workflow intentionally compact while modernizing the 
 - clear separation between connection **Name** and internal Xray **Outbound Tag**
 - modernized Qt5 visual styling
 - reduced legacy and obsolete UI paths
-- English-only maintained UI
 - quieter connection and proxy notifications for fresh configurations
 - existing realtime speed chart and traffic statistics retained
 
@@ -83,87 +103,11 @@ For example, **Bypass Mainland China** sends:
 
 Explicit custom routing rules keep higher priority, and advanced routing controls remain available when needed.
 
-## Releases
+## Compatibility and scope
 
-Windows releases are produced from standard semantic-version Git tags.
+Qv2ray-Z is intentionally Windows-focused and conservative about new features. Current maintenance emphasizes stable behavior with modern official Xray-core, removal of retired or unreachable legacy paths, and UI cleanup without changing proven protocol behavior.
 
-A release tag must use the form:
-
-```text
-v<major>.<minor>.<patch>
-```
-
-The GitHub Release is named `Qv2ray-Z v<major>.<minor>.<patch>`.
-
-Before tagging, the source version and release notes must already exist in `dev`:
-
-- `makespec/VERSION`
-- `docs/release-notes/<version>.md`
-
-A typical Codespaces release flow is:
-
-```bash
-git switch dev
-git pull --ff-only
-git tag -a v2.7.0 -m "Qv2ray-Z v2.7.0"
-git push origin v2.7.0
-```
-
-Pushing the tag automatically starts `.github/workflows/windows-release.yml`. The workflow verifies that:
-
-- the tag format is valid
-- the tag version matches `makespec/VERSION`
-- matching release notes exist
-- the tagged commit belongs to `dev` history
-- the Windows package builds successfully
-- TLS Vision and REALITY Vision fixtures validate with the pinned official Xray-core
-- retired native Qv2ray plugin DLLs and translation bundles are not packaged
-- packaged Qv2ray-Z and Xray binaries pass smoke checks
-
-If validation succeeds, GitHub Actions creates the versioned ZIP, writes its SHA256 checksum, and publishes the GitHub Release automatically.
-
-Historical `v2.7.0-z1` and `v2.7.0-z2` tags remain available, but new Qv2ray-Z releases use standard `vX.Y.Z` tags.
-
-## Release contents
-
-The Windows x64 release package includes:
-
-- Qv2ray-Z
-- Qt runtime and required plugins
-- verified official Xray-core Windows x64 binary
-- `geoip.dat`
-- `geosite.dat`
-- release build metadata
-
-Downloads and checksums are available from the [Releases](https://github.com/Zhehao-w/Qv2ray-Z/releases) page.
-
-## Build and validation
-
-The primary maintained workflows are:
-
-- `.github/workflows/windows-vless-vision-package.yml` — authoritative Windows package build and smoke test
-- `.github/workflows/windows-release.yml` — tag-driven release packaging and publishing
-- `.github/workflows/vless-vision-validation.yml` — VLESS / TLS / REALITY / Vision compatibility checks
-- `.github/workflows/data-safety-hardening.yml` — application and regression validation
-
-The repository also contains Xray fixtures and regression coverage under:
-
-- `.github/xray-fixtures/`
-- `test/`
-
-## Maintenance scope
-
-The repository is intentionally Windows-focused and conservative about new features.
-
-Current maintenance priorities are:
-
-1. correctness and security
-2. stable compatibility with modern official Xray-core
-3. reproducible Windows builds and releases
-4. removal of retired or unreachable legacy code
-5. focused UI cleanup without changing proven protocol behavior
-
-New protocol support is not a current project goal.
+New protocol support is not a current project goal. Legacy features that are no longer supported by modern Xray-core or by the maintained Windows product may be unavailable even if they existed in historical Qv2ray releases.
 
 ## Based on Qv2ray
 
