@@ -10,34 +10,55 @@ namespace Qv2ray::core::connection
         QList<std::pair<QString, CONFIGROOT>> ConvertConfigFromString(const QString &link, QString *aliasPrefix, QString *errMessage,
                                                                       QString *newGroup)
         {
+            errMessage->clear();
+
             const auto TLSOptionsFilter = [](QJsonObject &conf)
             {
                 const auto disableSystemRoot = GlobalConfig.advancedConfig.disableSystemRoot;
                 QJsonIO::SetValue(conf, disableSystemRoot, { "outbounds", 0, "streamSettings", "tlsSettings", "disableSystemRoot" });
+            };
+            const auto parsedConfigIsUsable = [errMessage](const CONFIGROOT &conf)
+            {
+                if (!errMessage->isEmpty())
+                    return false;
+                if (conf.isEmpty())
+                {
+                    *errMessage = QObject::tr("Share link parser returned an empty configuration.");
+                    return false;
+                }
+                return true;
             };
 
             QList<std::pair<QString, CONFIGROOT>> connectionConf;
             if (link.startsWith("vmess://") && link.contains("@"))
             {
                 auto conf = vmess_new::Deserialize(link, aliasPrefix, errMessage);
+                if (!parsedConfigIsUsable(conf))
+                    return {};
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
             }
             else if (link.startsWith("vless://"))
             {
                 auto conf = vless::Deserialize(link, aliasPrefix, errMessage);
+                if (!parsedConfigIsUsable(conf))
+                    return {};
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
             }
             else if (link.startsWith("vmess://"))
             {
                 auto conf = vmess::Deserialize(link, aliasPrefix, errMessage);
+                if (!parsedConfigIsUsable(conf))
+                    return {};
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
             }
             else if (link.startsWith("ss://") && !link.contains("plugin="))
             {
                 auto conf = ss::Deserialize(link, aliasPrefix, errMessage);
+                if (!parsedConfigIsUsable(conf))
+                    return {};
                 connectionConf << std::pair{ *aliasPrefix, conf };
             }
             else if (link.startsWith("ssd://"))
@@ -53,6 +74,11 @@ namespace Qv2ray::core::connection
                 if (ok)
                 {
                     errMessage->clear();
+                    if (configs.isEmpty())
+                    {
+                        *errMessage = QObject::tr("Share link parser returned no configurations.");
+                        return {};
+                    }
                     for (const auto &[_alias, _protocol, _outbound] : configs)
                     {
                         CONFIGROOT root;
