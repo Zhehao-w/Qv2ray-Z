@@ -34,10 +34,6 @@ ImportConfigWindow::ImportConfigWindow(QWidget *parent) : QvDialog("ImportWindow
             defaultItemIndex = groupCombo->count() - 1;
     }
     groupCombo->setCurrentIndex(defaultItemIndex);
-    // Screenshot/image QR decoding is retired in Qv2ray-Z. Keep the legacy form
-    // compatible for now, but never expose the unreachable QR image tab.
-    qrCodeTab->setVisible(false);
-    tabWidget->removeTab(1);
 }
 
 void ImportConfigWindow::updateColorScheme()
