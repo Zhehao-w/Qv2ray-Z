@@ -11,7 +11,6 @@
 #include "ui/widgets/widgets/ConnectionInfoWidget.hpp"
 #include "ui/widgets/windows/w_GroupManager.hpp"
 #include "ui/widgets/windows/w_ImportConfig.hpp"
-#include "ui/widgets/windows/w_PluginManager.hpp"
 #include "ui/widgets/windows/w_PreferencesWindow.hpp"
 
 #include <QClipboard>
@@ -388,8 +387,6 @@ void MainWindow::ProcessCommand(QString command, QStringList commands, QMap<QStr
         QvDialog *w;
         if (subcommand == "preference")
             w = new PreferencesWindow();
-        else if (subcommand == "plugin")
-            w = new PluginManageWindow();
         else if (subcommand == "group")
             w = new GroupManager();
         else if (subcommand == "import")
@@ -1045,11 +1042,6 @@ void MainWindow::Action_CopyGraphAsImage()
 {
     const auto image = speedChartWidget->grab();
     qApp->clipboard()->setImage(image.toImage());
-}
-
-void MainWindow::on_pluginsBtn_clicked()
-{
-    PluginManageWindow(this).exec();
 }
 
 void MainWindow::on_newConnectionBtn_clicked()

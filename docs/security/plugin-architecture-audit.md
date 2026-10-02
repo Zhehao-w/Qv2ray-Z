@@ -31,20 +31,19 @@ This is a focused architecture regression guard, not a general static-analysis c
 The post-audit cleanup removed the dead plugin surfaces that could be proven unnecessary without changing maintained protocol/subscription behavior or configuration compatibility:
 
 1. The inactive `src/plugins/utils/**` tree, including its historical `MODULE` target and platform plugin install rules, was removed from the source tree.
-2. The retired `w_PluginManager` implementation and `.ui` form were removed from the build/source surface. The historical private MainWindow auto-connect slot still includes a tiny no-op tombstone header so this focused cleanup does not rewrite the large MainWindow implementation; invoking that legacy slot performs no UI, plugin-host, filesystem, settings, or executable-loading action.
+2. The retired `w_PluginManager` implementation and `.ui` form were removed from the build/source surface together with the historical `open plugin` command branch and private `on_pluginsBtn_clicked` MainWindow slot. No Plugin Manager compatibility tombstone remains.
 3. The StyleManager polish hook that existed only to hide the already-absent `pluginsBtn` control was removed.
 
 The first-party `QvPluginHost` dispatch path, protocol/subscription components, their settings widgets, and the compile-time plugin interface remain active and intentionally unchanged.
 
 ## Remaining compatibility surface
 
-The following items remain deliberately out of this focused cleanup because they are active compile-time APIs, persistent compatibility surfaces, or harmless legacy symbols:
+The following items remain deliberately out of this focused cleanup because they are active compile-time APIs or persistent compatibility surfaces:
 
 1. `QvPluginHost`, plugin-interface types, and several paths/APIs still use historical plugin naming even though their runtime role is now internal component dispatch.
 2. `Qv2rayConfig_Plugin::pluginStates` remains for old configuration compatibility. `QvPluginHost` ignores legacy enable-state data for external plugins instead of restoring external loading.
 3. `QV2RAY_PLUGIN_SETTINGS_DIR` remains as the settings location for the built-in components. Whether to rename/migrate that persistent path belongs to the later compatibility/schema audit.
 4. The pinned `src/plugin-interface` dependency remains because protocol/subscription implementations still consume its active compile-time contracts.
-5. The private `on_pluginsBtn_clicked` MainWindow slot name and its inert `w_PluginManager.hpp` tombstone remain only to avoid a high-churn rewrite of `w_MainWindow.cpp` in this attack-surface PR. They expose no plugin-management behavior and can be removed with other dormant MainWindow symbols in the later deep legacy cleanup.
 
 Renaming or removing the active/persistent structures should be handled by the later compatibility/schema audit rather than folded into attack-surface cleanup.
 
