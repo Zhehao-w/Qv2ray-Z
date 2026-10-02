@@ -102,32 +102,6 @@
               </property>
              </widget>
             </item>
-            <item row="4" column="0">
-             <widget class="QLabel" name="label_6">
-              <property name="text">
-               <string>Language</string>
-              </property>
-              <property name="textFormat">
-               <enum>Qt::PlainText</enum>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="1">
-             <widget class="QComboBox" name="languageComboBox">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>100</width>
-                <height>0</height>
-               </size>
-              </property>
-             </widget>
-            </item>
             <item row="5" column="0">
              <widget class="QLabel" name="label_55">
               <property name="text">
@@ -241,20 +215,6 @@
             </item>
             <item row="1" column="1">
              <widget class="QCheckBox" name="quietModeCB">
-              <property name="text">
-               <string>Enabled</string>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_38">
-              <property name="text">
-               <string>Old Share Link Format</string>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QCheckBox" name="useOldShareLinkFormatCB">
               <property name="text">
                <string>Enabled</string>
               </property>
@@ -807,13 +767,6 @@ Qv2ray will give a more accurate latency value if Enabled, but makes it easy to 
            <widget class="QPushButton" name="checkVCoreSettings">
             <property name="text">
              <string>Check V2Ray Core Settings</string>
-            </property>
-           </widget>
-          </item>
-          <item row="8" column="0" colspan="2">
-           <widget class="QPushButton" name="pushButton">
-            <property name="text">
-             <string>Check System Date and Time from the Internet</string>
             </property>
            </widget>
           </item>
@@ -1735,67 +1688,6 @@ Custom DNS Settings</string>
                </layout>
               </widget>
              </item>
-             <item row="1" column="1">
-              <widget class="QGroupBox" name="groupBox_2">
-               <property name="enabled">
-                <bool>true</bool>
-               </property>
-               <property name="title">
-                <string>Browser Forwarder Settings</string>
-               </property>
-               <property name="checkable">
-                <bool>false</bool>
-               </property>
-               <property name="checked">
-                <bool>false</bool>
-               </property>
-               <layout class="QFormLayout" name="formLayout_14">
-                <item row="1" column="0">
-                 <widget class="QLabel" name="label_42">
-                  <property name="text">
-                   <string comment="Listening Address for Browser Forwarder">Listening Address</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="1">
-                 <widget class="QLineEdit" name="browserForwarderAddressTxt">
-                  <property name="text">
-                   <string notr="true">127.0.0.1</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="2" column="0">
-                 <widget class="QLabel" name="label_66">
-                  <property name="text">
-                   <string comment="Listening Port for Browser Forwarder">Listening Port</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="2" column="1">
-                 <widget class="QSpinBox" name="browserForwarderPortSB">
-                  <property name="minimum">
-                   <number>1</number>
-                  </property>
-                  <property name="maximum">
-                   <number>65535</number>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="0" colspan="2">
-                 <widget class="QLabel" name="label_82">
-                  <property name="font">
-                   <font>
-                    <italic>true</italic>
-                   </font>
-                  </property>
-                  <property name="text">
-                   <string>This applies to Simple Configs with Browser Forwarder on.</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
             </layout>
            </item>
           </layout>
@@ -2153,60 +2045,6 @@ Custom DNS Settings</string>
            </layout>
           </widget>
          </item>
-         <item>
-          <widget class="QGroupBox" name="updateSettingsGroupBox">
-           <layout class="QGridLayout" name="gridLayout_8">
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_23">
-              <property name="text">
-               <string>Ignored Version</string>
-              </property>
-              <property name="textFormat">
-               <enum>Qt::PlainText</enum>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="2">
-             <widget class="QLabel" name="ignoredNextVersion">
-              <property name="text">
-               <string/>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QPushButton" name="cancelIgnoreVersionBtn">
-              <property name="text">
-               <string>Cancel</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="0">
-             <widget class="QLabel" name="label_81">
-              <property name="text">
-               <string>Update Channel</string>
-              </property>
-              <property name="textFormat">
-               <enum>Qt::PlainText</enum>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="1" colspan="2">
-             <widget class="QComboBox" name="updateChannelCombo">
-              <item>
-               <property name="text">
-                <string>Stable Release</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Testing</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
         </layout>
        </item>
        <item>
@@ -2481,12 +2319,10 @@ Custom DNS Settings</string>
   <tabstop>darkTrayCB</tabstop>
   <tabstop>glyphTrayCB</tabstop>
   <tabstop>themeCombo</tabstop>
-  <tabstop>languageComboBox</tabstop>
   <tabstop>jumpListCountSB</tabstop>
   <tabstop>maxLogLinesSB</tabstop>
   <tabstop>startWithLoginCB</tabstop>
   <tabstop>quietModeCB</tabstop>
-  <tabstop>useOldShareLinkFormatCB</tabstop>
   <tabstop>noAutoConnectRB</tabstop>
   <tabstop>lastConnectedRB</tabstop>
   <tabstop>fixedAutoConnectRB</tabstop>
@@ -2516,7 +2352,6 @@ Custom DNS Settings</string>
   <tabstop>V2RayOutboundStatsCB</tabstop>
   <tabstop>hasDirectStatisticsCB</tabstop>
   <tabstop>checkVCoreSettings</tabstop>
-  <tabstop>pushButton</tabstop>
   <tabstop>pluginKernelV2RayIntegrationCB</tabstop>
   <tabstop>pluginKernelPortAllocateCB</tabstop>
   <tabstop>scrollArea_2</tabstop>
@@ -2560,8 +2395,6 @@ Custom DNS Settings</string>
   <tabstop>tproxyOverrideFakeDNSOthersCB</tabstop>
   <tabstop>tproxyMode</tabstop>
   <tabstop>outboundMark</tabstop>
-  <tabstop>browserForwarderAddressTxt</tabstop>
-  <tabstop>browserForwarderPortSB</tabstop>
   <tabstop>proxyDefaultCb</tabstop>
   <tabstop>bypassPrivateCb</tabstop>
   <tabstop>bypassCNCb</tabstop>
@@ -2576,8 +2409,6 @@ Custom DNS Settings</string>
   <tabstop>fpUsernameTx</tabstop>
   <tabstop>fpPasswordTx</tabstop>
   <tabstop>openConfigDirCB</tabstop>
-  <tabstop>updateChannelCombo</tabstop>
-  <tabstop>cancelIgnoreVersionBtn</tabstop>
   <tabstop>textBrowser</tabstop>
   <tabstop>aboutQt</tabstop>
  </tabstops>
