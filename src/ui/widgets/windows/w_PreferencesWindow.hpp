@@ -66,8 +66,6 @@ class PreferencesWindow
     void on_socksUDPIP_textEdited(const QString &arg1);
     void on_selectVCoreBtn_clicked();
     void on_vCorePathTxt_textEdited(const QString &arg1);
-    void on_themeCombo_currentTextChanged(const QString &arg1);
-    void on_darkThemeCB_stateChanged(int arg1);
     void on_darkTrayCB_stateChanged(int arg1);
     void on_glyphTrayCB_stateChanged(int arg1);
     void on_setSysProxyCB_stateChanged(int arg1);

@@ -6,7 +6,6 @@
 #include "core/settings/SettingsBackend.hpp"
 #include "src/plugin-interface/QvPluginInterface.hpp"
 #include "ui/common/autolaunch/QvAutoLaunch.hpp"
-#include "ui/widgets/styles/StyleManager.hpp"
 #include "ui/widgets/widgets/DnsSettingsWidget.hpp"
 #include "ui/widgets/widgets/RouteSettingsMatrix.hpp"
 #include "utils/HTTPRequestHelper.hpp"
@@ -58,7 +57,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
 
     // Set auto start button state
     SetAutoStartButtonsState(GetLaunchAtLoginStatus());
-    themeCombo->addItems(StyleManager->AllStyles());
     //
     qvVersion->setText(QV2RAY_VERSION_STRING ":" + QSTRN(QV2RAY_VERSION_BUILD));
     qvBuildInfo->setText(QV2RAY_BUILD_INFO);
@@ -69,8 +67,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     // Deep copy
     CurrentConfig.loadJson(GlobalConfig.toJson());
     //
-    themeCombo->setCurrentText(CurrentConfig.uiConfig.theme);
-    darkThemeCB->setChecked(CurrentConfig.uiConfig.useDarkTheme);
     darkTrayCB->setChecked(CurrentConfig.uiConfig.useDarkTrayIcon);
     darkTrayCB->setToolTip(
         tr("Use the tray icon set intended for a dark Windows taskbar. This changes tray-icon contrast only, not the application theme."));
@@ -432,10 +428,6 @@ void PreferencesWindow::on_buttonBox_accepted()
         }
         //
         //
-        if (CurrentConfig.uiConfig.theme != GlobalConfig.uiConfig.theme)
-        {
-            StyleManager->ApplyStyle(CurrentConfig.uiConfig.theme);
-        }
         GlobalConfig.loadJson(CurrentConfig.toJson());
         SaveGlobalSettings();
         UIMessageBus.EmitGlobalSignal(QvMBMessage::UPDATE_COLORSCHEME);
@@ -629,18 +621,6 @@ void PreferencesWindow::on_socksUDPIP_textEdited(const QString &arg1)
     {
         RED(socksUDPIP);
     }
-}
-
-void PreferencesWindow::on_themeCombo_currentTextChanged(const QString &arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.theme = arg1;
-}
-
-void PreferencesWindow::on_darkThemeCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.useDarkTheme = arg1 == Qt::Checked;
 }
 
 void PreferencesWindow::on_darkTrayCB_stateChanged(int arg1)
