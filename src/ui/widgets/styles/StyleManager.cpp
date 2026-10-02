@@ -74,16 +74,6 @@ namespace Qv2ray::ui::styles
                 QStringLiteral("darkThemeCB"),
                 QStringLiteral("label_35"),
                 QStringLiteral("themeCombo"),
-                // Qv2ray-Z is English-only. These legacy Designer controls stay
-                // hidden until the Preferences form is replaced by the category UI.
-                QStringLiteral("label_6"),
-                QStringLiteral("languageComboBox"),
-                // These entries correspond to already-retired product features.
-                QStringLiteral("label_38"),
-                QStringLiteral("useOldShareLinkFormatCB"),
-                QStringLiteral("pushButton"),
-                QStringLiteral("groupBox_2"),
-                QStringLiteral("updateSettingsGroupBox"),
             };
 
             const bool retiredPreference = topLevelName == QStringLiteral("PreferencesWindow") && retiredPreferencesObjects.contains(objectName);
