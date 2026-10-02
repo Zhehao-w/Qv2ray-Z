@@ -4,11 +4,9 @@
 
 #include <QApplication>
 #include <QColor>
-#include <QEvent>
 #include <QFile>
 #include <QPalette>
 #include <QStyleFactory>
-#include <QWidget>
 
 #define QV_MODULE_NAME "StyleManager"
 
@@ -16,7 +14,6 @@ namespace Qv2ray::ui::styles
 {
     QvStyleManager::QvStyleManager(QObject *parent) : QObject(parent)
     {
-        qApp->installEventFilter(this);
     }
 
     void QvStyleManager::ApplyStyle()
@@ -53,24 +50,5 @@ namespace Qv2ray::ui::styles
         }
 
         qApp->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
-    }
-
-    bool QvStyleManager::eventFilter(QObject *watched, QEvent *event)
-    {
-        if (event->type() == QEvent::Polish)
-        {
-            auto *widget = qobject_cast<QWidget *>(watched);
-            if (!widget)
-                return QObject::eventFilter(watched, event);
-
-            const auto *topLevel = widget->window();
-            const auto topLevelName = topLevel ? topLevel->objectName() : QString{};
-            const auto objectName = widget->objectName();
-
-            const bool retiredMainWindowControl = topLevelName == QStringLiteral("MainWindow") && objectName == QStringLiteral("pluginsBtn");
-            if (retiredMainWindowControl)
-                widget->hide();
-        }
-        return QObject::eventFilter(watched, event);
     }
 } // namespace Qv2ray::ui::styles

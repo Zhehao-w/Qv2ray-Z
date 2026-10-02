@@ -20,7 +20,6 @@ set(_QV2RAY_UI_FORMS
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_ImportConfig.ui
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_MainWindow.ui
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PreferencesWindow.ui
-    ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PluginManager.ui
     #
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/widgets/complex/ChainEditorWidget.ui
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/widgets/complex/RoutingEditorWidget.ui
@@ -112,8 +111,6 @@ set(_QV2RAY_UI_SOURCES
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_MainWindow_extra.cpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PreferencesWindow.hpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PreferencesWindow.cpp
-    ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PluginManager.hpp
-    ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_PluginManager.cpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_GroupManager.hpp
     ${QV2RAY_QWIDGETS_UI_BASEDIR}/windows/w_GroupManager.cpp
     )

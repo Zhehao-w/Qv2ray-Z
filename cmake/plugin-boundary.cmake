@@ -24,10 +24,9 @@ function(qv2ray_verify_internal_component_boundary source_root)
         endif()
     endforeach()
 
-    # The legacy utils recipe still exists in the source tree until the focused
-    # cleanup PR removes it. Because this function runs after the full top-level
-    # graph is configured, any direct, quoted, or indirect include that creates
-    # the old MODULE target is caught by the target graph itself.
+    # The legacy utils MODULE component has been removed from the maintained
+    # source/build surface. Keep the target check so an accidental reintroduction
+    # anywhere in the configured graph fails closed.
     if(TARGET QvPlugin-BuiltinUtils)
         message(FATAL_ERROR
             "Plugin boundary violation: legacy QvPlugin-BuiltinUtils must not be an active build target.")

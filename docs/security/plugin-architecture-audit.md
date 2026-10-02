@@ -21,29 +21,36 @@ The resulting maintained component model is therefore first-party and in-process
 `cmake/plugin-boundary.cmake` is executed during normal CMake configuration. It fails configuration if:
 
 - either maintained built-in component stops being an `OBJECT_LIBRARY`;
-- the legacy `QvPlugin-BuiltinUtils` target becomes active again; or
+- the retired `QvPlugin-BuiltinUtils` target is reintroduced into the active graph; or
 - `QvPluginHost.cpp` reintroduces a direct native-library loader marker such as `QPluginLoader`, `QLibrary`, `LoadLibrary`, or `dlopen`.
 
 This is a focused architecture regression guard, not a general static-analysis claim. It deliberately checks the active plugin registration/build boundary and leaves unrelated platform library usage alone.
 
-## Residual legacy surface
+## Focused cleanup completed
 
-The audit found several remnants that are not currently an executable external-plugin path but should be removed in the focused cleanup PR:
+The post-audit cleanup removed the dead plugin surfaces that could be proven unnecessary without changing maintained protocol/subscription behavior or configuration compatibility:
 
-1. `src/plugins/utils/QvPlugin-BuiltinUtils.cmake` still contains an old `MODULE` target and platform plugin install rules. The top-level build does not include this file, so the recipe is currently inert.
-2. `src/plugins/utils/**` remains in the source tree even though the maintained build does not activate that component.
-3. `w_PluginManager` is still compiled, and `MainWindow::on_pluginsBtn_clicked()` can construct it, while the normal `pluginsBtn` entry point is hidden by `StyleManager`. The window now describes bundled components rather than managing third-party plugins, but the legacy UI shell is unnecessary.
-4. `QvPluginHost`, plugin-interface types, and several paths/APIs still use historical plugin naming even though their runtime role is now internal component dispatch.
-5. `Qv2rayConfig_Plugin::pluginStates` remains for old configuration compatibility. `QvPluginHost` ignores legacy enable-state data for external plugins instead of restoring external loading.
-6. `QV2RAY_PLUGIN_SETTINGS_DIR` remains as the settings location for the built-in components. Whether to rename/migrate that persistent path belongs to the later compatibility/schema audit, not this cleanup sequence.
+1. The inactive `src/plugins/utils/**` tree, including its historical `MODULE` target and platform plugin install rules, was removed from the source tree.
+2. The retired `w_PluginManager` implementation and `.ui` form were removed from the build/source surface. The historical private MainWindow auto-connect slot still includes a tiny no-op tombstone header so this focused cleanup does not rewrite the large MainWindow implementation; invoking that legacy slot performs no UI, plugin-host, filesystem, settings, or executable-loading action.
+3. The StyleManager polish hook that existed only to hide the already-absent `pluginsBtn` control was removed.
 
-## Focused cleanup boundary
+The first-party `QvPluginHost` dispatch path, protocol/subscription components, their settings widgets, and the compile-time plugin interface remain active and intentionally unchanged.
 
-The next plugin-focused cleanup PR should remove only remnants whose runtime/build dependencies can be proven dead without changing protocol, subscription, routing, system-proxy, or configuration compatibility behavior. The primary candidates are the inactive built-in-utils plugin tree/build recipe and the hidden Plugin Manager UI path. Any attempt to remove the pinned plugin-interface dependency or rename persistent plugin configuration/settings structures should be treated separately because those changes touch active compile-time APIs or backward compatibility.
+## Remaining compatibility surface
+
+The following items remain deliberately out of this focused cleanup because they are active compile-time APIs, persistent compatibility surfaces, or harmless legacy symbols:
+
+1. `QvPluginHost`, plugin-interface types, and several paths/APIs still use historical plugin naming even though their runtime role is now internal component dispatch.
+2. `Qv2rayConfig_Plugin::pluginStates` remains for old configuration compatibility. `QvPluginHost` ignores legacy enable-state data for external plugins instead of restoring external loading.
+3. `QV2RAY_PLUGIN_SETTINGS_DIR` remains as the settings location for the built-in components. Whether to rename/migrate that persistent path belongs to the later compatibility/schema audit.
+4. The pinned `src/plugin-interface` dependency remains because protocol/subscription implementations still consume its active compile-time contracts.
+5. The private `on_pluginsBtn_clicked` MainWindow slot name and its inert `w_PluginManager.hpp` tombstone remain only to avoid a high-churn rewrite of `w_MainWindow.cpp` in this attack-surface PR. They expose no plugin-management behavior and can be removed with other dormant MainWindow symbols in the later deep legacy cleanup.
+
+Renaming or removing the active/persistent structures should be handled by the later compatibility/schema audit rather than folded into attack-surface cleanup.
 
 ## i18n/resource note
 
-The active built-in component CMake files still append source lists to historical translation variables, but this audit found no plugin-specific executable resource loader or native extension mechanism associated with that naming. Broader language/i18n retirement remains outside this PR unless a later audit finds a direct executable-loading/security intersection.
+The active built-in component CMake files still append source lists to historical translation variables, but this audit found no plugin-specific executable resource loader or native extension mechanism associated with that naming. Broader language/i18n retirement remains outside this cleanup unless a later audit finds a direct executable-loading/security intersection.
 
 ## Security invariant going forward
 

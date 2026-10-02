@@ -12,9 +12,6 @@ namespace Qv2ray::ui::styles
       public:
         explicit QvStyleManager(QObject *parent = nullptr);
         void ApplyStyle();
-
-      protected:
-        bool eventFilter(QObject *watched, QEvent *event) override;
     };
 
     inline QvStyleManager *StyleManager = nullptr;
