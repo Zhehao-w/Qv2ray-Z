@@ -8,8 +8,19 @@ constexpr auto QV2RAY_CONFIG_PATH_ENV_NAME = "QV2RAY_CONFIG_PATH";
 
 namespace Qv2ray::core::config
 {
+    namespace
+    {
+        bool globalSettingsPersistenceEnabled = false;
+    }
+
     void SaveGlobalSettings()
     {
+        if (!globalSettingsPersistenceEnabled)
+        {
+            LOG("Skipping global settings persistence because configuration initialization is incomplete.");
+            return;
+        }
+
         const auto str = JsonToString(GlobalConfig.toJson());
         StringToFile(str, QV2RAY_CONFIG_FILE);
     }
@@ -94,6 +105,11 @@ namespace Qv2ray::core::config
 
     bool LocateConfiguration()
     {
+        // A failed or incomplete initialization must never authorize later
+        // shutdown paths to persist a default/partial GlobalConfig over the
+        // user's existing configuration.
+        globalSettingsPersistenceEnabled = false;
+
         LOG("Application exec path: " + qApp->applicationDirPath());
         // Non-standard paths needs special handing for "_debug"
         const auto currentPathConfig = qApp->applicationDirPath() + "/config" QV2RAY_CONFIG_DIR_SUFFIX;
@@ -219,7 +235,9 @@ namespace Qv2ray::core::config
             GlobalConfig.defaultRouteConfig.dnsConfig.servers.append({ "8.8.8.8" });
             GlobalConfig.defaultRouteConfig.dnsConfig.servers.append({ "8.8.4.4" });
 
-            // Save initial config.
+            // This is a newly initialized, writable configuration. From this
+            // point onward persistence is authorized.
+            globalSettingsPersistenceEnabled = true;
             SaveGlobalSettings();
             LOG("Created initial config file.");
         }
@@ -247,6 +265,7 @@ namespace Qv2ray::core::config
                                      QObject::tr("Please check if there's an issue explaining about it.") + NEWLINE +                      //
                                      QObject::tr("Or submit a new issue if you think this is an error.") + NEWLINE + NEWLINE +             //
                                      QObject::tr("Qv2ray will now exit."));
+                globalSettingsPersistenceEnabled = false;
                 return false;
             }
             else if (configVersion < QV2RAY_CONFIG_VERSION)
@@ -255,8 +274,8 @@ namespace Qv2ray::core::config
                 conf = Qv2ray::UpgradeSettingsVersion(configVersion, QV2RAY_CONFIG_VERSION, conf);
             }
 
-            // Let's save the config.
             GlobalConfig.loadJson(conf);
+            globalSettingsPersistenceEnabled = true;
             SaveGlobalSettings();
             return true;
         }
