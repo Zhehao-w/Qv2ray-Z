@@ -50,9 +50,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     addStateOptions("y", { [&] { return y(); }, [&](QJsonValue val) { move(x(), val.toInt()); } });
 
     setupUi(this);
-    label_6->hide();
-    languageComboBox->hide();
-    updateSettingsGroupBox->hide();
     //
     QvMessageBusConnect(PreferencesWindow);
     textBrowser->setHtml(StringFromFile(":/assets/credit.html"));
@@ -89,17 +86,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     quietModeCB->setToolTip(
         tr("Suppress routine connection, subscription and system-proxy tray notifications and automatically accept scheduled subscription updates. Errors, warnings, logs, status indicators and traffic statistics remain visible."));
     quietModeCB->setChecked(CurrentConfig.uiConfig.quietMode);
-    useOldShareLinkFormatCB->setChecked(CurrentConfig.uiConfig.useOldShareLinkFormat);
-    // Keep the setting readable for migration, but modern exports no longer need
-    // to present this compatibility switch in the everyday preferences UI.
-    useOldShareLinkFormatCB->hide();
-    // The retired NTP control remains in the legacy form until the next physical
-    // Preferences UI cleanup, but it has no runtime slot or backend.
-    pushButton->hide();
-    // browserForwarder was a Qv2ray-specific top-level config object and is no
-    // longer accepted by current Xray-core. Retain its model solely so old
-    // preferences can be read without data-loss during migration.
-    groupBox_2->hide();
     startMinimizedCB->setChecked(CurrentConfig.uiConfig.startMinimized);
     startMinimizedCB->setEnabled(CurrentConfig.autoStartBehavior != AUTO_CONNECTION_NONE);
     exitByCloseEventCB->setChecked(CurrentConfig.uiConfig.exitByCloseEvent);
@@ -182,11 +168,6 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
         tproxySniffingMetadataOnlyCB->setChecked(tProxySettings.metadataOnly);
 
         tproxyMode->setCurrentText(tProxySettings.mode);
-    }
-    {
-        const auto &browserForwarderSettings = CurrentConfig.inboundConfig.browserForwarderSettings;
-        browserForwarderAddressTxt->setText(browserForwarderSettings.address);
-        browserForwarderPortSB->setValue(browserForwarderSettings.port);
     }
     outboundMark->setValue(CurrentConfig.outboundConfig.mark);
     //
@@ -1202,12 +1183,6 @@ void PreferencesWindow::on_hasDirectStatisticsCB_stateChanged(int arg1)
     CurrentConfig.uiConfig.graphConfig.hasDirectStats = arg1 == Qt::Checked;
 }
 
-void PreferencesWindow::on_useOldShareLinkFormatCB_stateChanged(int arg1)
-{
-    LOADINGCHECK
-    CurrentConfig.uiConfig.useOldShareLinkFormat = arg1 == Qt::Checked;
-}
-
 void PreferencesWindow::on_bypassPrivateCb_clicked(bool checked)
 {
     LOADINGCHECK
@@ -1311,16 +1286,4 @@ void PreferencesWindow::on_tproxyOverrideFakeDNSOthersCB_stateChanged(int arg1)
         CurrentConfig.inboundConfig.tProxySettings.destOverride.removeAll("fakedns+others");
     else if (!CurrentConfig.inboundConfig.tProxySettings.destOverride.contains("fakedns+others"))
         CurrentConfig.inboundConfig.tProxySettings.destOverride.append("fakedns+others");
-}
-
-void PreferencesWindow::on_browserForwarderAddressTxt_textEdited(const QString &arg1)
-{
-    NEEDRESTART
-    CurrentConfig.inboundConfig.browserForwarderSettings.address = arg1;
-}
-
-void PreferencesWindow::on_browserForwarderPortSB_valueChanged(int arg1)
-{
-    NEEDRESTART
-    CurrentConfig.inboundConfig.browserForwarderSettings.port = arg1;
 }
