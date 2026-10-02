@@ -43,32 +43,26 @@ namespace Qv2ray::base::config
 
     struct Qv2rayConfig_UI
     {
-#ifdef Q_OS_WIN
-        QString theme = "windowsvista";
-#elif defined(Q_OS_MACOS)
-        QString theme = "macintosh";
-#else
-        QString theme = "Fusion";
-#endif
-        QString language = "en_US";
         QList<ConnectionGroupPair> recentConnections;
         Qv2rayConfig_Graph graphConfig;
         // Routine tray notifications are opt-in for fresh configurations. A value
         // explicitly stored by an existing user is still loaded unchanged.
         bool quietMode = true;
         bool groupedConnectionView = false;
-        bool useDarkTheme = false;
         bool useGlyphTrayIcon = true;
         bool useDarkTrayIcon = false;
+        // Transitional runtime-only value for the legacy log-highlighter call site.
+        // It is deliberately excluded from the JSON schema and can be removed with the remaining theme UI plumbing.
+        bool useDarkTheme = false;
         int maximumLogLines = 500;
         int maxJumpListCount = 20;
         bool useOldShareLinkFormat = false;
         bool startMinimized = true;
         bool exitByCloseEvent = false;
-        JSONSTRUCT_COMPARE(Qv2rayConfig_UI, theme, language, quietMode, groupedConnectionView, graphConfig, useDarkTheme, useDarkTrayIcon, useGlyphTrayIcon, maximumLogLines,
+        JSONSTRUCT_COMPARE(Qv2rayConfig_UI, quietMode, groupedConnectionView, graphConfig, useDarkTrayIcon, useGlyphTrayIcon, maximumLogLines,
                            maxJumpListCount, recentConnections, useOldShareLinkFormat, startMinimized, exitByCloseEvent)
-        JSONSTRUCT_REGISTER(Qv2rayConfig_UI, F(theme, language, quietMode, groupedConnectionView, graphConfig, useDarkTheme, useDarkTrayIcon, useGlyphTrayIcon,
-                                               maximumLogLines, maxJumpListCount, recentConnections, useOldShareLinkFormat, startMinimized, exitByCloseEvent))
+        JSONSTRUCT_REGISTER(Qv2rayConfig_UI, F(quietMode, groupedConnectionView, graphConfig, useDarkTrayIcon, useGlyphTrayIcon, maximumLogLines,
+                                               maxJumpListCount, recentConnections, useOldShareLinkFormat, startMinimized, exitByCloseEvent))
     };
 
     struct Qv2rayConfig_Plugin
