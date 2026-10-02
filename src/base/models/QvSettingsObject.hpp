@@ -73,11 +73,10 @@ namespace Qv2ray::base::config
 
     struct Qv2rayConfig_Plugin
     {
-        QMap<QString, bool> pluginStates;
         bool v2rayIntegration = true;
         int portAllocationStart = 15000;
-        JSONSTRUCT_COMPARE(Qv2rayConfig_Plugin, pluginStates, v2rayIntegration, portAllocationStart)
-        JSONSTRUCT_REGISTER(Qv2rayConfig_Plugin, F(pluginStates, v2rayIntegration, portAllocationStart))
+        JSONSTRUCT_COMPARE(Qv2rayConfig_Plugin, v2rayIntegration, portAllocationStart)
+        JSONSTRUCT_REGISTER(Qv2rayConfig_Plugin, F(v2rayIntegration, portAllocationStart))
     };
 
     struct Qv2rayConfig_Kernel
