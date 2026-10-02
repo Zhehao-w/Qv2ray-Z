@@ -14,7 +14,3 @@ qv2ray://open/import/link?name=
 qv2ray://open/import/qr?name=
 qv2ray://open/import/manual?name=
 qv2ray://open/import/advanced?name=
-
-qv2ray://open/plugin/plugindir
-qv2ray://open/plugin/metadata
-qv2ray://open/plugin/settings
