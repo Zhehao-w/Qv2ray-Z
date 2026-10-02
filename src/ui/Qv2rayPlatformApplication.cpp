@@ -70,7 +70,6 @@ bool Qv2rayPlatformApplication::Initialize()
     reg.setValue("Default", Qv2ray::utils::windows::BuildUrlProtocolCommand(appPath));
 #endif
 
-    connect(this, &Qv2rayPlatformApplication::aboutToQuit, this, &Qv2rayPlatformApplication::quitInternal);
 #ifndef QV2RAY_NO_SINGLEAPPLICATON
     connect(this, &SingleApplication::receivedMessage, this, &Qv2rayPlatformApplication::onMessageReceived, Qt::QueuedConnection);
     if (isSecondary())
@@ -96,12 +95,6 @@ bool Qv2rayPlatformApplication::Initialize()
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     setFallbackSessionManagementEnabled(false);
 #endif
-    connect(this, &QGuiApplication::commitDataRequest, [] {
-        RouteManager->SaveRoutes();
-        ConnectionManager->SaveConnectionConfig();
-        PluginHost->SavePluginSettings();
-        SaveGlobalSettings();
-    });
 #endif
 
 #ifdef Q_OS_WIN
@@ -114,7 +107,13 @@ bool Qv2rayPlatformApplication::Initialize()
 #endif
 #endif
 
-    LocateConfiguration();
+    if (!LocateConfiguration())
+    {
+        LOG("Configuration initialization failed; aborting startup without persisting application state.");
+        SetExitReason(EXIT_INITIALIZATION_FAILED);
+        return false;
+    }
+
 #ifdef Q_OS_WIN
     using namespace Qv2ray::components::proxy::safety;
     SetProxyAccessAllowed(false);
@@ -185,6 +184,22 @@ Qv2rayExitReason Qv2rayPlatformApplication::RunQv2ray()
     PluginHost = new QvPluginHost();
     RouteManager = new RouteHandler();
     ConnectionManager = new QvConfigHandler();
+
+    // Persistence callbacks are installed only after configuration loading has
+    // succeeded and all state managers exist. Initialization failures and
+    // secondary instances therefore cannot enter normal shutdown persistence.
+    connect(this, &Qv2rayPlatformApplication::aboutToQuit, this, &Qv2rayPlatformApplication::quitInternal);
+#ifdef QV2RAY_GUI
+#ifdef Q_OS_LINUX
+    connect(this, &QGuiApplication::commitDataRequest, [] {
+        RouteManager->SaveRoutes();
+        ConnectionManager->SaveConnectionConfig();
+        PluginHost->SavePluginSettings();
+        SaveGlobalSettings();
+    });
+#endif
+#endif
+
     return runQv2rayInternal();
 }
 
