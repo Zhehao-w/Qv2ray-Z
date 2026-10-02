@@ -112,9 +112,6 @@ bool Qv2rayPlatformApplication::Initialize()
 #endif
 
     LocateConfiguration();
-    // Runtime translation support is retired. Keep the serialized legacy field
-    // normalized so older configurations remain deterministic when rewritten.
-    GlobalConfig.uiConfig.language = QStringLiteral("en_US");
 #ifdef Q_OS_WIN
     using namespace Qv2ray::components::proxy::safety;
     SetProxyAccessAllowed(false);
