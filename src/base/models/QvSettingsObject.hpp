@@ -51,6 +51,9 @@ namespace Qv2ray::base::config
         bool groupedConnectionView = false;
         bool useGlyphTrayIcon = true;
         bool useDarkTrayIcon = false;
+        // Transitional runtime-only value for the legacy log-highlighter call site.
+        // It is deliberately excluded from the JSON schema and can be removed with the remaining theme UI plumbing.
+        bool useDarkTheme = false;
         int maximumLogLines = 500;
         int maxJumpListCount = 20;
         bool useOldShareLinkFormat = false;
