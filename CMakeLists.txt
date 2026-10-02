@@ -303,3 +303,9 @@ message("======== Qv2ray Build Statistics ========")
 message("${QV2RAY_BUILD_STATS}")
 message("=========================================")
 message("")
+
+# ==================================================================================
+# Plugin boundary validation — keep this as the final top-level graph check.
+# ==================================================================================
+include(cmake/plugin-boundary.cmake)
+qv2ray_verify_internal_component_boundary("${CMAKE_SOURCE_DIR}")
