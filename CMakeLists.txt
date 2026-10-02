@@ -210,6 +210,7 @@ target_include_directories(qv2ray_baselib PUBLIC
     ${CURL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${Protobuf_INCLUDE_DIRS}
     )
 
 if(QV2RAY_USE_V5_CORE)
