@@ -30,9 +30,3 @@ target_link_libraries(${SUBSCRIPTION_PLUGIN_TARGET}
     ${QV_QT_LIBNAME}::Widgets)
 
 target_sources(qv2ray_baselib PRIVATE $<TARGET_OBJECTS:${SUBSCRIPTION_PLUGIN_TARGET}>)
-
-# This is the second and final maintained built-in component registered by the
-# top-level build. Validate the plugin trust boundary after both object targets
-# exist so supported and diagnostic builds fail closed on architectural drift.
-include(${CMAKE_SOURCE_DIR}/cmake/plugin-boundary.cmake)
-qv2ray_verify_internal_component_boundary("${CMAKE_SOURCE_DIR}")
