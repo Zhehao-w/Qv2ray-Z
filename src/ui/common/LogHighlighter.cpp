@@ -6,8 +6,9 @@
 
 namespace Qv2ray::ui
 {
-    SyntaxHighlighter::SyntaxHighlighter(bool darkMode, QTextDocument *parent) : QSyntaxHighlighter(parent)
+    SyntaxHighlighter::SyntaxHighlighter(bool, QTextDocument *parent) : QSyntaxHighlighter(parent)
     {
+        constexpr bool darkMode = false;
         HighlightingRule rule;
 
         if (darkMode)
