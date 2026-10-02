@@ -254,11 +254,5 @@ int main(int argc, char *argv[])
     }
 
     app.RunQv2ray();
-    const auto reason = app.GetExitReason();
-    if (reason == EXIT_NEW_VERSION_TRIGGER)
-    {
-        LOG("Starting new version of Qv2ray: " + app.StartupArguments._qvNewVersionPath);
-        QProcess::startDetached(app.StartupArguments._qvNewVersionPath, {});
-    }
-    return reason;
+    return app.GetExitReason();
 }

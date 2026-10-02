@@ -64,3 +64,24 @@ TEST_CASE("Retired UI appearance and language state stays backward compatible wi
     REQUIRE_FALSE(savedUiConfig["useGlyphTrayIcon"].toBool());
     REQUIRE(savedUiConfig["maximumLogLines"].toInt() == 900);
 }
+
+TEST_CASE("Retired updater state stays backward compatible without being persisted")
+{
+    Qv2rayConfigObject config;
+    const QJsonObject legacyUpdateConfig{
+        { "updateChannel", 1 },
+        { "ignoredVersion", "2.7.0-z1" },
+    };
+    const QJsonObject legacyConfig{
+        { "config_version", QV2RAY_CONFIG_VERSION },
+        { "updateConfig", legacyUpdateConfig },
+        { "logLevel", 2 },
+    };
+
+    config.loadJson(legacyConfig);
+
+    REQUIRE(config.logLevel == 2);
+    const auto savedConfig = config.toJson();
+    REQUIRE_FALSE(savedConfig.contains("updateConfig"));
+    REQUIRE(savedConfig["logLevel"].toInt() == 2);
+}
