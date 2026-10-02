@@ -210,7 +210,6 @@ target_include_directories(qv2ray_baselib PUBLIC
     ${CURL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${Protobuf_INCLUDE_DIRS}
     )
 
 if(QV2RAY_USE_V5_CORE)
@@ -222,11 +221,6 @@ endif()
 # process. They no longer create or install native plugin DLLs.
 include(src/plugins/protocols/QvPlugin-BuiltinProtocolSupport.cmake)
 include(src/plugins/subscription-adapters/QvPlugin-BuiltinSubscriptionAdapters.cmake)
-
-# Validate the complete maintained plugin/component graph after all supported
-# first-party component targets have been registered.
-include(cmake/plugin-boundary.cmake)
-qv2ray_verify_internal_component_boundary("${CMAKE_SOURCE_DIR}")
 
 # ==================================================================================
 # QWidget frontend
@@ -308,3 +302,9 @@ message("======== Qv2ray Build Statistics ========")
 message("${QV2RAY_BUILD_STATS}")
 message("=========================================")
 message("")
+
+# ==================================================================================
+# Plugin boundary validation — keep this as the final top-level graph check.
+# ==================================================================================
+include(cmake/plugin-boundary.cmake)
+qv2ray_verify_internal_component_boundary("${CMAKE_SOURCE_DIR}")
