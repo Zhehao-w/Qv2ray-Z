@@ -144,10 +144,7 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
         { "sockopt", QJsonObject{ { "tcpFastOpen", false } } },
         { "tlsSettings", QJsonObject{ { "serverName", "new.example.com" } } },
         { "tcpSettings",
-          QJsonObject{ { "header",
-                         QJsonObject{ { "type", "http" },
-                                      { "request", QJsonObject{ { "method", "POST" } } },
-                                      { "response", QJsonObject{ { "status", "204" } } } } } } }
+          QJsonObject{ { "header", QJsonObject{ { "type", "http" }, { "request", QJsonObject{ { "method", "POST" } } } } } } }
     };
     auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
 
@@ -173,7 +170,7 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
     REQUIRE(header["futureHeaderField"] == "keep");
     REQUIRE(header["request"].toObject()["method"] == "POST");
     REQUIRE(header["request"].toObject()["futureRequestField"] == 17);
-    REQUIRE(header["response"].toObject()["status"] == "204");
+    REQUIRE_FALSE(header["response"].toObject().contains("status"));
     REQUIRE(header["response"].toObject()["futureResponseField"].toBool());
     REQUIRE(tcp["acceptProxyProtocol"].toBool());
 }
@@ -185,19 +182,17 @@ TEST_CASE("Outbound editor persistence preserves unknown fields inside KCP and Q
         original["protocol"] = "vless";
         original["streamSettings"] = QJsonObject{
             { "network", "kcp" },
-            { "kcpSettings", QJsonObject{ { "mtu", 1350 }, { "header", QJsonObject{ { "type", "srtp" }, { "futureHeaderField", 7 } } } } }
+            { "kcpSettings", QJsonObject{ { "mtu", 1350 }, { "header", QJsonObject{ { "type", "none" }, { "futureHeaderField", 7 } } } } }
         };
 
-        const QJsonObject editedStream{
-            { "network", "kcp" },
-            { "kcpSettings", QJsonObject{ { "mtu", 1400 }, { "header", QJsonObject{ { "type", "srtp" } } } } }
-        };
+        const QJsonObject editedStream{ { "network", "kcp" }, { "kcpSettings", QJsonObject{ { "mtu", 1400 } } } };
         auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
         const auto resultSettings = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject()["kcpSettings"].toObject();
+        const auto header = resultSettings["header"].toObject();
 
         REQUIRE(resultSettings["mtu"] == 1400);
-        REQUIRE(resultSettings["header"].toObject()["type"] == "srtp");
-        REQUIRE(resultSettings["header"].toObject()["futureHeaderField"] == 7);
+        REQUIRE_FALSE(header.contains("type"));
+        REQUIRE(header["futureHeaderField"] == 7);
     }
 
     {
