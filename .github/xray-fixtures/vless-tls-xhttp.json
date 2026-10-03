@@ -1,0 +1,44 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "outbounds": [
+    {
+      "tag": "tls-xhttp-validation",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "192.0.2.1",
+            "port": 443,
+            "users": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003",
+                "encryption": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "tls-xhttp.example.invalid",
+          "alpn": [
+            "h2"
+          ]
+        },
+        "xhttpSettings": {
+          "host": "tls-xhttp.example.invalid",
+          "path": "/xhttp",
+          "mode": "auto",
+          "extra": {
+            "xPaddingBytes": "100-1000",
+            "noGRPCHeader": false
+          }
+        }
+      }
+    }
+  ]
+}
