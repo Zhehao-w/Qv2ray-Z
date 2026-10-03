@@ -2,6 +2,7 @@
 #include "Common.hpp"
 #include "VLESSOutboundSerializerTestHelper.hpp"
 #include "base/VLESSShareLinkOpaque.hpp"
+#include "src/core/connection/Generation.hpp"
 #include "src/core/connection/Serialization.hpp"
 
 #include <QJsonArray>
@@ -94,4 +95,20 @@ TEST_CASE("Malformed opaque VLESS query metadata fails closed on export")
     stream[Qv2ray::base::vless_share::OpaqueQueryMetadataKey()] = QJsonArray{ QStringLiteral("futureOption=%ZZ") };
 
     REQUIRE(SerializeVLESSOutboundForTest("opaque", settings, stream) == "(Invalid VLESS opaque query metadata)");
+}
+
+TEST_CASE("Opaque VLESS query metadata is stripped from runtime config")
+{
+    CONFIGROOT root;
+    QJsonObject stream{ { "network", "tcp" }, { "futureStreamField", 7 } };
+    stream[Qv2ray::base::vless_share::OpaqueQueryMetadataKey()] = QJsonArray{ QStringLiteral("futureOption=value") };
+    root["outbounds"] = QJsonArray{ QJsonObject{ { "protocol", "vless" }, { "streamSettings", stream } } };
+
+    Qv2ray::core::connection::generation::filters::FillupTagsFilter(root, QStringLiteral("outbounds"));
+
+    const auto runtimeOutbound = root["outbounds"].toArray().first().toObject();
+    const auto runtimeStream = runtimeOutbound["streamSettings"].toObject();
+    REQUIRE_FALSE(runtimeStream.contains(Qv2ray::base::vless_share::OpaqueQueryMetadataKey()));
+    REQUIRE(runtimeStream["futureStreamField"] == 7);
+    REQUIRE_FALSE(runtimeOutbound["tag"].toString().isEmpty());
 }

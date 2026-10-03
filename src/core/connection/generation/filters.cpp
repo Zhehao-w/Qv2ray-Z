@@ -1,4 +1,5 @@
 #include "core/connection/Generation.hpp"
+#include "base/VLESSShareLinkOpaque.hpp"
 #include "utils/QvHelpers.hpp"
 
 namespace Qv2ray::core::connection::generation::filters
@@ -80,6 +81,16 @@ namespace Qv2ray::core::connection::generation::filters
             {
                 const auto tag = GenerateRandomString(8);
                 QJsonIO::SetValue(root, tag, subKey, i, "tag");
+            }
+
+            // Opaque VLESS share-link query items are Qv2ray-Z persistence
+            // metadata, not Xray streamSettings. The final runtime pass reaches
+            // both simple and complex outbounds, so strip the reserved key here
+            // before validation/launch while leaving stored/editor data intact.
+            if (subKey == QStringLiteral("outbounds") && QJsonIO::GetValue(root, subKey, i, "protocol").toString() == QStringLiteral("vless"))
+            {
+                QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings",
+                                  Qv2ray::base::vless_share::OpaqueQueryMetadataKey());
             }
         }
     }
