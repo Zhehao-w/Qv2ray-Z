@@ -172,14 +172,14 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
             for (const auto &key : { QStringLiteral("host"), QStringLiteral("path"), QStringLiteral("mode") })
             {
                 if (xhttp.contains(key))
-                    query.addQueryItem(key, xhttp.value(key).toString());
+                    query.addQueryItem(key, QUrl::toPercentEncoding(xhttp.value(key).toString()));
             }
             if (xhttp.contains("extra"))
             {
                 if (!xhttp.value("extra").isObject())
                     return "(Invalid XHTTP extra JSON object)";
-                const auto extra = QJsonDocument(xhttp.value("extra").toObject()).toJson(QJsonDocument::Compact);
-                query.addQueryItem("extra", QString::fromUtf8(extra));
+                const auto extra = QString::fromUtf8(QJsonDocument(xhttp.value("extra").toObject()).toJson(QJsonDocument::Compact));
+                query.addQueryItem("extra", QUrl::toPercentEncoding(extra));
             }
         }
         // -------- TLS RELATED --------
