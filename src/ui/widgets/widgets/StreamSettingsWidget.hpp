@@ -24,13 +24,6 @@ class StreamSettingsWidget
     // Domain Socket
     void on_dsPathTxt_textEdited(const QString &arg1);
 
-    // HTTP
-    void on_httpHostTxt_textChanged();
-    void on_httpPathTxt_textEdited(const QString &arg1);
-    void on_httpMethodCB_currentTextChanged(const QString &arg1);
-    void on_httpHeadersEditBtn_clicked();
-    void on_httpHeadersDefBtn_clicked();
-
     // KCP
     void on_kcpCongestionCB_stateChanged(int arg1);
     void on_kcpDownCapacitySB_valueChanged(int arg1);

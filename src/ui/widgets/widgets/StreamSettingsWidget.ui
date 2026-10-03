@@ -159,148 +159,6 @@
            </item>
           </layout>
          </widget>
-         <widget class="QWidget" name="httpStackPage">
-          <layout class="QGridLayout" name="gridLayout_8">
-           <item row="0" column="0">
-            <layout class="QGridLayout" name="gridLayout_10">
-             <item row="0" column="0">
-              <widget class="QLabel" name="label_5">
-               <property name="text">
-                <string>Path</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1" colspan="2">
-              <widget class="QLineEdit" name="httpPathTxt">
-               <property name="placeholderText">
-                <string notr="true">/</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="label_31">
-               <property name="text">
-                <string>Method</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="1" colspan="2">
-              <widget class="QComboBox" name="httpMethodCB">
-               <property name="editable">
-                <bool>true</bool>
-               </property>
-               <item>
-                <property name="text">
-                 <string notr="true">PUT</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">GET</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">POST</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">DELETE</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">CONNECT</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">HEAD</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">OPTIONS</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">PATCH</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string notr="true">TRACE</string>
-                </property>
-               </item>
-              </widget>
-             </item>
-            </layout>
-           </item>
-           <item row="1" column="0">
-            <layout class="QGridLayout" name="gridLayout_11">
-             <item row="0" column="0">
-              <widget class="QLabel" name="label_4">
-               <property name="text">
-                <string>Host</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1" colspan="2">
-              <widget class="QLabel" name="label_33">
-               <property name="text">
-                <string>Headers</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QPlainTextEdit" name="httpHostTxt">
-               <property name="placeholderText">
-                <string notr="true">myhost.mydomain.com</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="1" colspan="2">
-              <widget class="QPlainTextEdit" name="httpHeadersTxt">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="lineWrapMode">
-                <enum>QPlainTextEdit::NoWrap</enum>
-               </property>
-               <property name="readOnly">
-                <bool>true</bool>
-               </property>
-               <property name="plainText">
-                <string/>
-               </property>
-               <property name="placeholderText">
-                <string notr="true"/>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QPushButton" name="httpHeadersEditBtn">
-               <property name="text">
-                <string>Edit</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="2">
-              <widget class="QPushButton" name="httpHeadersDefBtn">
-               <property name="text">
-                <string>Reset</string>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
-          </layout>
-         </widget>
          <widget class="QWidget" name="wsStackPage">
           <layout class="QGridLayout" name="gridLayout_9" rowstretch="0,0,1">
            <item row="0" column="0">
@@ -713,11 +571,6 @@
            </item>
            <item>
             <property name="text">
-             <string notr="true">http</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
              <string notr="true">ws</string>
             </property>
            </item>
@@ -986,8 +839,6 @@
   <tabstop>tcpRequestDefBtn</tabstop>
   <tabstop>tcpResponseEditBtn</tabstop>
   <tabstop>tcpRespDefBtn</tabstop>
-  <tabstop>httpPathTxt</tabstop>
-  <tabstop>httpHostTxt</tabstop>
   <tabstop>wsHeadersTxt</tabstop>
   <tabstop>kcpUploadCapacSB</tabstop>
   <tabstop>kcpDownCapacitySB</tabstop>
