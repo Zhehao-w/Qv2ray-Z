@@ -1,5 +1,6 @@
 #pragma once
 
+#include "StreamSettingsTransport.hpp"
 #include "base/Qv2rayBase.hpp"
 #include "ui/common/QvMessageBus.hpp"
 #include "ui_StreamSettingsWidget.h"
@@ -86,6 +87,15 @@ class StreamSettingsWidget
     void on_pinnedPeerCertificateChainSha256Btn_clicked();
 
   private:
+    bool SelectTransportEditor(const QString &network);
+    void RefreshXhttpExtraText();
+
     QvMessageBusSlotDecl;
     StreamSettingsObject stream;
+
+    QWidget *xhttpStackPage = nullptr;
+    QLineEdit *xhttpHostTxt = nullptr;
+    QLineEdit *xhttpPathTxt = nullptr;
+    QComboBox *xhttpModeCB = nullptr;
+    QPlainTextEdit *xhttpExtraTxt = nullptr;
 };
