@@ -36,7 +36,7 @@ namespace Qv2ray::core::connection::generation::routing
     {
         ROUTING root;
         // IPIfNonMatch lets the CN preset fall back from geosite matching to
-        // geoip:cn. Never replace an explicit advanced strategy.
+        // the pinned optimized CN GeoIP data. Never replace an explicit advanced strategy.
         const auto domainStrategy = bypassCN && routeConfig.domainStrategy.isEmpty() ? "IPIfNonMatch" : routeConfig.domainStrategy;
         root.insert("domainStrategy", domainStrategy);
         root.insert("domainMatcher", routeConfig.domainMatcher);
@@ -44,7 +44,7 @@ namespace Qv2ray::core::connection::generation::routing
         // For Rules list
         QJsonArray rulesList;
         if (bypassLAN)
-            rulesList << GenerateSingleRouteRule(RULE_IP, "geoip:private", OUTBOUND_TAG_DIRECT);
+            rulesList << GenerateSingleRouteRule(RULE_IP, "ext:geoip-only-cn-private.dat:private", OUTBOUND_TAG_DIRECT);
         //
         if (!enableProxy)
         {
@@ -78,7 +78,7 @@ namespace Qv2ray::core::connection::generation::routing
             if (bypassCN)
             {
                 // No proxy agains CN addresses.
-                rulesList << GenerateSingleRouteRule(RULE_IP, "geoip:cn", OUTBOUND_TAG_DIRECT);
+                rulesList << GenerateSingleRouteRule(RULE_IP, "ext:geoip-only-cn-private.dat:cn", OUTBOUND_TAG_DIRECT);
                 rulesList << GenerateSingleRouteRule(RULE_DOMAIN, "geosite:cn", OUTBOUND_TAG_DIRECT);
             }
         }

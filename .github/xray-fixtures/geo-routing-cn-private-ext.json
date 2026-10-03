@@ -9,12 +9,26 @@
     }
   ],
   "routing": {
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
         "ip": [
-          "ext:geoip-only-cn-private.dat:cn",
           "ext:geoip-only-cn-private.dat:private"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "ext:geoip-only-cn-private.dat:cn"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:cn"
         ],
         "outboundTag": "direct"
       }
