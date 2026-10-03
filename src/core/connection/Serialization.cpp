@@ -32,12 +32,25 @@ namespace Qv2ray::core::connection
                 }
                 return true;
             };
+            const auto rejectRemovedQuicTransport = [errMessage](const CONFIGROOT &conf, const QString &protocol)
+            {
+                const auto outbounds = conf.value("outbounds").toArray();
+                if (outbounds.isEmpty())
+                    return false;
+                const auto network = outbounds.first().toObject().value("streamSettings").toObject().value("network").toString("tcp");
+                if (network != QStringLiteral("quic"))
+                    return false;
+                *errMessage = QObject::tr("Unsupported %1 transport: quic").arg(protocol);
+                return true;
+            };
 
             QList<std::pair<QString, CONFIGROOT>> connectionConf;
             if (link.startsWith("vmess://") && link.contains("@"))
             {
                 auto conf = vmess_new::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
+                    return {};
+                if (rejectRemovedQuicTransport(conf, QStringLiteral("VMess")))
                     return {};
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
@@ -72,6 +85,8 @@ namespace Qv2ray::core::connection
             {
                 auto conf = vmess::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
+                    return {};
+                if (rejectRemovedQuicTransport(conf, QStringLiteral("VMess")))
                     return {};
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
@@ -143,8 +158,8 @@ namespace Qv2ray::core::connection
                 return "";
             }
 
-            if (type == "vless" && streamSettings.value("network").toString("tcp") == "quic")
-                return "(Unsupported VLESS transport)";
+            if ((type == "vless" || type == "vmess") && streamSettings.value("network").toString("tcp") == "quic")
+                return type == "vless" ? "(Unsupported VLESS transport)" : "(Unsupported VMess transport)";
 
             if (type == "vmess")
             {
