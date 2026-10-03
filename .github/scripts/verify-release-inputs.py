@@ -153,10 +153,14 @@ for marker in (
     "release_id",
     "asset_id",
     "releases/assets/$ASSET_ID",
-    "Downloaded size mismatch",
+    "ACTUAL_SIZE",
+    "EXPECTED_SIZE",
+    "exit 1",
 ):
     if marker not in setup_libs:
         fail(f"setup-libs.sh is missing required pinned dependency verification marker: {marker}")
+if not re.search(r'if\s+\[\[\s+"\$ACTUAL_SIZE"\s+!=\s+"\$EXPECTED_SIZE"\s+\]\];\s*then', setup_libs):
+    fail("setup-libs.sh no longer fails closed when a downloaded dependency size mismatches its pin")
 
 version = (ROOT / "makespec" / "VERSION").read_text(encoding="utf-8").strip()
 if not re.fullmatch(r"\d+\.\d+\.\d+", version):
