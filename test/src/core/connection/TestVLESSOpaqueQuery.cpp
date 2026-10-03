@@ -26,11 +26,13 @@ TEST_CASE("Unknown VLESS query items survive canonical import and export")
     inputQuery.addQueryItem("futureOption", "second value");
     inputQuery.addQueryItem("futureUnicode", QString::fromUtf8("雪/%2F"));
     input.setQuery(inputQuery);
+    const auto inputWire = input.toString(QUrl::FullyEncoded);
+    const auto expectedOpaque = Qv2ray::base::vless_share::ExtractOpaqueQueryItems(inputWire);
 
     QString alias;
     QString error;
     QString group;
-    const auto converted = ConvertConfigFromString(input.toString(QUrl::FullyEncoded), &alias, &error, &group);
+    const auto converted = ConvertConfigFromString(inputWire, &alias, &error, &group);
     REQUIRE(error.isEmpty());
     REQUIRE(converted.size() == 1);
 
@@ -38,12 +40,10 @@ TEST_CASE("Unknown VLESS query items survive canonical import and export")
     const auto outbound = root["outbounds"].toArray().first().toObject();
     const auto stream = outbound["streamSettings"].toObject();
     const auto opaque = stream.value(Qv2ray::base::vless_share::OpaqueQueryMetadataKey()).toArray();
+    REQUIRE(opaque == expectedOpaque);
     REQUIRE(opaque.size() == 3);
     for (const auto &item : opaque)
-    {
-        const auto key = item.toObject().value("key").toString();
-        REQUIRE_FALSE(Qv2ray::base::vless_share::ManagedQueryKeys().contains(key));
-    }
+        REQUIRE(item.isString());
 
     const auto exported = SerializeVLESSOutboundForTest(alias, outbound["settings"].toObject(), stream);
     const QUrlQuery exportedQuery{ QUrl(exported) };
@@ -53,7 +53,7 @@ TEST_CASE("Unknown VLESS query items survive canonical import and export")
     REQUIRE(exportedQuery.queryItemValue("pbk") == "PUBLIC_KEY");
     const QStringList expectedFutureOptions{ "first/value", "second value" };
     REQUIRE(exportedQuery.allQueryItemValues("futureOption") == expectedFutureOptions);
-    REQUIRE(exportedQuery.queryItemValue("futureUnicode") == QString::fromUtf8("雪/%2F"));
+    REQUIRE(Qv2ray::base::vless_share::ExtractOpaqueQueryItems(exported) == expectedOpaque);
 
     QString secondAlias;
     QString secondError;
@@ -74,10 +74,8 @@ TEST_CASE("Opaque VLESS query metadata cannot override modeled fields")
     QJsonIO::SetValue(settings, "none", { "vnext", 0, "users", 0, "encryption" });
 
     QJsonObject stream{ { "network", "tcp" }, { "security", "reality" } };
-    stream[Qv2ray::base::vless_share::OpaqueQueryMetadataKey()] = QJsonArray{
-        QJsonObject{ { "key", "security" }, { "value", "none" } },
-        QJsonObject{ { "key", "futureOption" }, { "value", "preserved" } }
-    };
+    stream[Qv2ray::base::vless_share::OpaqueQueryMetadataKey()] =
+        QJsonArray{ QStringLiteral("security=none"), QStringLiteral("futureOption=preserved") };
 
     const QUrlQuery query{ QUrl(SerializeVLESSOutboundForTest("opaque", settings, stream)) };
     REQUIRE(query.queryItemValue("security") == "reality");
@@ -93,8 +91,7 @@ TEST_CASE("Malformed opaque VLESS query metadata fails closed on export")
     QJsonIO::SetValue(settings, "none", { "vnext", 0, "users", 0, "encryption" });
 
     QJsonObject stream{ { "network", "tcp" } };
-    stream[Qv2ray::base::vless_share::OpaqueQueryMetadataKey()] =
-        QJsonArray{ QJsonObject{ { "key", "futureOption" } } };
+    stream[Qv2ray::base::vless_share::OpaqueQueryMetadataKey()] = QJsonArray{ QStringLiteral("futureOption=%ZZ") };
 
     REQUIRE(SerializeVLESSOutboundForTest("opaque", settings, stream) == "(Invalid VLESS opaque query metadata)");
 }
