@@ -103,7 +103,8 @@ TEST_CASE("Outbound editor persistence does not carry transport-specific unknown
     original["sendThrough"] = "192.0.2.44";
     original["streamSettings"] = QJsonObject{ { "network", "xhttp" }, { "futureStreamField", 7 } };
 
-    auto edited = GenerateOutboundEntry("proxy", "vless", {}, QJsonObject{ { "network", "tcp" } });
+    OUTBOUNDSETTING editedSettings;
+    auto edited = GenerateOutboundEntry("proxy", "vless", editedSettings, QJsonObject{ { "network", "tcp" } });
     const auto result = PreserveUneditedOutboundFields(original, edited);
 
     REQUIRE(result["sendThrough"] == "192.0.2.44");
