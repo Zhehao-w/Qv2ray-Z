@@ -52,17 +52,39 @@ The bundled Xray binary and assets are ready for normal use. Advanced users can 
 
 The maintained configuration paths currently include:
 
-- VLESS over TCP / RAW
+- VLESS
 - TLS
 - REALITY
 - `xtls-rprx-vision`
 - `xtls-rprx-vision-udp443`
 - REALITY ML-DSA-65 verification (`pqv` / `mldsa65Verify`)
+- TCP
+- WebSocket
+- mKCP using current Xray-supported fields
+- gRPC
+- XHTTP
+- FinalMask
 - modern VLESS share-link import and export
+- preservation of unknown / duplicate / raw VLESS query metadata across supported round-trips
 - bundled Xray executable discovery
-- compatibility with current official Xray-core releases
+- compatibility with the pinned official Xray-core release
 
-Unsupported legacy XTLS modes from the original codebase have been removed from normal configuration generation.
+### Disabled or removed legacy surfaces
+
+The maintained product intentionally does not expose or generate several historical Qv2ray/Xray paths that are retired, unsupported by current Xray-core, or no longer useful for this Windows-focused client:
+
+- legacy QUIC transport
+- legacy HTTP / H2 / H3 stream transport
+- legacy mKCP Header camouflage
+- legacy mKCP Seed
+- legacy SSD (`ssd://`) share-link import
+- obsolete MTProto outbound editor
+- inactive Android and historical Debian / Snap / RPM packaging paths
+- unreachable inbound placeholder editors that were never part of the maintained build
+
+Some old persisted model fields are intentionally retained for backward compatibility and lossless loading. Their presence in the data model does **not** mean they can be newly created, exported, or passed to modern Xray at runtime. Unsupported runtime fields are rejected or stripped at the final runtime boundary rather than silently migrated to unrelated modern features.
+
+In particular, FinalMask is a current Xray feature and is not treated as legacy transport/header camouflage.
 
 ## Import and daily use
 
@@ -106,6 +128,8 @@ Explicit custom routing rules keep higher priority, and advanced routing control
 ## Compatibility and scope
 
 Qv2ray-Z is intentionally Windows-focused and conservative about new features. Current maintenance emphasizes stable behavior with modern official Xray-core, removal of retired or unreachable legacy paths, and UI cleanup without changing proven protocol behavior.
+
+Existing configuration data is handled conservatively: cleanup work avoids destructive automatic migration and avoids silently rewriting unrelated or unknown configuration fields.
 
 New protocol support is not a current project goal. Legacy features that are no longer supported by modern Xray-core or by the maintained Windows product may be unavailable even if they existed in historical Qv2ray releases.
 
