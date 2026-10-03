@@ -10,7 +10,6 @@ enum class StreamTransportEditor
     WebSocket,
     Kcp,
     DomainSocket,
-    Quic,
     Grpc,
     Xhttp
 };
@@ -27,8 +26,6 @@ inline StreamTransportEditor StreamTransportEditorForNetwork(const QString &netw
         return StreamTransportEditor::Kcp;
     if (network == "domainsocket")
         return StreamTransportEditor::DomainSocket;
-    if (network == "quic")
-        return StreamTransportEditor::Quic;
     if (network == "grpc")
         return StreamTransportEditor::Grpc;
     if (network == "xhttp")
