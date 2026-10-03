@@ -1,6 +1,9 @@
 #include "3rdparty/QJsonStruct/QJsonIO.hpp"
 #include "Common.hpp"
 #include "src/core/connection/Serialization.hpp"
+
+#include <QUrl>
+#include <QUrlQuery>
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
@@ -117,4 +120,120 @@ TEST_CASE("Modern VMess parser does not retain query state across calls")
     REQUIRE(QJsonIO::GetValue(second, { "outbounds", 0, "streamSettings", "wsSettings", "path" }) == "/second");
     REQUIRE(QJsonIO::GetValue(second, { "outbounds", 0, "settings", "vnext", 0, "address" }) == "example.net");
     REQUIRE(QJsonIO::GetValue(second, { "outbounds", 0, "settings", "vnext", 0, "port" }).toInt() == 8443);
+}
+
+TEST_CASE("Modern VMess supported transport fields round trip")
+{
+    QvTestApplication app;
+    VMessServerObject server;
+    server.address = "example.com";
+    server.port = 443;
+    VMessServerObject::UserObject user;
+    user.id = "40980939-f6bd-4b17-ad26-c2aed2f1b3fc";
+    user.alterId = 0;
+    server.users << user;
+
+    const auto roundTrip = [&server](const StreamSettingsObject &stream)
+    {
+        const auto link = vmess_new::Serialize(stream, server, "roundtrip");
+        QString alias;
+        QString error;
+        const auto result = vmess_new::Deserialize(link, &alias, &error);
+        INFO("Serialized link: " << link.toStdString());
+        INFO("Parser error: " << error.toStdString());
+        REQUIRE(error.isEmpty());
+        REQUIRE(alias == "roundtrip");
+        const auto outbound = result["outbounds"].toArray().first().toObject();
+        return StreamSettingsObject::fromJson(outbound["streamSettings"]);
+    };
+
+    SECTION("TCP header")
+    {
+        StreamSettingsObject stream;
+        stream.network = "tcp";
+        stream.tcpSettings.header.type = "http";
+        const auto parsed = roundTrip(stream);
+        REQUIRE(parsed.network == "tcp");
+        REQUIRE(parsed.tcpSettings.header.type == "http");
+    }
+
+    SECTION("HTTP host and path")
+    {
+        StreamSettingsObject stream;
+        stream.network = "http";
+        stream.httpSettings.host = { "h2.example.com" };
+        stream.httpSettings.path = "/h2";
+        const auto parsed = roundTrip(stream);
+        REQUIRE(parsed.network == "http");
+        REQUIRE(parsed.httpSettings.host == QList<QString>{ "h2.example.com" });
+        REQUIRE(parsed.httpSettings.path == "/h2");
+    }
+
+    SECTION("WebSocket host and path")
+    {
+        StreamSettingsObject stream;
+        stream.network = "ws";
+        stream.wsSettings.headers["Host"] = "ws.example.com";
+        stream.wsSettings.path = "/socket";
+        const auto parsed = roundTrip(stream);
+        REQUIRE(parsed.network == "ws");
+        REQUIRE(parsed.wsSettings.headers["Host"] == "ws.example.com");
+        REQUIRE(parsed.wsSettings.path == "/socket");
+    }
+
+    SECTION("mKCP seed and header")
+    {
+        StreamSettingsObject stream;
+        stream.network = "kcp";
+        stream.kcpSettings.seed = "round-trip-seed";
+        stream.kcpSettings.header.type = "wireguard";
+        const auto parsed = roundTrip(stream);
+        REQUIRE(parsed.network == "kcp");
+        REQUIRE(parsed.kcpSettings.seed == "round-trip-seed");
+        REQUIRE(parsed.kcpSettings.header.type == "wireguard");
+    }
+
+    SECTION("QUIC security key and header")
+    {
+        StreamSettingsObject stream;
+        stream.network = "quic";
+        stream.quicSettings.security = "aes-128-gcm";
+        stream.quicSettings.key = "round-trip-key";
+        stream.quicSettings.header.type = "wireguard";
+
+        const auto link = vmess_new::Serialize(stream, server, "roundtrip");
+        const QUrlQuery query{ QUrl(link) };
+        REQUIRE(query.queryItemValue("type") == "wireguard");
+        REQUIRE(!query.hasQueryItem("headers"));
+
+        const auto parsed = roundTrip(stream);
+        REQUIRE(parsed.network == "quic");
+        REQUIRE(parsed.quicSettings.security == "aes-128-gcm");
+        REQUIRE(parsed.quicSettings.key == "round-trip-key");
+        REQUIRE(parsed.quicSettings.header.type == "wireguard");
+    }
+
+    SECTION("gRPC service name")
+    {
+        StreamSettingsObject stream;
+        stream.network = "grpc";
+        stream.grpcSettings.serviceName = "RoundTripService";
+        const auto parsed = roundTrip(stream);
+        REQUIRE(parsed.network == "grpc");
+        REQUIRE(parsed.grpcSettings.serviceName == "RoundTripService");
+    }
+}
+
+TEST_CASE("Modern VMess accepts QUIC links emitted with the legacy headers key")
+{
+    QvTestApplication app;
+    QString alias;
+    QString error;
+    const auto result = vmess_new::Deserialize(
+        "vmess://quic:40980939-f6bd-4b17-ad26-c2aed2f1b3fc-0@example.com:443?security=none&headers=wireguard#legacy",
+        &alias, &error);
+
+    REQUIRE(error.isEmpty());
+    REQUIRE(alias == "legacy");
+    REQUIRE(QJsonIO::GetValue(result, { "outbounds", 0, "streamSettings", "quicSettings", "header", "type" }) == "wireguard");
 }

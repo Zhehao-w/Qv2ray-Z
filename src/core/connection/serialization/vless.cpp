@@ -143,12 +143,12 @@ namespace Qv2ray::core::connection
                         const auto key = query.queryItemValue("key");
                         QJsonIO::SetValue(stream, key, { "quicSettings", "key" });
                     }
-
-                    const auto hasHeaderType = query.hasQueryItem("headerType");
-                    const auto headerType = hasHeaderType ? query.queryItemValue("headerType") : "none";
-                    if (headerType != "none")
-                        QJsonIO::SetValue(stream, headerType, { "quicSettings", "header", "type" });
                 }
+
+                const auto hasHeaderType = query.hasQueryItem("headerType");
+                const auto headerType = hasHeaderType ? query.queryItemValue("headerType") : "none";
+                if (headerType != "none")
+                    QJsonIO::SetValue(stream, headerType, { "quicSettings", "header", "type" });
             }
             else if (type == "grpc")
             {
