@@ -3,7 +3,9 @@ target_link_libraries(qv2ray_baselib wininet wsock32 ws2_32 user32 Rasapi32 Iphl
 
 install(TARGETS qv2ray RUNTIME DESTINATION .)
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/winqt/ DESTINATION .)
+if(QV2RAY_AUTO_DEPLOY)
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/winqt/ DESTINATION .)
+endif()
 
 set(APPS "\${CMAKE_INSTALL_PREFIX}/qv2ray.exe")
 
