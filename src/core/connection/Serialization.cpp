@@ -31,7 +31,10 @@ namespace Qv2ray::core::connection
             };
             const auto rejectedRemovedVlessTransport = [errMessage](const CONFIGROOT &conf)
             {
-                const auto network = QJsonIO::GetValue(conf, { "outbounds", 0, "streamSettings", "network" }).toString("tcp");
+                const auto outbounds = conf.value("outbounds").toArray();
+                if (outbounds.isEmpty())
+                    return false;
+                const auto network = outbounds.first().toObject().value("streamSettings").toObject().value("network").toString("tcp");
                 if (network != "quic")
                     return false;
                 *errMessage = QObject::tr("Unsupported VLESS transport: %1").arg(network);
