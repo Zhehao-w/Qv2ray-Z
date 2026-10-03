@@ -71,6 +71,10 @@ jobs:
         with:
           python-version: '3.13.3'
 
+      - name: Verify pinned release inputs
+        shell: pwsh
+        run: python .github/scripts/verify-release-inputs.py
+
       - name: Install Qt 5.15.2
         uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1 internal action
         with:
@@ -150,14 +154,22 @@ jobs:
         run: |
           & ./.github/scripts/install-pinned-xray-windows.ps1
 
-      - name: Validate TLS Vision and REALITY Vision fixtures
+      - name: Download and verify pinned Geo routing assets
         shell: pwsh
         run: |
+          & ./.github/scripts/install-pinned-geo-windows.ps1
+
+      - name: Validate Xray compatibility and Geo routing fixtures
+        shell: pwsh
+        run: |
+          $env:XRAY_LOCATION_ASSET = $env:GEO_DIR
           $help = & "$env:XRAY_BIN" help 2>&1 | Out-String
           $runHelp = & "$env:XRAY_BIN" help run 2>&1 | Out-String
           $fixtures = @(
             '.github/xray-fixtures/vless-tls-vision.json',
-            '.github/xray-fixtures/vless-reality-vision.json'
+            '.github/xray-fixtures/vless-reality-vision.json',
+            '.github/xray-fixtures/geo-routing-full.json',
+            '.github/xray-fixtures/geo-routing-cn-private-ext.json'
           )
 
           foreach ($fixture in $fixtures) {
@@ -172,23 +184,41 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-      - name: Package Xray executable, assets, and release manifest
+      - name: Package Xray executable, Geo assets, and release manifest
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
-          foreach ($file in @('xray.exe', 'geoip.dat', 'geosite.dat')) {
-            $source = Join-Path "$env:RUNNER_TEMP/xray/bin" $file
-            if (-not (Test-Path $source)) { throw "Xray release is missing $file" }
+          Copy-Item "$env:XRAY_BIN" (Join-Path $deployment 'xray.exe') -Force
+          foreach ($file in @('geoip.dat', 'geosite.dat', 'geoip-only-cn-private.dat')) {
+            $source = Join-Path $env:GEO_DIR $file
+            if (-not (Test-Path $source -PathType Leaf)) { throw "Verified Geo staging directory is missing $file" }
             Copy-Item $source $deployment -Force
           }
 
+          $geoipHash = (Get-FileHash (Join-Path $deployment 'geoip.dat') -Algorithm SHA256).Hash.ToLowerInvariant()
+          $geositeHash = (Get-FileHash (Join-Path $deployment 'geosite.dat') -Algorithm SHA256).Hash.ToLowerInvariant()
+          $cnPrivateHash = (Get-FileHash (Join-Path $deployment 'geoip-only-cn-private.dat') -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($geoipHash -ne $env:GEOIP_SHA256.ToLowerInvariant()) { throw 'Packaged geoip.dat hash does not match the pin.' }
+          if ($geositeHash -ne $env:GEOSITE_SHA256.ToLowerInvariant()) { throw 'Packaged geosite.dat hash does not match the pin.' }
+          if ($cnPrivateHash -ne $env:GEOIP_CN_PRIVATE_SHA256.ToLowerInvariant()) { throw 'Packaged CN/private GeoIP hash does not match the pin.' }
+
           $releaseManifest = [ordered]@{
-            schema_version = 1
+            schema_version = 2
             qv2ray_version = $env:RELEASE_VERSION
             qv2ray_commit = $env:GITHUB_SHA
             xray_version = $env:XRAY_VERSION
             xray_asset = $env:XRAY_ASSET
             xray_sha256 = $env:XRAY_SHA256
+            geo_rules_source = $env:GEO_RULES_SOURCE
+            geo_rules_version = $env:GEO_RULES_VERSION
+            geoip_asset = $env:GEOIP_ASSET
+            geoip_sha256 = $geoipHash
+            geosite_asset = $env:GEOSITE_ASSET
+            geosite_sha256 = $geositeHash
+            geo_cn_private_source = $env:GEO_CN_PRIVATE_SOURCE
+            geo_cn_private_version = $env:GEO_CN_PRIVATE_VERSION
+            geoip_cn_private_asset = $env:GEOIP_CN_PRIVATE_ASSET
+            geoip_cn_private_sha256 = $cnPrivateHash
             qt_version = '5.15.2'
             msvc_toolset = '14.2'
             runner_image = 'windows-2022'
@@ -200,7 +230,7 @@ jobs:
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
-          foreach ($file in @('qv2ray.exe', 'xray.exe', 'geoip.dat', 'geosite.dat', 'release-manifest.json')) {
+          foreach ($file in @('qv2ray.exe', 'xray.exe', 'geoip.dat', 'geosite.dat', 'geoip-only-cn-private.dat', 'release-manifest.json')) {
             $packagedFile = Join-Path $deployment $file
             if (-not (Test-Path $packagedFile -PathType Leaf)) { throw "Deployment is missing $file" }
           }
@@ -221,11 +251,29 @@ jobs:
           }
 
           $metadata = Get-Content "$deployment/release-manifest.json" -Raw | ConvertFrom-Json
-          if ($metadata.qv2ray_version -ne $env:RELEASE_VERSION -or
+          if ($metadata.schema_version -ne 2 -or
+              $metadata.qv2ray_version -ne $env:RELEASE_VERSION -or
               $metadata.qv2ray_commit -ne $env:GITHUB_SHA -or
               $metadata.xray_version -ne $env:XRAY_VERSION -or
-              $metadata.xray_sha256 -ne $env:XRAY_SHA256) {
+              $metadata.xray_sha256 -ne $env:XRAY_SHA256 -or
+              $metadata.geo_rules_source -ne $env:GEO_RULES_SOURCE -or
+              $metadata.geo_rules_version -ne $env:GEO_RULES_VERSION -or
+              $metadata.geo_cn_private_source -ne $env:GEO_CN_PRIVATE_SOURCE -or
+              $metadata.geo_cn_private_version -ne $env:GEO_CN_PRIVATE_VERSION) {
             throw 'Packaged release manifest does not match the verified build inputs.'
+          }
+
+          $geoipHash = (Get-FileHash "$deployment/geoip.dat" -Algorithm SHA256).Hash.ToLowerInvariant()
+          $geositeHash = (Get-FileHash "$deployment/geosite.dat" -Algorithm SHA256).Hash.ToLowerInvariant()
+          $cnPrivateHash = (Get-FileHash "$deployment/geoip-only-cn-private.dat" -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($metadata.geoip_sha256 -ne $geoipHash -or $metadata.geoip_sha256 -ne $env:GEOIP_SHA256.ToLowerInvariant()) {
+            throw 'Packaged geoip.dat does not match the release manifest and dependency pin.'
+          }
+          if ($metadata.geosite_sha256 -ne $geositeHash -or $metadata.geosite_sha256 -ne $env:GEOSITE_SHA256.ToLowerInvariant()) {
+            throw 'Packaged geosite.dat does not match the release manifest and dependency pin.'
+          }
+          if ($metadata.geoip_cn_private_sha256 -ne $cnPrivateHash -or $metadata.geoip_cn_private_sha256 -ne $env:GEOIP_CN_PRIVATE_SHA256.ToLowerInvariant()) {
+            throw 'Packaged CN/private GeoIP does not match the release manifest and dependency pin.'
           }
           if ($metadata.component_model -ne 'in-process') {
             throw 'Packaged release manifest does not identify the internal component model.'

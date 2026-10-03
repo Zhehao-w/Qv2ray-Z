@@ -1,0 +1,23 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "ip": [
+          "ext:geoip-only-cn-private.dat:cn",
+          "ext:geoip-only-cn-private.dat:private"
+        ],
+        "outboundTag": "direct"
+      }
+    ]
+  }
+}
