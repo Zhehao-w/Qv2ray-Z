@@ -377,6 +377,7 @@ void StreamSettingsWidget::on_kcpReadBufferSB_valueChanged(int arg1)
 {
     stream.kcpSettings.readBufferSize = arg1;
 }
+
 void StreamSettingsWidget::on_kcpWriteBufferSB_valueChanged(int arg1)
 {
     stream.kcpSettings.writeBufferSize = arg1;
