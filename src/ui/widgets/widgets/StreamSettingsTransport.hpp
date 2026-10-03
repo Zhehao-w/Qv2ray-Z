@@ -38,7 +38,7 @@ inline StreamTransportEditor StreamTransportEditorForNetwork(const QString &netw
 
 inline int StreamSecurityEditorIndexForValue(const QString &security)
 {
-    if (security == "none")
+    if (security.isEmpty() || security == "none")
         return 0;
     if (security == "tls")
         return 1;

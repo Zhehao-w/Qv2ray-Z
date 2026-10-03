@@ -15,11 +15,11 @@ TEST_CASE("Stream transport editor mapping is explicit and index independent")
     REQUIRE(StreamTransportEditorForNetwork("unknown") == StreamTransportEditor::Invalid);
 }
 
-TEST_CASE("Stream security editor mapping fails closed for unsupported values")
+TEST_CASE("Stream security editor mapping preserves existing none semantics and fails closed for unknown values")
 {
+    REQUIRE(StreamSecurityEditorIndexForValue("") == 0);
     REQUIRE(StreamSecurityEditorIndexForValue("none") == 0);
     REQUIRE(StreamSecurityEditorIndexForValue("tls") == 1);
     REQUIRE(StreamSecurityEditorIndexForValue("reality") == 2);
     REQUIRE(StreamSecurityEditorIndexForValue("future-security") == -1);
-    REQUIRE(StreamSecurityEditorIndexForValue("") == -1);
 }
