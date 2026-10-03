@@ -2,8 +2,10 @@
 
 #include "Generation.hpp"
 #include "base/VLESSShareLinkOpaque.hpp"
+#include "core/CoreUtils.hpp"
 #include "core/handler/ConfigHandler.hpp"
 
+#include <QJsonDocument>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -45,6 +47,15 @@ namespace Qv2ray::core::connection
                 *errMessage = QObject::tr("Unsupported %1 transport: %2").arg(protocol, network);
                 return true;
             };
+            const auto legacyVMessRequestedTransport = [](const QString &legacyLink)
+            {
+                const auto payload = legacyLink.mid(QStringLiteral("vmess://").size());
+                const auto decoded = SafeBase64Decode(payload);
+                const auto document = QJsonDocument::fromJson(decoded.toUtf8());
+                if (!document.isObject())
+                    return QString{};
+                return document.object().value("net").toVariant().toString();
+            };
 
             QList<std::pair<QString, CONFIGROOT>> connectionConf;
             if (link.startsWith("vmess://") && link.contains("@"))
@@ -85,6 +96,13 @@ namespace Qv2ray::core::connection
             }
             else if (link.startsWith("vmess://"))
             {
+                const auto requestedTransport = legacyVMessRequestedTransport(link);
+                if (removedTransports.contains(requestedTransport))
+                {
+                    *errMessage = QObject::tr("Unsupported VMess transport: %1").arg(requestedTransport);
+                    return {};
+                }
+
                 auto conf = vmess::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
                     return {};
