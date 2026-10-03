@@ -13,7 +13,7 @@ namespace
 {
     QJsonObject ExpectedExtra()
     {
-        return QJsonObject{ { "xPaddingBytes", "100-1000" }, { "noGRPCHeader", false } };
+        return QJsonObject{ { "xPaddingBytes", "100-1000" }, { "noGRPCHeader", false }, { "literalEscape", "%2F" } };
     }
 }
 
@@ -21,16 +21,21 @@ TEST_CASE("VLESS XHTTP share links preserve transport settings")
 {
     QvTestApplication app;
 
+    const auto expectedHost = QStringLiteral("edge%2F.example.com");
+    const auto expectedPath = QStringLiteral("/xhttp/%2F/api");
+    const auto expectedMode = QStringLiteral("stream-up");
+    const auto expectedExtraText = QString::fromUtf8(QJsonDocument(ExpectedExtra()).toJson(QJsonDocument::Compact));
+
     QUrl input{ "vless://b0dd64e4-0fbd-4038-9139-d1f32a68a0dc@192.0.2.1:443#XHTTP%20TLS" };
     QUrlQuery query;
     query.addQueryItem("encryption", "none");
     query.addQueryItem("type", "xhttp");
     query.addQueryItem("security", "tls");
     query.addQueryItem("sni", "cdn.example.com");
-    query.addQueryItem("host", "edge.example.com");
-    query.addQueryItem("path", "/xhttp/api");
-    query.addQueryItem("mode", "stream-up");
-    query.addQueryItem("extra", QString::fromUtf8(QJsonDocument(ExpectedExtra()).toJson(QJsonDocument::Compact)));
+    query.addQueryItem("host", QUrl::toPercentEncoding(expectedHost));
+    query.addQueryItem("path", QUrl::toPercentEncoding(expectedPath));
+    query.addQueryItem("mode", QUrl::toPercentEncoding(expectedMode));
+    query.addQueryItem("extra", QUrl::toPercentEncoding(expectedExtraText));
     input.setQuery(query);
 
     QString alias;
@@ -42,16 +47,16 @@ TEST_CASE("VLESS XHTTP share links preserve transport settings")
     const auto outbound = result["outbounds"].toArray().first().toObject();
     const auto rawStream = outbound["streamSettings"].toObject();
     REQUIRE(rawStream["network"] == "xhttp");
-    REQUIRE(QJsonIO::GetValue(rawStream, { "xhttpSettings", "host" }) == "edge.example.com");
-    REQUIRE(QJsonIO::GetValue(rawStream, { "xhttpSettings", "path" }) == "/xhttp/api");
-    REQUIRE(QJsonIO::GetValue(rawStream, { "xhttpSettings", "mode" }) == "stream-up");
+    REQUIRE(QJsonIO::GetValue(rawStream, { "xhttpSettings", "host" }) == expectedHost);
+    REQUIRE(QJsonIO::GetValue(rawStream, { "xhttpSettings", "path" }) == expectedPath);
+    REQUIRE(QJsonIO::GetValue(rawStream, { "xhttpSettings", "mode" }) == expectedMode);
     REQUIRE(QJsonIO::GetValue(rawStream, { "xhttpSettings", "extra" }).toObject() == ExpectedExtra());
 
     const auto normalized = StreamSettingsObject::fromJson(rawStream);
     REQUIRE(normalized.network == "xhttp");
-    REQUIRE(normalized.xhttpSettings.value("host") == "edge.example.com");
-    REQUIRE(normalized.xhttpSettings.value("path") == "/xhttp/api");
-    REQUIRE(normalized.xhttpSettings.value("mode") == "stream-up");
+    REQUIRE(normalized.xhttpSettings.value("host") == expectedHost);
+    REQUIRE(normalized.xhttpSettings.value("path") == expectedPath);
+    REQUIRE(normalized.xhttpSettings.value("mode") == expectedMode);
     REQUIRE(normalized.xhttpSettings.value("extra").toObject() == ExpectedExtra());
 
     const auto persisted = normalized.toJson();
@@ -60,11 +65,12 @@ TEST_CASE("VLESS XHTTP share links preserve transport settings")
     REQUIRE(reloaded.xhttpSettings == normalized.xhttpSettings);
 
     const auto exported = SerializeVLESSOutboundForTest(alias, outbound["settings"].toObject(), persisted);
+    REQUIRE(exported.contains("%252F"));
     const QUrlQuery exportedQuery{ QUrl(exported) };
     REQUIRE(exportedQuery.queryItemValue("type") == "xhttp");
-    REQUIRE(exportedQuery.queryItemValue("host", QUrl::FullyDecoded) == "edge.example.com");
-    REQUIRE(exportedQuery.queryItemValue("path", QUrl::FullyDecoded) == "/xhttp/api");
-    REQUIRE(exportedQuery.queryItemValue("mode", QUrl::FullyDecoded) == "stream-up");
+    REQUIRE(exportedQuery.queryItemValue("host", QUrl::FullyDecoded) == expectedHost);
+    REQUIRE(exportedQuery.queryItemValue("path", QUrl::FullyDecoded) == expectedPath);
+    REQUIRE(exportedQuery.queryItemValue("mode", QUrl::FullyDecoded) == expectedMode);
     const auto exportedExtra = QJsonDocument::fromJson(exportedQuery.queryItemValue("extra", QUrl::FullyDecoded).toUtf8());
     REQUIRE(exportedExtra.isObject());
     REQUIRE(exportedExtra.object() == ExpectedExtra());
