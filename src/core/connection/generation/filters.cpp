@@ -83,14 +83,12 @@ namespace Qv2ray::core::connection::generation::filters
                 QJsonIO::SetValue(root, tag, subKey, i, "tag");
             }
 
-            // Xray v26.3.27 rejects legacy mKCP header and seed fields.
-            // Strip them only from the final runtime copy for both inbounds and
-            // outbounds so persisted configurations keep their compatibility data.
+            // Xray v26.3.27 builds any non-null kcpSettings object and rejects
+            // legacy mKCP header and seed fields even when another transport is
+            // selected. Strip them only from the final runtime copy so persisted
+            // configurations keep their compatibility data.
             const auto streamSettings = QJsonIO::GetValue(root, subKey, i, "streamSettings").toObject();
-            const auto network = streamSettings.value("network").toString();
-            const auto method = streamSettings.value("method").toString();
-            if (network == QStringLiteral("kcp") || network == QStringLiteral("mkcp") || method == QStringLiteral("kcp") ||
-                method == QStringLiteral("mkcp"))
+            if (streamSettings.value("kcpSettings").isObject())
             {
                 QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "header");
                 QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "seed");

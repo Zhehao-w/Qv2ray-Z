@@ -151,7 +151,11 @@ TEST_CASE("Runtime filtering strips removed mKCP fields without touching active 
         { "protocol", "vless" },
         { "streamSettings",
           QJsonObject{ { "network", "tcp" },
-                       { "kcpSettings", QJsonObject{ { "seed", "dormant" }, { "header", QJsonObject{ { "type", "srtp" } } } } } } }
+                       { "kcpSettings",
+                         QJsonObject{ { "mtu", 1250 },
+                                      { "seed", "dormant" },
+                                      { "header", QJsonObject{ { "type", "srtp" } } },
+                                      { "futureDormantKcpField", "keep" } } } } }
     };
     QJsonObject kcpInbound{
         { "protocol", "dokodemo-door" },
@@ -179,8 +183,10 @@ TEST_CASE("Runtime filtering strips removed mKCP fields without touching active 
     REQUIRE(activeStream["finalmask"].toObject()["udp"].toObject()["mode"] == "keep");
 
     const auto dormantKcp = root["outbounds"].toArray().at(1).toObject()["streamSettings"].toObject()["kcpSettings"].toObject();
-    REQUIRE(dormantKcp["seed"] == "dormant");
-    REQUIRE(dormantKcp["header"].toObject()["type"] == "srtp");
+    REQUIRE_FALSE(dormantKcp.contains("header"));
+    REQUIRE_FALSE(dormantKcp.contains("seed"));
+    REQUIRE(dormantKcp["mtu"] == 1250);
+    REQUIRE(dormantKcp["futureDormantKcpField"] == "keep");
 
     const auto inboundKcp = root["inbounds"].toArray().at(0).toObject()["streamSettings"].toObject()["kcpSettings"].toObject();
     REQUIRE_FALSE(inboundKcp.contains("header"));
