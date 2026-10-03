@@ -103,7 +103,8 @@ TEST_CASE("VLESS FinalMask import fails closed for invalid fm")
         QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("\"text\""))),
         QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("42"))),
         QStringLiteral("%ZZ"),
-        QStringLiteral("%2")
+        QStringLiteral("%2"),
+        QStringLiteral("%7B%22x%22%3A%22%FF%22%7D")
     };
 
     for (const auto &fm : invalidValues)
