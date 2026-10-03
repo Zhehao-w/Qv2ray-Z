@@ -16,6 +16,7 @@ namespace Qv2ray::core::connection
         {
             errMessage->clear();
 
+            const static QStringList removedTransports{ "quic", "http", "h2", "h3" };
             const auto TLSOptionsFilter = [](QJsonObject &conf)
             {
                 const auto disableSystemRoot = GlobalConfig.advancedConfig.disableSystemRoot;
@@ -32,15 +33,16 @@ namespace Qv2ray::core::connection
                 }
                 return true;
             };
-            const auto rejectRemovedQuicTransport = [errMessage](const CONFIGROOT &conf, const QString &protocol)
+            const auto rejectRemovedTransport = [errMessage](const CONFIGROOT &conf, const QString &protocol)
             {
+                const static QStringList removedTransports{ "quic", "http", "h2", "h3" };
                 const auto outbounds = conf.value("outbounds").toArray();
                 if (outbounds.isEmpty())
                     return false;
                 const auto network = outbounds.first().toObject().value("streamSettings").toObject().value("network").toString("tcp");
-                if (network != QStringLiteral("quic"))
+                if (!removedTransports.contains(network))
                     return false;
-                *errMessage = QObject::tr("Unsupported %1 transport: quic").arg(protocol);
+                *errMessage = QObject::tr("Unsupported %1 transport: %2").arg(protocol, network);
                 return true;
             };
 
@@ -50,7 +52,7 @@ namespace Qv2ray::core::connection
                 auto conf = vmess_new::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
                     return {};
-                if (rejectRemovedQuicTransport(conf, QStringLiteral("VMess")))
+                if (rejectRemovedTransport(conf, QStringLiteral("VMess")))
                     return {};
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
@@ -65,7 +67,7 @@ namespace Qv2ray::core::connection
                 const QUrlQuery inboundQuery(inboundUrl);
                 const auto requestedTransport =
                     inboundQuery.hasQueryItem("type") ? inboundQuery.queryItemValue("type") : QStringLiteral("tcp");
-                if (requestedTransport == QStringLiteral("quic"))
+                if (removedTransports.contains(requestedTransport))
                 {
                     *errMessage = QObject::tr("Unsupported VLESS transport: %1").arg(requestedTransport);
                     return {};
@@ -86,7 +88,7 @@ namespace Qv2ray::core::connection
                 auto conf = vmess::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
                     return {};
-                if (rejectRemovedQuicTransport(conf, QStringLiteral("VMess")))
+                if (rejectRemovedTransport(conf, QStringLiteral("VMess")))
                     return {};
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
@@ -158,7 +160,9 @@ namespace Qv2ray::core::connection
                 return "";
             }
 
-            if ((type == "vless" || type == "vmess") && streamSettings.value("network").toString("tcp") == "quic")
+            const auto network = streamSettings.value("network").toString("tcp");
+            const static QStringList removedTransports{ "quic", "http", "h2", "h3" };
+            if ((type == "vless" || type == "vmess") && removedTransports.contains(network))
                 return type == "vless" ? "(Unsupported VLESS transport)" : "(Unsupported VMess transport)";
 
             if (type == "vmess")
