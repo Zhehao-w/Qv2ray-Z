@@ -32,6 +32,47 @@ TEST_CASE("Removed VLESS QUIC transport is rejected at the application share-lin
     REQUIRE(ConvertConfigToString("LegacyQUIC", "test", root, false) == "(Unsupported VLESS transport)");
 }
 
+TEST_CASE("Removed VMess QUIC transport is rejected at the application share-link boundary")
+{
+    QvTestApplication app;
+
+    VMessServerObject server;
+    server.address = "example.com";
+    server.port = 443;
+    VMessServerObject::UserObject user;
+    user.id = "b0dd64e4-0fbd-4038-9139-d1f32a68a0dc";
+    user.alterId = 0;
+    user.security = "auto";
+    server.users << user;
+
+    StreamSettingsObject stream;
+    stream.network = "quic";
+    stream.quicSettings.security = "none";
+    stream.quicSettings.key = "legacy-key";
+    stream.quicSettings.header.type = "none";
+
+    const QStringList legacyLinks{ vmess_new::Serialize(stream, server, "ModernQUIC"), vmess::Serialize(stream, server, "LegacyQUIC") };
+    for (const auto &legacyLink : legacyLinks)
+    {
+        REQUIRE_FALSE(legacyLink.isEmpty());
+        QString alias;
+        QString error;
+        QString group;
+        const auto imported = ConvertConfigFromString(legacyLink, &alias, &error, &group);
+        REQUIRE(imported.isEmpty());
+        REQUIRE(error.contains("Unsupported VMess transport"));
+    }
+
+    CONFIGROOT root;
+    QJsonObject outbound;
+    outbound["protocol"] = "vmess";
+    QJsonIO::SetValue(outbound, server.toJson(), { "settings", "vnext", 0 });
+    outbound["streamSettings"] = stream.toJson();
+    root["outbounds"] = QJsonArray{ outbound };
+
+    REQUIRE(ConvertConfigToString("LegacyQUIC", "test", root, false) == "(Unsupported VMess transport)");
+}
+
 TEST_CASE("Legacy QUIC settings remain model round-trip compatible")
 {
     const QJsonObject original{
