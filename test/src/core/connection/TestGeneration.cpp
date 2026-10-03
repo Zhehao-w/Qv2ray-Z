@@ -1,4 +1,5 @@
 #include "core/connection/Generation.hpp"
+#include "core/connection/OutboundEditorPersistence.hpp"
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
@@ -60,4 +61,51 @@ TEST_CASE("Advanced routing preserves full GeoIP rule strings")
     REQUIRE(ContainsRuleValue(rules, "ip", "geoip:jp"));
     REQUIRE_FALSE(ContainsRuleValue(rules, "ip", "ext:geoip-only-cn-private.dat:cn"));
     REQUIRE_FALSE(ContainsRuleValue(rules, "ip", "ext:geoip-only-cn-private.dat:private"));
+}
+
+TEST_CASE("Outbound editor persistence preserves unmanaged fields on same protocol and transport")
+{
+    OUTBOUND original;
+    original["protocol"] = "vless";
+    original["tag"] = "old-tag";
+    original["sendThrough"] = "192.0.2.44";
+    original["settings"] = QJsonObject{ { "oldSetting", true } };
+    original["streamSettings"] = QJsonObject{ { "network", "xhttp" },
+                                               { "security", "tls" },
+                                               { "futureStreamField", QJsonObject{ { "nested", 7 } } },
+                                               { "finalmask", QJsonObject{ { "old", true } } } };
+    original["futureOutboundField"] = QJsonArray{ "keep", 42 };
+    original[QV2RAY_USE_FPROXY_KEY] = false;
+
+    OUTBOUNDSETTING editedSettings;
+    editedSettings["newSetting"] = true;
+    const QJsonObject editedStream{ { "network", "xhttp" }, { "security", "reality" }, { "finalmask", QJsonObject{} } };
+    auto edited = GenerateOutboundEntry("new-tag", "vless", editedSettings, editedStream);
+    edited[QV2RAY_USE_FPROXY_KEY] = true;
+
+    const auto result = PreserveUneditedOutboundFields(original, edited);
+    REQUIRE(result["tag"] == "new-tag");
+    REQUIRE(result["settings"].toObject() == editedSettings);
+    REQUIRE(result["sendThrough"] == "192.0.2.44");
+    REQUIRE(result["futureOutboundField"] == original["futureOutboundField"]);
+    REQUIRE(result[QV2RAY_USE_FPROXY_KEY].toBool());
+
+    const auto resultStream = result["streamSettings"].toObject();
+    REQUIRE(resultStream["security"] == "reality");
+    REQUIRE(resultStream["finalmask"].toObject().isEmpty());
+    REQUIRE(resultStream["futureStreamField"] == original["streamSettings"].toObject()["futureStreamField"]);
+}
+
+TEST_CASE("Outbound editor persistence does not carry transport-specific unknown fields across a transport switch")
+{
+    OUTBOUND original;
+    original["protocol"] = "vless";
+    original["sendThrough"] = "192.0.2.44";
+    original["streamSettings"] = QJsonObject{ { "network", "xhttp" }, { "futureStreamField", 7 } };
+
+    auto edited = GenerateOutboundEntry("proxy", "vless", {}, QJsonObject{ { "network", "tcp" } });
+    const auto result = PreserveUneditedOutboundFields(original, edited);
+
+    REQUIRE(result["sendThrough"] == "192.0.2.44");
+    REQUIRE_FALSE(result["streamSettings"].toObject().contains("futureStreamField"));
 }

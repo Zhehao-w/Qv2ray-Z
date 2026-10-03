@@ -1,6 +1,7 @@
 #include "w_OutboundEditor.hpp"
 
 #include "core/connection/Generation.hpp"
+#include "core/connection/OutboundEditorPersistence.hpp"
 #include "plugin-interface/QvGUIPluginInterface.hpp"
 #include "ui/widgets/common/WidgetUIBase.hpp"
 #include "ui/widgets/editors/w_JsonEditor.hpp"
@@ -118,7 +119,7 @@ OUTBOUND OutboundEditor::generateConnectionJson()
     }
     auto root = GenerateOutboundEntry(tag, outboundType, settings, streaming, muxConfig);
     root[QV2RAY_USE_FPROXY_KEY] = useForwardProxy;
-    return root;
+    return PreserveUneditedOutboundFields(originalConfig, root);
 }
 
 void OutboundEditor::reloadGUI()
