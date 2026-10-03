@@ -110,3 +110,68 @@ TEST_CASE("Outbound editor persistence does not carry transport-specific unknown
     REQUIRE(result["sendThrough"] == "192.0.2.44");
     REQUIRE_FALSE(result["streamSettings"].toObject().contains("futureStreamField"));
 }
+
+TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active stream objects")
+{
+    OUTBOUND original;
+    original["protocol"] = "vless";
+    original["streamSettings"] = QJsonObject{
+        { "network", "tcp" },
+        { "security", "tls" },
+        { "sockopt", QJsonObject{ { "tcpFastOpen", true }, { "domainStrategy", "UseIP" }, { "tcpUserTimeout", 12000 } } },
+        { "tlsSettings",
+          QJsonObject{ { "serverName", "old.example.com" },
+                       { "minVersion", "1.3" },
+                       { "cipherSuites", "TLS_AES_128_GCM_SHA256" },
+                       { "curvePreferences", QJsonArray{ "X25519MLKEM768" } } } },
+        { "tcpSettings", QJsonObject{ { "header", QJsonObject{ { "type", "none" } } }, { "acceptProxyProtocol", true } } }
+    };
+
+    const QJsonObject editedStream{
+        { "network", "tcp" },
+        { "security", "tls" },
+        { "sockopt", QJsonObject{ { "tcpFastOpen", false } } },
+        { "tlsSettings", QJsonObject{ { "serverName", "new.example.com" } } },
+        { "tcpSettings", QJsonObject{ { "header", QJsonObject{ { "type", "http" } } } } }
+    };
+    auto edited = GenerateOutboundEntry("proxy", "vless", {}, editedStream);
+
+    const auto resultStream = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject();
+    const auto sockopt = resultStream["sockopt"].toObject();
+    REQUIRE_FALSE(sockopt["tcpFastOpen"].toBool());
+    REQUIRE(sockopt["domainStrategy"] == "UseIP");
+    REQUIRE(sockopt["tcpUserTimeout"] == 12000);
+
+    const auto tls = resultStream["tlsSettings"].toObject();
+    REQUIRE(tls["serverName"] == "new.example.com");
+    REQUIRE(tls["minVersion"] == "1.3");
+    REQUIRE(tls["cipherSuites"] == "TLS_AES_128_GCM_SHA256");
+    REQUIRE(tls["curvePreferences"].toArray() == QJsonArray{ "X25519MLKEM768" });
+
+    const auto tcp = resultStream["tcpSettings"].toObject();
+    REQUIRE(tcp["header"].toObject()["type"] == "http");
+    REQUIRE(tcp["acceptProxyProtocol"].toBool());
+}
+
+TEST_CASE("Outbound editor persistence does not carry security-specific unknown fields across a security switch")
+{
+    OUTBOUND original;
+    original["protocol"] = "vless";
+    original["streamSettings"] = QJsonObject{
+        { "network", "tcp" },
+        { "security", "tls" },
+        { "tlsSettings", QJsonObject{ { "serverName", "old.example.com" }, { "minVersion", "1.3" } } }
+    };
+
+    const QJsonObject editedStream{
+        { "network", "tcp" },
+        { "security", "reality" },
+        { "realitySettings", QJsonObject{ { "serverName", "new.example.com" }, { "password", "key" } } }
+    };
+    auto edited = GenerateOutboundEntry("proxy", "vless", {}, editedStream);
+
+    const auto resultStream = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject();
+    REQUIRE(resultStream["security"] == "reality");
+    REQUIRE_FALSE(resultStream["tlsSettings"].toObject().contains("minVersion"));
+    REQUIRE(resultStream["realitySettings"].toObject()["password"] == "key");
+}

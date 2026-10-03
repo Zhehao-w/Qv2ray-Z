@@ -4,6 +4,33 @@
 
 namespace Qv2ray::core::connection
 {
+    inline void PreserveUnknownObjectFields(const QJsonObject &original, QJsonObject &edited, const QSet<QString> &managedFields)
+    {
+        for (auto it = original.constBegin(); it != original.constEnd(); ++it)
+        {
+            if (!managedFields.contains(it.key()))
+                edited.insert(it.key(), it.value());
+        }
+    }
+
+    inline void PreserveUnknownStreamObjectFields(const QJsonObject &originalStream, QJsonObject &editedStream, const QString &field,
+                                                  const QSet<QString> &managedFields)
+    {
+        const auto originalObject = originalStream.value(field).toObject();
+        if (originalObject.isEmpty())
+            return;
+
+        auto editedObject = editedStream.value(field).toObject();
+        PreserveUnknownObjectFields(originalObject, editedObject, managedFields);
+        editedStream.insert(field, editedObject);
+    }
+
+    inline QString NormalizedStreamSecurity(const QJsonObject &stream)
+    {
+        const auto security = stream.value("security").toString();
+        return security.isEmpty() ? QStringLiteral("none") : security;
+    }
+
     inline OUTBOUND PreserveUneditedOutboundFields(const OUTBOUND &original, OUTBOUND edited)
     {
         if (original.value("protocol") != edited.value("protocol"))
@@ -40,6 +67,52 @@ namespace Qv2ray::core::connection
             if (!managedStreamFields.contains(it.key()))
                 editedStream.insert(it.key(), it.value());
         }
+
+        // StreamSettingsObject uses typed objects for several Xray settings.
+        // Unknown keys inside those objects would otherwise be discarded by
+        // fromJson() -> toJson(). Keep only keys outside the fields that the
+        // current model/editor owns, so explicit user edits and resets remain
+        // authoritative.
+        PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("sockopt"),
+                                          { "mark", "tcpFastOpen", "tproxy", "tcpKeepAliveInterval" });
+
+        const auto originalSecurity = NormalizedStreamSecurity(originalStream);
+        const auto editedSecurity = NormalizedStreamSecurity(editedStream);
+        if (originalSecurity == editedSecurity)
+        {
+            if (editedSecurity == QStringLiteral("tls"))
+            {
+                PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("tlsSettings"),
+                                                  { "serverName", "fingerprint", "enableSessionResumption", "disableSystemRoot", "alpn",
+                                                    "pinnedPeerCertificateChainSha256", "certificates" });
+            }
+            else if (editedSecurity == QStringLiteral("reality"))
+            {
+                PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("realitySettings"),
+                                                  { "serverName", "fingerprint", "password", "shortId", "mldsa65Verify", "spiderX" });
+            }
+        }
+
+        if (editedNetwork == QStringLiteral("tcp"))
+            PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("tcpSettings"), { "header" });
+        else if (editedNetwork == QStringLiteral("http"))
+            PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("httpSettings"), { "host", "path", "method", "headers" });
+        else if (editedNetwork == QStringLiteral("ws"))
+            PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("wsSettings"),
+                                              { "path", "headers", "maxEarlyData", "useBrowserForwarding", "earlyDataHeaderName" });
+        else if (editedNetwork == QStringLiteral("kcp"))
+            PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("kcpSettings"),
+                                              { "mtu", "tti", "uplinkCapacity", "downlinkCapacity", "congestion", "readBufferSize",
+                                                "writeBufferSize", "header", "seed" });
+        else if (editedNetwork == QStringLiteral("ds"))
+            PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("dsSettings"), { "path" });
+        else if (editedNetwork == QStringLiteral("quic"))
+            PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("quicSettings"), { "security", "key", "header" });
+        else if (editedNetwork == QStringLiteral("grpc"))
+            PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("grpcSettings"), { "serviceName", "multiMode" });
+        // xhttpSettings and finalmask are already stored as opaque QJsonObject
+        // values and therefore retain unknown nested fields without help here.
+
         edited["streamSettings"] = editedStream;
         return edited;
     }
