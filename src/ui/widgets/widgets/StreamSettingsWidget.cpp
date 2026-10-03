@@ -17,6 +17,10 @@ StreamSettingsWidget::StreamSettingsWidget(QWidget *parent) : QWidget(parent)
 {
     setupUi(this);
 
+    const auto removedHttpIndex = transportCombo->findText(QStringLiteral("http"), Qt::MatchExactly);
+    if (removedHttpIndex >= 0)
+        transportCombo->removeItem(removedHttpIndex);
+
     // XHTTP is maintained programmatically so the transport/page relationship
     // is explicit instead of depending on matching Designer indices.
     xhttpStackPage = new QWidget(v2rayStackView);
@@ -157,7 +161,6 @@ bool StreamSettingsWidget::SelectTransportEditor(const QString &network)
     switch (StreamTransportEditorForNetwork(network))
     {
         case StreamTransportEditor::Tcp: page = tcpStackPage; break;
-        case StreamTransportEditor::Http: page = httpStackPage; break;
         case StreamTransportEditor::WebSocket: page = wsStackPage; break;
         case StreamTransportEditor::Kcp: page = mKCPStackPage; break;
         case StreamTransportEditor::DomainSocket: page = dsStackPage; break;
@@ -241,13 +244,6 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
         tcpHeaderTypeCB->setCurrentText(stream.tcpSettings.header.type);
         tcpRequestTxt->setPlainText(JsonToString(stream.tcpSettings.header.request.toJson()));
         tcpRespTxt->setPlainText(JsonToString(stream.tcpSettings.header.response.toJson()));
-    }
-    // HTTP
-    {
-        httpHostTxt->setPlainText(stream.httpSettings.host.join(NEWLINE));
-        httpPathTxt->setText(stream.httpSettings.path);
-        httpMethodCB->setCurrentText(stream.httpSettings.method);
-        httpHeadersTxt->setPlainText(JsonToString(stream.httpSettings.toJson()["headers"].toObject()));
     }
     // WS
     {

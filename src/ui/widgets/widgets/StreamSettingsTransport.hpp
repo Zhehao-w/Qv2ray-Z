@@ -6,7 +6,6 @@ enum class StreamTransportEditor
 {
     Invalid,
     Tcp,
-    Http,
     WebSocket,
     Kcp,
     DomainSocket,
@@ -18,8 +17,6 @@ inline StreamTransportEditor StreamTransportEditorForNetwork(const QString &netw
 {
     if (network == "tcp")
         return StreamTransportEditor::Tcp;
-    if (network == "http")
-        return StreamTransportEditor::Http;
     if (network == "ws")
         return StreamTransportEditor::WebSocket;
     if (network == "kcp")

@@ -5,7 +5,7 @@
 TEST_CASE("Stream transport editor mapping is explicit and index independent")
 {
     REQUIRE(StreamTransportEditorForNetwork("tcp") == StreamTransportEditor::Tcp);
-    REQUIRE(StreamTransportEditorForNetwork("http") == StreamTransportEditor::Http);
+    REQUIRE(StreamTransportEditorForNetwork("http") == StreamTransportEditor::Invalid);
     REQUIRE(StreamTransportEditorForNetwork("ws") == StreamTransportEditor::WebSocket);
     REQUIRE(StreamTransportEditorForNetwork("kcp") == StreamTransportEditor::Kcp);
     REQUIRE(StreamTransportEditorForNetwork("domainsocket") == StreamTransportEditor::DomainSocket);
