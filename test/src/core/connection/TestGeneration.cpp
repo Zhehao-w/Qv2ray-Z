@@ -129,7 +129,13 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
                                                   { "certificateFile", "cert.pem" },
                                                   { "ocspStapling", 3600 },
                                                   { "buildChain", true } } } } } },
-        { "tcpSettings", QJsonObject{ { "header", QJsonObject{ { "type", "none" } } }, { "acceptProxyProtocol", true } } }
+        { "tcpSettings",
+          QJsonObject{ { "header",
+                         QJsonObject{ { "type", "http" },
+                                      { "futureHeaderField", "keep" },
+                                      { "request", QJsonObject{ { "method", "GET" }, { "futureRequestField", 17 } } },
+                                      { "response", QJsonObject{ { "status", "200" }, { "futureResponseField", true } } } } },
+                       { "acceptProxyProtocol", true } } }
     };
 
     const QJsonObject editedStream{
@@ -137,7 +143,11 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
         { "security", "tls" },
         { "sockopt", QJsonObject{ { "tcpFastOpen", false } } },
         { "tlsSettings", QJsonObject{ { "serverName", "new.example.com" } } },
-        { "tcpSettings", QJsonObject{ { "header", QJsonObject{ { "type", "http" } } } } }
+        { "tcpSettings",
+          QJsonObject{ { "header",
+                         QJsonObject{ { "type", "http" },
+                                      { "request", QJsonObject{ { "method", "POST" } } },
+                                      { "response", QJsonObject{ { "status", "204" } } } } } } }
     };
     auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
 
@@ -158,8 +168,82 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
     REQUIRE(certificates.first().toObject()["buildChain"].toBool());
 
     const auto tcp = resultStream["tcpSettings"].toObject();
-    REQUIRE(tcp["header"].toObject()["type"] == "http");
+    const auto header = tcp["header"].toObject();
+    REQUIRE(header["type"] == "http");
+    REQUIRE(header["futureHeaderField"] == "keep");
+    REQUIRE(header["request"].toObject()["method"] == "POST");
+    REQUIRE(header["request"].toObject()["futureRequestField"] == 17);
+    REQUIRE(header["response"].toObject()["status"] == "204");
+    REQUIRE(header["response"].toObject()["futureResponseField"].toBool());
     REQUIRE(tcp["acceptProxyProtocol"].toBool());
+}
+
+TEST_CASE("Outbound editor persistence preserves unknown fields inside KCP and QUIC headers")
+{
+    {
+        OUTBOUND original;
+        original["protocol"] = "vless";
+        original["streamSettings"] = QJsonObject{
+            { "network", "kcp" },
+            { "kcpSettings", QJsonObject{ { "mtu", 1350 }, { "header", QJsonObject{ { "type", "srtp" }, { "futureHeaderField", 7 } } } } }
+        };
+
+        const QJsonObject editedStream{
+            { "network", "kcp" },
+            { "kcpSettings", QJsonObject{ { "mtu", 1400 }, { "header", QJsonObject{ { "type", "srtp" } } } } }
+        };
+        auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
+        const auto resultSettings = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject()["kcpSettings"].toObject();
+
+        REQUIRE(resultSettings["mtu"] == 1400);
+        REQUIRE(resultSettings["header"].toObject()["type"] == "srtp");
+        REQUIRE(resultSettings["header"].toObject()["futureHeaderField"] == 7);
+    }
+
+    {
+        OUTBOUND original;
+        original["protocol"] = "vless";
+        original["streamSettings"] = QJsonObject{
+            { "network", "quic" },
+            { "quicSettings",
+              QJsonObject{ { "security", "none" }, { "key", "old" }, { "header", QJsonObject{ { "type", "srtp" }, { "futureHeaderField", 9 } } } } }
+        };
+
+        const QJsonObject editedStream{
+            { "network", "quic" },
+            { "quicSettings", QJsonObject{ { "security", "none" }, { "key", "new" }, { "header", QJsonObject{ { "type", "srtp" } } } } }
+        };
+        auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
+        const auto resultSettings = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject()["quicSettings"].toObject();
+
+        REQUIRE(resultSettings["key"] == "new");
+        REQUIRE(resultSettings["header"].toObject()["type"] == "srtp");
+        REQUIRE(resultSettings["header"].toObject()["futureHeaderField"] == 9);
+    }
+}
+
+TEST_CASE("Outbound editor persistence does not carry nested header fields across a header type switch")
+{
+    OUTBOUND original;
+    original["protocol"] = "vless";
+    original["streamSettings"] = QJsonObject{
+        { "network", "tcp" },
+        { "tcpSettings",
+          QJsonObject{ { "header",
+                         QJsonObject{ { "type", "http" },
+                                      { "futureHeaderField", "old-http-only" },
+                                      { "request", QJsonObject{ { "futureRequestField", 42 } } } } } } }
+    };
+
+    const QJsonObject editedStream{
+        { "network", "tcp" }, { "tcpSettings", QJsonObject{ { "header", QJsonObject{ { "type", "none" } } } } }
+    };
+    auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
+    const auto header = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject()["tcpSettings"].toObject()["header"].toObject();
+
+    REQUIRE(header["type"] == "none");
+    REQUIRE_FALSE(header.contains("futureHeaderField"));
+    REQUIRE_FALSE(header.contains("request"));
 }
 
 TEST_CASE("Outbound editor persistence does not carry security-specific unknown fields across a security switch")
