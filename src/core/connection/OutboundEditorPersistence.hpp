@@ -26,6 +26,53 @@ namespace Qv2ray::core::connection
         editedStream.insert(field, editedObject);
     }
 
+    inline void PreserveUnknownNestedObjectFields(const QJsonObject &originalParent, QJsonObject &editedParent, const QString &field,
+                                                  const QSet<QString> &managedFields)
+    {
+        if (!originalParent.value(field).isObject() || !editedParent.value(field).isObject())
+            return;
+
+        const auto originalObject = originalParent.value(field).toObject();
+        auto editedObject = editedParent.value(field).toObject();
+        PreserveUnknownObjectFields(originalObject, editedObject, managedFields);
+        editedParent.insert(field, editedObject);
+    }
+
+    inline void PreserveTypedTransportHeaderFields(const QJsonObject &originalStream, QJsonObject &editedStream, const QString &settingsField,
+                                                   const bool tcpHeader)
+    {
+        if (!originalStream.value(settingsField).isObject() || !editedStream.value(settingsField).isObject())
+            return;
+
+        const auto originalSettings = originalStream.value(settingsField).toObject();
+        auto editedSettings = editedStream.value(settingsField).toObject();
+        if (!originalSettings.value("header").isObject() || !editedSettings.value("header").isObject())
+            return;
+
+        const auto originalHeader = originalSettings.value("header").toObject();
+        auto editedHeader = editedSettings.value("header").toObject();
+        const auto originalHeaderType = originalHeader.value("type").toString(QStringLiteral("none"));
+        const auto editedHeaderType = editedHeader.value("type").toString(QStringLiteral("none"));
+        if (originalHeaderType != editedHeaderType)
+            return;
+
+        if (tcpHeader)
+        {
+            PreserveUnknownObjectFields(originalHeader, editedHeader, { "type", "request", "response" });
+            PreserveUnknownNestedObjectFields(originalHeader, editedHeader, QStringLiteral("request"),
+                                              { "version", "method", "path", "headers" });
+            PreserveUnknownNestedObjectFields(originalHeader, editedHeader, QStringLiteral("response"),
+                                              { "version", "status", "reason", "headers" });
+        }
+        else
+        {
+            PreserveUnknownObjectFields(originalHeader, editedHeader, { "type" });
+        }
+
+        editedSettings.insert(QStringLiteral("header"), editedHeader);
+        editedStream.insert(settingsField, editedSettings);
+    }
+
     inline QString NormalizedStreamSecurity(const QJsonObject &stream)
     {
         const auto security = stream.value("security").toString();
@@ -102,20 +149,29 @@ namespace Qv2ray::core::connection
         }
 
         if (editedNetwork == QStringLiteral("tcp"))
+        {
             PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("tcpSettings"), { "header" });
+            PreserveTypedTransportHeaderFields(originalStream, editedStream, QStringLiteral("tcpSettings"), true);
+        }
         else if (editedNetwork == QStringLiteral("http"))
             PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("httpSettings"), { "host", "path", "method", "headers" });
         else if (editedNetwork == QStringLiteral("ws"))
             PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("wsSettings"),
                                               { "path", "headers", "maxEarlyData", "useBrowserForwarding", "earlyDataHeaderName" });
         else if (editedNetwork == QStringLiteral("kcp"))
+        {
             PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("kcpSettings"),
                                               { "mtu", "tti", "uplinkCapacity", "downlinkCapacity", "congestion", "readBufferSize",
                                                 "writeBufferSize", "header", "seed" });
+            PreserveTypedTransportHeaderFields(originalStream, editedStream, QStringLiteral("kcpSettings"), false);
+        }
         else if (editedNetwork == QStringLiteral("ds"))
             PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("dsSettings"), { "path" });
         else if (editedNetwork == QStringLiteral("quic"))
+        {
             PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("quicSettings"), { "security", "key", "header" });
+            PreserveTypedTransportHeaderFields(originalStream, editedStream, QStringLiteral("quicSettings"), false);
+        }
         else if (editedNetwork == QStringLiteral("grpc"))
             PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("grpcSettings"), { "serviceName", "multiMode" });
         // xhttpSettings and finalmask are already stored as opaque QJsonObject
