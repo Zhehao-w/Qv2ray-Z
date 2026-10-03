@@ -3,6 +3,9 @@
 #include "core/connection/Serialization.hpp"
 #include "utils/QvHelpers.hpp"
 
+#include <QJsonDocument>
+#include <QJsonParseError>
+
 #define QV_MODULE_NAME "VLESSImporter"
 
 namespace Qv2ray::core::connection
@@ -77,7 +80,7 @@ namespace Qv2ray::core::connection
             // its compatibility alias. Keep Qv2ray storage and share links on
             // `tcp`, while accepting either spelling on import.
             const auto type = linkType == "raw" ? QStringLiteral("tcp") : linkType;
-            const static QStringList supportedTransports{ "tcp", "http", "ws", "kcp", "quic", "grpc" };
+            const static QStringList supportedTransports{ "tcp", "http", "ws", "kcp", "quic", "grpc", "xhttp" };
             if (!supportedTransports.contains(type))
             {
                 *errMessage = QObject::tr("Unsupported VLESS transport: %1").arg(type);
@@ -164,6 +167,27 @@ namespace Qv2ray::core::connection
                 {
                     const auto multiMode = QUrl::fromPercentEncoding(query.queryItemValue("mode").toUtf8()) == "multi";
                     QJsonIO::SetValue(stream, multiMode, { "grpcSettings", "multiMode" });
+                }
+            }
+            else if (type == "xhttp")
+            {
+                for (const auto &key : { QStringLiteral("host"), QStringLiteral("path"), QStringLiteral("mode") })
+                {
+                    if (query.hasQueryItem(key))
+                        QJsonIO::SetValue(stream, query.queryItemValue(key, QUrl::FullyDecoded), { "xhttpSettings", key });
+                }
+
+                if (query.hasQueryItem("extra"))
+                {
+                    QJsonParseError parseError;
+                    const auto extraText = query.queryItemValue("extra", QUrl::FullyDecoded);
+                    const auto extraDocument = QJsonDocument::fromJson(extraText.toUtf8(), &parseError);
+                    if (parseError.error != QJsonParseError::NoError || !extraDocument.isObject())
+                    {
+                        *errMessage = QObject::tr("Invalid XHTTP extra JSON object");
+                        return CONFIGROOT();
+                    }
+                    QJsonIO::SetValue(stream, extraDocument.object(), { "xhttpSettings", "extra" });
                 }
             }
 

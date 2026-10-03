@@ -2,6 +2,7 @@
 #include "3rdparty/QJsonStruct/QJsonIO.hpp"
 #include "3rdparty/QJsonStruct/QJsonStruct.hpp"
 
+#include <QJsonObject>
 #include <QList>
 #include <QMap>
 #include <QString>
@@ -348,11 +349,13 @@ namespace Qv2ray::base::objects
         transfer::DomainSocketObject dsSettings;
         transfer::QuicObject quicSettings;
         transfer::gRPCObject grpcSettings;
+        QJsonObject xhttpSettings;
         JSONSTRUCT_COMPARE(StreamSettingsObject, network, security, sockopt, //
-                           tcpSettings, tlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings, grpcSettings)
+                           tcpSettings, tlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings, grpcSettings,
+                           xhttpSettings)
         JSONSTRUCT_REGISTER(StreamSettingsObject, F(network, security, sockopt),
                             F(tcpSettings, tlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings,
-                              grpcSettings))
+                              grpcSettings, xhttpSettings))
     };
 
     struct FakeDNSObject

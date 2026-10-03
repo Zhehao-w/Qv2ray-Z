@@ -5,11 +5,87 @@
 #include "ui/widgets/editors/w_JsonEditor.hpp"
 #include "utils/QvHelpers.hpp"
 
+#include <QFormLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QVBoxLayout>
+
 #define QV_MODULE_NAME "StreamSettingsWidget"
 
 StreamSettingsWidget::StreamSettingsWidget(QWidget *parent) : QWidget(parent)
 {
     setupUi(this);
+
+    // XHTTP is maintained programmatically so the transport/page relationship
+    // is explicit instead of depending on matching Designer indices.
+    xhttpStackPage = new QWidget(v2rayStackView);
+    xhttpStackPage->setObjectName(QStringLiteral("xhttpStackPage"));
+    auto *xhttpLayout = new QFormLayout(xhttpStackPage);
+    xhttpHostTxt = new QLineEdit(xhttpStackPage);
+    xhttpHostTxt->setObjectName(QStringLiteral("xhttpHostTxt"));
+    xhttpHostTxt->setPlaceholderText(QStringLiteral("edge.example.com"));
+    xhttpPathTxt = new QLineEdit(xhttpStackPage);
+    xhttpPathTxt->setObjectName(QStringLiteral("xhttpPathTxt"));
+    xhttpPathTxt->setPlaceholderText(QStringLiteral("/"));
+    xhttpModeCB = new QComboBox(xhttpStackPage);
+    xhttpModeCB->setObjectName(QStringLiteral("xhttpModeCB"));
+    xhttpExtraTxt = new QPlainTextEdit(xhttpStackPage);
+    xhttpExtraTxt->setObjectName(QStringLiteral("xhttpExtraTxt"));
+    xhttpExtraTxt->setReadOnly(true);
+    xhttpExtraTxt->setLineWrapMode(QPlainTextEdit::NoWrap);
+    xhttpExtraTxt->setMinimumHeight(96);
+    xhttpExtraTxt->setTabChangesFocus(true);
+    xhttpModeCB->setEditable(true);
+    xhttpModeCB->setInsertPolicy(QComboBox::NoInsert);
+    xhttpModeCB->addItems({ "auto", "packet-up", "stream-up", "stream-one" });
+    xhttpModeCB->setToolTip(tr("Select a common XHTTP mode or enter a mode supported by the bundled Xray."));
+
+    auto *extraContainer = new QWidget(xhttpStackPage);
+    extraContainer->setObjectName(QStringLiteral("xhttpExtraContainer"));
+    auto *extraLayout = new QVBoxLayout(extraContainer);
+    extraLayout->setContentsMargins(0, 0, 0, 0);
+    extraLayout->addWidget(xhttpExtraTxt);
+    auto *extraButtons = new QHBoxLayout;
+    auto *editExtraBtn = new QPushButton(tr("Edit"), extraContainer);
+    editExtraBtn->setObjectName(QStringLiteral("xhttpEditExtraBtn"));
+    auto *resetExtraBtn = new QPushButton(tr("Reset"), extraContainer);
+    resetExtraBtn->setObjectName(QStringLiteral("xhttpResetExtraBtn"));
+    extraButtons->addWidget(editExtraBtn);
+    extraButtons->addWidget(resetExtraBtn);
+    extraButtons->addStretch();
+    extraLayout->addLayout(extraButtons);
+
+    xhttpLayout->addRow(tr("Host"), xhttpHostTxt);
+    xhttpLayout->addRow(tr("Path"), xhttpPathTxt);
+    xhttpLayout->addRow(tr("Mode"), xhttpModeCB);
+    xhttpLayout->addRow(tr("Extra"), extraContainer);
+    xhttpExtraTxt->setToolTip(tr("Passed to Xray as xhttpSettings.extra without interpreting the XHTTP grammar."));
+
+    v2rayStackView->addWidget(xhttpStackPage);
+    transportCombo->addItem(QStringLiteral("xhttp"));
+
+    QWidget::setTabOrder(transportCombo, xhttpHostTxt);
+    QWidget::setTabOrder(xhttpHostTxt, xhttpPathTxt);
+    QWidget::setTabOrder(xhttpPathTxt, xhttpModeCB);
+    QWidget::setTabOrder(xhttpModeCB, xhttpExtraTxt);
+    QWidget::setTabOrder(xhttpExtraTxt, editExtraBtn);
+    QWidget::setTabOrder(editExtraBtn, resetExtraBtn);
+
+    connect(xhttpHostTxt, &QLineEdit::textEdited, this, [this](const QString &value) { stream.xhttpSettings["host"] = value; });
+    connect(xhttpPathTxt, &QLineEdit::textEdited, this, [this](const QString &value) { stream.xhttpSettings["path"] = value; });
+    connect(xhttpModeCB, &QComboBox::currentTextChanged, this, [this](const QString &value) { stream.xhttpSettings["mode"] = value; });
+    connect(editExtraBtn, &QPushButton::clicked, this, [this]() {
+        const auto current = stream.xhttpSettings.value("extra");
+        JsonEditor editor(current.isObject() ? current.toObject() : QJsonObject{}, this);
+        stream.xhttpSettings["extra"] = editor.OpenEditor();
+        RefreshXhttpExtraText();
+    });
+    connect(resetExtraBtn, &QPushButton::clicked, this, [this]() {
+        stream.xhttpSettings.remove("extra");
+        RefreshXhttpExtraText();
+    });
+
     QvMessageBusConnect(StreamSettingsWidget);
 }
 
@@ -29,10 +105,59 @@ StreamSettingsObject StreamSettingsWidget::GetStreamSettings() const
     return stream;
 }
 
+bool StreamSettingsWidget::SelectTransportEditor(const QString &network)
+{
+    QWidget *page = nullptr;
+    switch (StreamTransportEditorForNetwork(network))
+    {
+        case StreamTransportEditor::Tcp: page = tcpStackPage; break;
+        case StreamTransportEditor::Http: page = httpStackPage; break;
+        case StreamTransportEditor::WebSocket: page = wsStackPage; break;
+        case StreamTransportEditor::Kcp: page = mKCPStackPage; break;
+        case StreamTransportEditor::DomainSocket: page = dsStackPage; break;
+        case StreamTransportEditor::Quic: page = quicStackPage; break;
+        case StreamTransportEditor::Grpc: page = grpcStackPage; break;
+        case StreamTransportEditor::Xhttp: page = xhttpStackPage; break;
+        case StreamTransportEditor::Invalid: break;
+    }
+    if (!page)
+    {
+        v2rayStackView->setCurrentIndex(-1);
+        return false;
+    }
+    v2rayStackView->setCurrentWidget(page);
+    return true;
+}
+
+void StreamSettingsWidget::RefreshXhttpExtraText()
+{
+    const auto extra = stream.xhttpSettings.value("extra");
+    if (extra.isUndefined() || extra.isNull())
+    {
+        xhttpExtraTxt->setPlainText("{}");
+        BLACK(xhttpExtraTxt);
+    }
+    else if (extra.isObject())
+    {
+        xhttpExtraTxt->setPlainText(JsonToString(extra.toObject()));
+        BLACK(xhttpExtraTxt);
+    }
+    else
+    {
+        xhttpExtraTxt->setPlainText(tr("Invalid XHTTP extra: expected a JSON object"));
+        RED(xhttpExtraTxt);
+    }
+}
+
 void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
 {
     stream = sso;
-    transportCombo->setCurrentText(stream.network);
+    {
+        const QSignalBlocker blocker(transportCombo);
+        transportCombo->setCurrentIndex(transportCombo->findText(stream.network, Qt::MatchExactly));
+    }
+    if (!SelectTransportEditor(stream.network))
+        LOG("Unsupported Transport Type:", stream.network);
     // TLS and REALITY
     {
         const static QMap<QString, int> securityIndexMap{ { "none", 0 }, { "tls", 1 }, { "reality", 2 } };
@@ -109,6 +234,16 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
     {
         grpcServiceNameTxt->setText(stream.grpcSettings.serviceName);
         grpcModeCB->setCurrentText(stream.grpcSettings.multiMode ? "multi" : "gun");
+    }
+    // XHTTP
+    {
+        const QSignalBlocker hostBlocker(xhttpHostTxt);
+        const QSignalBlocker pathBlocker(xhttpPathTxt);
+        const QSignalBlocker modeBlocker(xhttpModeCB);
+        xhttpHostTxt->setText(stream.xhttpSettings.value("host").toString());
+        xhttpPathTxt->setText(stream.xhttpSettings.value("path").toString("/"));
+        xhttpModeCB->setCurrentText(stream.xhttpSettings.value("mode").toString("auto"));
+        RefreshXhttpExtraText();
     }
     // SOCKOPT
     {
@@ -283,8 +418,22 @@ void StreamSettingsWidget::on_tcpResponseEditBtn_clicked()
 
 void StreamSettingsWidget::on_transportCombo_currentIndexChanged(int arg1)
 {
-    stream.network = transportCombo->itemText(arg1);
-    v2rayStackView->setCurrentIndex(arg1);
+    if (arg1 < 0)
+        return;
+    const auto network = transportCombo->itemText(arg1);
+    if (!SelectTransportEditor(network))
+    {
+        LOG("Unsupported Transport Type:", network);
+        return;
+    }
+    stream.network = network;
+    if (network == "xhttp")
+    {
+        if (!stream.xhttpSettings.contains("path"))
+            stream.xhttpSettings["path"] = "/";
+        if (!stream.xhttpSettings.contains("mode"))
+            stream.xhttpSettings["mode"] = "auto";
+    }
 }
 
 void StreamSettingsWidget::on_securityTypeCB_currentIndexChanged(int arg1)

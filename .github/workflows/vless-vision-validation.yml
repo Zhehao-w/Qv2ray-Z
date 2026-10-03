@@ -97,6 +97,8 @@ jobs:
           set -euo pipefail
           tls=.github/xray-fixtures/vless-tls-vision.json
           reality=.github/xray-fixtures/vless-reality-vision.json
+          tls_xhttp=.github/xray-fixtures/vless-tls-xhttp.json
+          reality_xhttp=.github/xray-fixtures/vless-reality-xhttp.json
 
           jq -e '.outbounds[0]
             | .protocol == "vless"
@@ -120,7 +122,31 @@ jobs:
             and .streamSettings.realitySettings.shortId == "0123456789abcdef"
             and .streamSettings.realitySettings.spiderX == "/"' "$reality"
 
-      - name: Validate TLS and REALITY Vision configs with Xray
+          jq -e '.outbounds[0]
+            | .protocol == "vless"
+            and .settings.vnext[0].users[0].encryption == "none"
+            and (.settings.vnext[0].users[0] | has("flow") | not)
+            and .streamSettings.network == "xhttp"
+            and .streamSettings.security == "tls"
+            and (.streamSettings.tlsSettings.serverName | length > 0)
+            and .streamSettings.xhttpSettings.path == "/xhttp"
+            and .streamSettings.xhttpSettings.mode == "auto"
+            and .streamSettings.xhttpSettings.extra.xPaddingBytes == "100-1000"' "$tls_xhttp"
+
+          jq -e '.outbounds[0]
+            | .protocol == "vless"
+            and .settings.vnext[0].users[0].encryption == "none"
+            and (.settings.vnext[0].users[0] | has("flow") | not)
+            and .streamSettings.network == "xhttp"
+            and .streamSettings.security == "reality"
+            and (.streamSettings.realitySettings.serverName | length > 0)
+            and .streamSettings.realitySettings.fingerprint == "chrome"
+            and (.streamSettings.realitySettings.password | length > 0)
+            and .streamSettings.xhttpSettings.path == "/xhttp"
+            and .streamSettings.xhttpSettings.mode == "auto"
+            and .streamSettings.xhttpSettings.extra.xPaddingBytes == "100-1000"' "$reality_xhttp"
+
+      - name: Validate TLS and REALITY Vision and XHTTP configs with Xray
         shell: bash
         run: |
           set -euo pipefail
@@ -134,6 +160,8 @@ jobs:
 
           validate .github/xray-fixtures/vless-tls-vision.json
           validate .github/xray-fixtures/vless-reality-vision.json
+          validate .github/xray-fixtures/vless-tls-xhttp.json
+          validate .github/xray-fixtures/vless-reality-xhttp.json
 
           verify="$($XRAY_BIN mldsa65 | awk '/^Verify: / { sub(/^Verify: /, ""); print; exit }')"
           if [[ -z "$verify" ]]; then
@@ -255,3 +283,5 @@ jobs:
           grep -Fq '<string notr="true">xtls-rprx-vision-udp443</string>' src/plugins/protocols/ui/outbound/vless.ui
           grep -Fq '<string notr="true">TLS</string>' src/ui/widgets/widgets/StreamSettingsWidget.ui
           grep -Fq '<string notr="true">REALITY</string>' src/ui/widgets/widgets/StreamSettingsWidget.ui
+          grep -Fq 'transportCombo->addItem(QStringLiteral("xhttp"))' src/ui/widgets/widgets/StreamSettingsWidget.cpp
+          grep -Fq 'StreamTransportEditorForNetwork' src/ui/widgets/widgets/StreamSettingsWidget.cpp
