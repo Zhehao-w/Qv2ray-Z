@@ -51,7 +51,8 @@ TEST_CASE("Unknown VLESS query items survive canonical import and export")
     REQUIRE(exportedQuery.queryItemValue("flow") == "xtls-rprx-vision");
     REQUIRE(exportedQuery.queryItemValue("sni") == "example.com");
     REQUIRE(exportedQuery.queryItemValue("pbk") == "PUBLIC_KEY");
-    REQUIRE(exportedQuery.allQueryItemValues("futureOption") == QStringList{ "first/value", "second value" });
+    const QStringList expectedFutureOptions{ "first/value", "second value" };
+    REQUIRE(exportedQuery.allQueryItemValues("futureOption") == expectedFutureOptions);
     REQUIRE(exportedQuery.queryItemValue("futureUnicode") == QString::fromUtf8("雪/%2F"));
 
     QString secondAlias;
