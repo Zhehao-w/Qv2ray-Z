@@ -79,7 +79,8 @@ namespace Qv2ray::core::connection::generation::filters
         {
             if (QJsonIO::GetValue(root, subKey, i, "tag").toString().isEmpty())
             {
-                QJsonIO::SetValue(root, GenerateRandomString(8), subKey, i, "tag");
+                const auto tag = GenerateRandomString(8);
+                QJsonIO::SetValue(root, tag, subKey, i, "tag");
             }
 
             if (subKey == QStringLiteral("outbounds"))
