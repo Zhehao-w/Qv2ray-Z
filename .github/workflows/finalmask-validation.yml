@@ -1,0 +1,127 @@
+name: FinalMask compatibility
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/finalmask-validation.yml"
+      - ".github/release-dependencies.json"
+      - ".github/xray-fixtures/vless-*-finalmask.json"
+      - "src/base/models/CoreObjectModels.hpp"
+      - "src/core/connection/serialization/vless.cpp"
+      - "src/plugins/protocols/core/OutboundHandler.cpp"
+      - "src/ui/widgets/widgets/StreamSettingsWidget.*"
+      - "test/CMakeLists.txt"
+      - "test/src/core/connection/TestFinalMask.cpp"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/finalmask-validation.yml"
+      - ".github/release-dependencies.json"
+      - ".github/xray-fixtures/vless-*-finalmask.json"
+      - "src/base/models/CoreObjectModels.hpp"
+      - "src/core/connection/serialization/vless.cpp"
+      - "src/plugins/protocols/core/OutboundHandler.cpp"
+      - "src/ui/widgets/widgets/StreamSettingsWidget.*"
+      - "test/CMakeLists.txt"
+      - "test/src/core/connection/TestFinalMask.cpp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned-xray-finalmask:
+    name: Pinned Xray FinalMask validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Download and verify pinned Xray
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(jq -r '.xray.version' .github/release-dependencies.json)"
+          asset="$(jq -r '.xray.assets["linux-x64"].name' .github/release-dependencies.json)"
+          expected_hash="$(jq -r '.xray.assets["linux-x64"].sha256' .github/release-dependencies.json)"
+          if [[ -z "$version" || -z "$asset" || ! "$expected_hash" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::Pinned Xray metadata is incomplete."
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/xray"
+          gh release download "$version" --repo XTLS/Xray-core --pattern "$asset" --dir "$RUNNER_TEMP/xray"
+          archive="$RUNNER_TEMP/xray/$asset"
+          actual_hash="$(sha256sum "$archive" | awk '{print $1}')"
+          if [[ "${actual_hash,,}" != "${expected_hash,,}" ]]; then
+            echo "::error::Pinned Xray checksum mismatch: expected $expected_hash, got $actual_hash"
+            exit 1
+          fi
+
+          unzip -q "$archive" -d "$RUNNER_TEMP/xray/bin"
+          chmod +x "$RUNNER_TEMP/xray/bin/xray"
+          echo "XRAY_BIN=$RUNNER_TEMP/xray/bin/xray" >> "$GITHUB_ENV"
+          echo "XRAY_VERSION=$version" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/xray/bin/xray" version
+
+      - name: Assert FinalMask fixture structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          tcp=.github/xray-fixtures/vless-reality-finalmask.json
+          xhttp=.github/xray-fixtures/vless-reality-xhttp-finalmask.json
+
+          jq -e '.outbounds[0]
+            | .protocol == "vless"
+            and .streamSettings.network == "tcp"
+            and .streamSettings.security == "reality"
+            and .streamSettings.finalmask.tcp[0].type == "fragment"
+            and .streamSettings.finalmask.tcp[0].settings.packets == "tlshello"
+            and .streamSettings.finalmask.tcp[0].settings.length == "3-5"
+            and .streamSettings.finalmask.tcp[0].settings.delay == "10-20"' "$tcp"
+
+          jq -e '.outbounds[0]
+            | .protocol == "vless"
+            and .streamSettings.network == "xhttp"
+            and .streamSettings.security == "reality"
+            and .streamSettings.xhttpSettings.mode == "auto"
+            and .streamSettings.finalmask.tcp[0].type == "fragment"
+            and .streamSettings.finalmask.tcp[0].settings.packets == "tlshello"
+            and .streamSettings.finalmask.tcp[0].settings.length == "3-5"
+            and .streamSettings.finalmask.tcp[0].settings.delay == "10-20"' "$xhttp"
+
+      - name: Validate FinalMask fixtures with pinned Xray
+        shell: bash
+        run: |
+          set -euo pipefail
+          for fixture in \
+            .github/xray-fixtures/vless-reality-finalmask.json \
+            .github/xray-fixtures/vless-reality-xhttp-finalmask.json; do
+            echo "::group::Validating $fixture with $XRAY_VERSION"
+            "$XRAY_BIN" run -test -c "$fixture"
+            echo "::endgroup::"
+          done
+
+      - name: Check committed whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == pull_request ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}" HEAD
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            git diff-tree --check --root HEAD
+          fi

@@ -182,6 +182,21 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
                 query.addQueryItem("extra", QUrl::toPercentEncoding(extra));
             }
         }
+
+        // -------- FINALMASK --------
+        const auto finalMaskValue = objStream.value("finalmask");
+        if (!finalMaskValue.isUndefined() && !finalMaskValue.isNull())
+        {
+            if (!finalMaskValue.isObject())
+                return "(Invalid FinalMask JSON object)";
+            const auto finalMask = finalMaskValue.toObject();
+            if (!finalMask.isEmpty())
+            {
+                const auto compactFinalMask = QString::fromUtf8(QJsonDocument(finalMask).toJson(QJsonDocument::Compact));
+                query.addQueryItem("fm", QUrl::toPercentEncoding(compactFinalMask));
+            }
+        }
+
         // -------- TLS RELATED --------
         const auto tlsKey = security == "reality" ? "realitySettings" : "tlsSettings";
 
