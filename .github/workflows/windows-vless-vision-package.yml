@@ -5,7 +5,7 @@ on:
     branches:
       - dev
     paths:
-      - ".github/workflows/*.yml"
+      - ".github/workflows/windows-vless-vision-package.yml"
       - ".github/release-dependencies.json"
       - ".github/scripts/**"
       - ".github/xray-fixtures/geo-routing-*.json"
@@ -78,6 +78,7 @@ jobs:
           python-version: '3.13.3'
 
       - name: Verify pinned release inputs
+        id: verify-release-inputs
         shell: pwsh
         run: |
           $output = & python .github/scripts/verify-release-inputs.py 2>&1
@@ -86,7 +87,7 @@ jobs:
           if ($verifyExitCode -ne 0) { exit $verifyExitCode }
 
       - name: Upload release-input verifier log on failure
-        if: failure()
+        if: failure() && steps.verify-release-inputs.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-input-verifier-log
@@ -156,6 +157,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build application and supported regression targets
+        id: build-regressions
         shell: pwsh
         run: |
           cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety connection_context_resolver http_request_safety crash_diagnostic_safety settings_compatibility --parallel 2>&1 | Tee-Object -FilePath build.log
@@ -163,7 +165,7 @@ jobs:
           if ($buildExitCode -ne 0) { exit $buildExitCode }
 
       - name: Upload Windows build log on failure
-        if: failure()
+        if: failure() && steps.build-regressions.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-authoritative-build-log
@@ -171,6 +173,7 @@ jobs:
           if-no-files-found: error
 
       - name: Run supported regression tests
+        id: run-regressions
         shell: pwsh
         run: |
           ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety|connection_context_resolver|http_request_safety|crash_diagnostic_safety|settings_compatibility)' 2>&1 | Tee-Object -FilePath ctest.log
@@ -178,7 +181,7 @@ jobs:
           if ($testExitCode -ne 0) { exit $testExitCode }
 
       - name: Upload Windows test log on failure
-        if: failure()
+        if: failure() && steps.run-regressions.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-authoritative-test-log

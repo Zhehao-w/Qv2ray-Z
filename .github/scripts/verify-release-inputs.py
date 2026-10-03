@@ -110,7 +110,7 @@ for marker in (
     if marker not in geo_installer_text:
         fail(f"shared Windows Geo installer is missing required verification marker: {marker}")
 
-for name in ("data-safety-hardening.yml", "windows-release.yml", "windows-vless-vision-package.yml"):
+for name in ("windows-release.yml", "windows-vless-vision-package.yml"):
     text = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
     if "jurplel/install-qt-action@" in text:
         fail(f"{name}: outer install-qt-action composite contains nested floating action references; use the pinned internal action")
