@@ -19,6 +19,9 @@ if ($manifest.schema_version -ne 2) {
 
 $rules = $manifest.geo.rules
 $cnPrivate = $manifest.geo.cn_private
+if ($cnPrivate.asset.name -ne 'geoip-only-cn-private.dat') {
+    throw "Pinned CN/private Geo asset name is invalid: $($cnPrivate.asset.name)"
+}
 $assets = @(
     [pscustomobject]@{
         Repository = $rules.repository
