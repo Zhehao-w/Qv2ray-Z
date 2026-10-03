@@ -161,7 +161,7 @@ TEST_CASE("Runtime filtering strips removed mKCP fields without touching active 
                          QJsonObject{ { "mtu", 1300 },
                                       { "seed", "legacy-inbound-seed" },
                                       { "header", QJsonObject{ { "type", "dtls" } } },
-                                      { "futureInboundKcpField", "keep" } } } } } }
+                                      { "futureInboundKcpField", "keep" } } } } }
     };
     root["outbounds"] = QJsonArray{ kcpOutbound, tcpOutbound };
     root["inbounds"] = QJsonArray{ kcpInbound };
