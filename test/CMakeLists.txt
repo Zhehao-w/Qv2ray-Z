@@ -22,6 +22,7 @@ target_sources(parse_vless_url PRIVATE
     src/core/connection/TestXHTTP.cpp
     src/core/connection/TestFinalMask.cpp
     src/core/connection/TestStreamTransportMapping.cpp
+    src/core/connection/TestRemovedQuicTransport.cpp
     src/core/connection/VLESSOutboundSerializerTestHelper.cpp
     src/core/connection/VLESSOutboundSerializerTestHelper.hpp
     ${CMAKE_SOURCE_DIR}/src/plugins/protocols/core/OutboundHandler.cpp)
