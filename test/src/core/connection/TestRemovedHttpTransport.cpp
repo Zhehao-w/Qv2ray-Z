@@ -134,9 +134,10 @@ TEST_CASE("Legacy HTTP settings remain model round-trip compatible")
     const auto typed = StreamSettingsObject::fromJson(original);
     const auto roundTripped = typed.toJson();
     const auto reparsed = StreamSettingsObject::fromJson(roundTripped);
+    const QList<QString> expectedHosts{ " legacy.example.com ", "alt.example.com" };
 
     REQUIRE(typed.network == "http");
-    REQUIRE(typed.httpSettings.host == QList<QString>{ " legacy.example.com ", "alt.example.com" });
+    REQUIRE(typed.httpSettings.host == expectedHosts);
     REQUIRE(typed.httpSettings.path == "/legacy");
     REQUIRE(typed.httpSettings.method == "GET");
     REQUIRE(roundTripped["network"] == "http");
