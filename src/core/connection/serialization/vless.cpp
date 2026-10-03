@@ -3,6 +3,7 @@
 #include "core/connection/Serialization.hpp"
 #include "utils/QvHelpers.hpp"
 
+#include <QByteArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QUrl>
@@ -47,7 +48,12 @@ namespace
                     return false;
                 i += 2;
             }
-            *decoded = QUrl::fromPercentEncoding(rawValue.toUtf8());
+
+            const auto decodedBytes = QByteArray::fromPercentEncoding(rawValue.toUtf8());
+            const auto decodedText = QString::fromUtf8(decodedBytes);
+            if (decodedText.toUtf8() != decodedBytes)
+                return false;
+            *decoded = decodedText;
         }
         return true;
     }
