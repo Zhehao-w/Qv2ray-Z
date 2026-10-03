@@ -153,9 +153,21 @@ TEST_CASE("Runtime filtering strips removed mKCP fields without touching active 
           QJsonObject{ { "network", "tcp" },
                        { "kcpSettings", QJsonObject{ { "seed", "dormant" }, { "header", QJsonObject{ { "type", "srtp" } } } } } } }
     };
+    QJsonObject kcpInbound{
+        { "protocol", "dokodemo-door" },
+        { "streamSettings",
+          QJsonObject{ { "network", "kcp" },
+                       { "kcpSettings",
+                         QJsonObject{ { "mtu", 1300 },
+                                      { "seed", "legacy-inbound-seed" },
+                                      { "header", QJsonObject{ { "type", "dtls" } } },
+                                      { "futureInboundKcpField", "keep" } } } } } }
+    };
     root["outbounds"] = QJsonArray{ kcpOutbound, tcpOutbound };
+    root["inbounds"] = QJsonArray{ kcpInbound };
 
     FillupTagsFilter(root, "outbounds");
+    FillupTagsFilter(root, "inbounds");
 
     const auto activeStream = root["outbounds"].toArray().at(0).toObject()["streamSettings"].toObject();
     const auto activeKcp = activeStream["kcpSettings"].toObject();
@@ -169,6 +181,12 @@ TEST_CASE("Runtime filtering strips removed mKCP fields without touching active 
     const auto dormantKcp = root["outbounds"].toArray().at(1).toObject()["streamSettings"].toObject()["kcpSettings"].toObject();
     REQUIRE(dormantKcp["seed"] == "dormant");
     REQUIRE(dormantKcp["header"].toObject()["type"] == "srtp");
+
+    const auto inboundKcp = root["inbounds"].toArray().at(0).toObject()["streamSettings"].toObject()["kcpSettings"].toObject();
+    REQUIRE_FALSE(inboundKcp.contains("header"));
+    REQUIRE_FALSE(inboundKcp.contains("seed"));
+    REQUIRE(inboundKcp["mtu"] == 1300);
+    REQUIRE(inboundKcp["futureInboundKcpField"] == "keep");
 }
 
 TEST_CASE("Legacy mKCP header and seed remain persisted-config compatible through editor round trip")
