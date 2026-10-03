@@ -17,10 +17,6 @@ StreamSettingsWidget::StreamSettingsWidget(QWidget *parent) : QWidget(parent)
 {
     setupUi(this);
 
-    const auto removedHttpIndex = transportCombo->findText(QStringLiteral("http"), Qt::MatchExactly);
-    if (removedHttpIndex >= 0)
-        transportCombo->removeItem(removedHttpIndex);
-
     // XHTTP is maintained programmatically so the transport/page relationship
     // is explicit instead of depending on matching Designer indices.
     xhttpStackPage = new QWidget(v2rayStackView);
@@ -302,22 +298,6 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
     }
 }
 
-void StreamSettingsWidget::on_httpPathTxt_textEdited(const QString &arg1)
-{
-    stream.httpSettings.path = arg1;
-}
-
-void StreamSettingsWidget::on_httpHostTxt_textChanged()
-{
-    const auto hosts = httpHostTxt->toPlainText().replace("\r", "").split("\n");
-    stream.httpSettings.host.clear();
-    for (const auto &host : hosts)
-    {
-        if (!host.trimmed().isEmpty())
-            stream.httpSettings.host.push_back(host.trimmed());
-    }
-}
-
 void StreamSettingsWidget::on_wsHeadersTxt_textChanged()
 {
     const auto headers = SplitLines(wsHeadersTxt->toPlainText());
@@ -583,30 +563,7 @@ void StreamSettingsWidget::on_wsEarlyDataHeaderNameCB_currentIndexChanged(int ar
     stream.wsSettings.earlyDataHeaderName = wsEarlyDataHeaderNameCB->itemText(arg1);
 }
 
-void StreamSettingsWidget::on_httpMethodCB_currentTextChanged(const QString &arg1)
-{
-    stream.httpSettings.method = arg1;
-}
-
 void StreamSettingsWidget::on_tcpKeepAliveIntervalSpinBox_valueChanged(int arg1)
 {
     stream.sockopt.tcpKeepAliveInterval = arg1;
-}
-
-void StreamSettingsWidget::on_httpHeadersDefBtn_clicked()
-{
-    httpHeadersTxt->clear();
-    httpHeadersTxt->setPlainText(JsonToString(HttpObject().toJson()["headers"].toObject()));
-    stream.httpSettings.headers = HttpObject().headers;
-}
-
-void StreamSettingsWidget::on_httpHeadersEditBtn_clicked()
-{
-    JsonEditor w(JsonFromString(httpHeadersTxt->toPlainText()), this);
-    auto rJson = w.OpenEditor();
-    httpHeadersTxt->setPlainText(JsonToString(rJson));
-
-    auto json = HttpObject().toJson();
-    json["headers"] = rJson;
-    stream.httpSettings.headers = HttpObject::fromJson(json).headers;
 }
