@@ -187,9 +187,8 @@ namespace Qv2ray::core::connection
             }
             else if (link.startsWith("ssd://"))
             {
-                QStringList errMessageList;
-                connectionConf << ssd::Deserialize(link, newGroup, &errMessageList);
-                *errMessage = errMessageList.join(NEWLINE);
+                *errMessage = QObject::tr("Unsupported SSD share link format.");
+                return {};
             }
             else
             {

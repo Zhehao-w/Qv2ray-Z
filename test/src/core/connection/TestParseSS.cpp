@@ -90,3 +90,27 @@ SCENARIO("Test Parse Shadowsocks url", "[ParseSSUrl]")
         }
     }
 }
+
+SCENARIO("Legacy SSD share links are rejected without affecting Shadowsocks", "[ParseSSUrl][LegacySSD]")
+{
+    QvTestApplication app;
+    QString alias = "legacy-ssd";
+    QString err;
+    QString group;
+
+    WHEN("a legacy SSD link is passed through the generic share-link importer")
+    {
+        const auto configs = ConvertConfigFromString("ssd://legacy", &alias, &err, &group);
+        REQUIRE(configs.isEmpty());
+        REQUIRE(err.toStdString() == "Unsupported SSD share link format.");
+    }
+
+    WHEN("a normal Shadowsocks link is passed through the same importer")
+    {
+        const auto configs = ConvertConfigFromString("ss://YmYtY2ZiOnRlc3RAMTkyLjE2OC4xMDAuMTo4ODg4", &alias, &err, &group);
+        REQUIRE(err.isEmpty());
+        REQUIRE(configs.size() == 1);
+        const auto outbound = configs.first().second.value("outbounds").toArray().first().toObject();
+        REQUIRE(outbound.value("protocol").toString().toStdString() == "shadowsocks");
+    }
+}
