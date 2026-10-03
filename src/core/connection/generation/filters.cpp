@@ -79,18 +79,33 @@ namespace Qv2ray::core::connection::generation::filters
         {
             if (QJsonIO::GetValue(root, subKey, i, "tag").toString().isEmpty())
             {
-                const auto tag = GenerateRandomString(8);
-                QJsonIO::SetValue(root, tag, subKey, i, "tag");
+                QJsonIO::SetValue(root, GenerateRandomString(8), subKey, i, "tag");
             }
 
-            // Opaque VLESS share-link query items are Qv2ray-Z persistence
-            // metadata, not Xray streamSettings. The final runtime pass reaches
-            // both simple and complex outbounds, so strip the reserved key here
-            // before validation/launch while leaving stored/editor data intact.
-            if (subKey == QStringLiteral("outbounds") && QJsonIO::GetValue(root, subKey, i, "protocol").toString() == QStringLiteral("vless"))
+            if (subKey == QStringLiteral("outbounds"))
             {
-                QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings",
-                                  Qv2ray::base::vless_share::OpaqueQueryMetadataKey());
+                // Xray v26.3.27 rejects legacy mKCP header and seed fields.
+                // Strip them only from the final runtime copy so persisted
+                // configurations keep their original compatibility data.
+                const auto streamSettings = QJsonIO::GetValue(root, subKey, i, "streamSettings").toObject();
+                const auto network = streamSettings.value("network").toString();
+                const auto method = streamSettings.value("method").toString();
+                if (network == QStringLiteral("kcp") || network == QStringLiteral("mkcp") || method == QStringLiteral("kcp") ||
+                    method == QStringLiteral("mkcp"))
+                {
+                    QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "header");
+                    QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "seed");
+                }
+
+                // Opaque VLESS share-link query items are Qv2ray-Z persistence
+                // metadata, not Xray streamSettings. The final runtime pass reaches
+                // both simple and complex outbounds, so strip the reserved key here
+                // before validation/launch while leaving stored/editor data intact.
+                if (QJsonIO::GetValue(root, subKey, i, "protocol").toString() == QStringLiteral("vless"))
+                {
+                    QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings",
+                                      Qv2ray::base::vless_share::OpaqueQueryMetadataKey());
+                }
             }
         }
     }

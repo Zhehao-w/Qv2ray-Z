@@ -17,6 +17,14 @@ StreamSettingsWidget::StreamSettingsWidget(QWidget *parent) : QWidget(parent)
 {
     setupUi(this);
 
+    // The bundled Xray rejects legacy mKCP header and seed fields. Keep their
+    // model state for persisted-config compatibility, but do not expose them
+    // as active creation/editing controls.
+    label_16->hide();
+    kcpHeaderType->hide();
+    label_13->hide();
+    kcpSeedTxt->hide();
+
     // XHTTP is maintained programmatically so the transport/page relationship
     // is explicit instead of depending on matching Designer indices.
     xhttpStackPage = new QWidget(v2rayStackView);
@@ -258,6 +266,8 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
     }
     // mKCP
     {
+        const QSignalBlocker headerBlocker(kcpHeaderType);
+        const QSignalBlocker seedBlocker(kcpSeedTxt);
         kcpMTU->setValue(stream.kcpSettings.mtu);
         kcpTTI->setValue(stream.kcpSettings.tti);
         kcpHeaderType->setCurrentText(stream.kcpSettings.header.type);

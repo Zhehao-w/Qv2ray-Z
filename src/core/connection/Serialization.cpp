@@ -47,19 +47,82 @@ namespace Qv2ray::core::connection
                 *errMessage = QObject::tr("Unsupported %1 transport: %2").arg(protocol, network);
                 return true;
             };
-            const auto legacyVMessRequestedTransport = [](const QString &legacyLink)
+            const auto rejectRemovedKcpUrlFields = [errMessage](const QString &shareLink, const QString &protocol)
+            {
+                const QUrl url(shareLink);
+                const QUrlQuery query(url.query());
+                QString network;
+                QString headerKey;
+                if (protocol == QStringLiteral("VLESS"))
+                {
+                    network = query.hasQueryItem("type") ? query.queryItemValue("type") : QStringLiteral("tcp");
+                    headerKey = QStringLiteral("headerType");
+                }
+                else
+                {
+                    for (const auto &component : url.userName().split('+'))
+                    {
+                        if (component != QStringLiteral("tls"))
+                            network = component;
+                    }
+                    headerKey = QStringLiteral("type");
+                }
+                if (network != QStringLiteral("kcp"))
+                    return false;
+                if (query.hasQueryItem("seed"))
+                {
+                    *errMessage = QObject::tr("Unsupported %1 mKCP seed").arg(protocol);
+                    return true;
+                }
+                if (query.hasQueryItem(headerKey))
+                {
+                    const auto headerType = query.queryItemValue(headerKey);
+                    if (!headerType.isEmpty() && headerType != QStringLiteral("none"))
+                    {
+                        *errMessage = QObject::tr("Unsupported %1 mKCP header").arg(protocol);
+                        return true;
+                    }
+                }
+                return false;
+            };
+            const auto legacyVMessPayload = [](const QString &legacyLink)
             {
                 const auto payload = legacyLink.mid(QStringLiteral("vmess://").size());
                 const auto decoded = SafeBase64Decode(payload);
                 const auto document = QJsonDocument::fromJson(decoded.toUtf8());
-                if (!document.isObject())
-                    return QString{};
-                return document.object().value("net").toVariant().toString();
+                return document.isObject() ? document.object() : QJsonObject{};
+            };
+            const auto legacyVMessRequestedTransport = [&legacyVMessPayload](const QString &legacyLink)
+            {
+                return legacyVMessPayload(legacyLink).value("net").toVariant().toString();
+            };
+            const auto rejectRemovedLegacyKcpFields = [errMessage, &legacyVMessPayload](const QString &legacyLink)
+            {
+                const auto payload = legacyVMessPayload(legacyLink);
+                if (payload.value("net").toVariant().toString() != QStringLiteral("kcp"))
+                    return false;
+                if (payload.contains("seed"))
+                {
+                    *errMessage = QObject::tr("Unsupported VMess mKCP seed");
+                    return true;
+                }
+                if (payload.contains("type"))
+                {
+                    const auto headerType = payload.value("type").toVariant().toString();
+                    if (!headerType.isEmpty() && headerType != QStringLiteral("none"))
+                    {
+                        *errMessage = QObject::tr("Unsupported VMess mKCP header");
+                        return true;
+                    }
+                }
+                return false;
             };
 
             QList<std::pair<QString, CONFIGROOT>> connectionConf;
             if (link.startsWith("vmess://") && link.contains("@"))
             {
+                if (rejectRemovedKcpUrlFields(link, QStringLiteral("VMess")))
+                    return {};
                 auto conf = vmess_new::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
                     return {};
@@ -70,6 +133,8 @@ namespace Qv2ray::core::connection
             }
             else if (link.startsWith("vless://"))
             {
+                if (rejectRemovedKcpUrlFields(link, QStringLiteral("VLESS")))
+                    return {};
                 auto conf = vless::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
                     return {};
@@ -102,6 +167,8 @@ namespace Qv2ray::core::connection
                     *errMessage = QObject::tr("Unsupported VMess transport: %1").arg(requestedTransport);
                     return {};
                 }
+                if (rejectRemovedLegacyKcpFields(link))
+                    return {};
 
                 auto conf = vmess::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
@@ -182,6 +249,15 @@ namespace Qv2ray::core::connection
             const static QStringList removedTransports{ "quic", "http", "h2", "h3" };
             if ((type == "vless" || type == "vmess") && removedTransports.contains(network))
                 return type == "vless" ? "(Unsupported VLESS transport)" : "(Unsupported VMess transport)";
+
+            if ((type == "vless" || type == "vmess") && network == QStringLiteral("kcp"))
+            {
+                const auto kcpSettings = streamSettings.value("kcpSettings").toObject();
+                const auto seed = kcpSettings.value("seed").toString();
+                const auto headerType = kcpSettings.value("header").toObject().value("type").toString("none");
+                if (!seed.isEmpty() || (!headerType.isEmpty() && headerType != QStringLiteral("none")))
+                    return type == "vless" ? "(Unsupported VLESS mKCP header/seed)" : "(Unsupported VMess mKCP header/seed)";
+            }
 
             if (type == "vmess")
             {
