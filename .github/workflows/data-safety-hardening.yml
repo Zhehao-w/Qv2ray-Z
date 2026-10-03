@@ -1,44 +1,17 @@
-name: Data safety hardening
+name: Data safety hardening (manual Linux diagnostic)
 
 on:
-  pull_request:
-    branches:
-      - dev
-    paths:
-      - ".github/workflows/*.yml"
-      - ".github/release-dependencies.json"
-      - ".github/scripts/**"
-      - "src/**"
-      - "test/**"
-      - "libs/**"
-      - "cmake/**"
-      - "CMakeLists.txt"
-      - "makespec/VERSION"
-  push:
-    branches:
-      - "hardening/**"
-    paths:
-      - ".github/workflows/*.yml"
-      - ".github/release-dependencies.json"
-      - ".github/scripts/**"
-      - "src/**"
-      - "test/**"
-      - "libs/**"
-      - "cmake/**"
-      - "CMakeLists.txt"
-      - "makespec/VERSION"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   linux-tests:
-    if: github.event_name == 'workflow_dispatch'
     name: Qt5 diagnostic regression tests
     runs-on: ubuntu-22.04
     timeout-minutes: 35
@@ -117,114 +90,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
-          elif [[ "${{ github.event_name }}" == "push" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
-            git diff --check "${{ github.event.before }}" "${{ github.sha }}"
-          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
             git diff --check HEAD^ HEAD
           else
             git diff-tree --check --root HEAD
           fi
-
-  windows-build:
-    name: Qt 5.15.2 / MSVC 14.2 app and regression tests
-    runs-on: windows-2022
-    timeout-minutes: 45
-    steps:
-      - name: Check out source and recursive submodules
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          submodules: recursive
-
-      - name: Install MSVC 14.2 environment
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
-        with:
-          toolset: 14.2
-          arch: x64
-
-      - name: Set up Python for pinned Qt installer
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.13.3'
-
-      - name: Install Qt 5.15.2
-        uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1 internal action
-        with:
-          version: 5.15.2
-          arch: win64_msvc2019_64
-          cache: true
-          aqtversion: '==3.3.0'
-          py7zrversion: '==1.0.0'
-
-      - name: Download pinned historical Qv2ray Windows dependencies
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cd libs
-          ./setup-libs.sh windows x64
-
-      - name: Locate CURL in the Windows dependency bundle
-        shell: pwsh
-        run: |
-          $prefix = (Resolve-Path "libs/x64-windows").Path
-          $header = Get-ChildItem $prefix -Recurse -File -Filter curl.h |
-            Where-Object { $_.FullName -match '[\\/]curl[\\/]curl\.h$' } |
-            Select-Object -First 1
-          $library = Get-ChildItem $prefix -Recurse -File |
-            Where-Object { $_.Name -in @('libcurl.lib', 'curl.lib') -and $_.FullName -notmatch '[\\/]debug[\\/]' } |
-            Select-Object -First 1
-          $runtime = Join-Path $prefix "bin"
-
-          if (-not $header) { throw "CURL header was not found below $prefix" }
-          if (-not $library) { throw "CURL import library was not found below $prefix" }
-          if (-not (Test-Path $runtime)) { throw "Windows runtime dependency directory was not found at $runtime" }
-
-          $include = Split-Path (Split-Path $header.FullName -Parent) -Parent
-          "CURL_INCLUDE_DIR=$include" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "CURL_LIBRARY=$($library.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          $runtime | Out-File $env:GITHUB_PATH -Append -Encoding utf8
-
-      - name: Configure Qv2ray-Z
-        shell: pwsh
-        run: |
-          cmake -S . -B build -G Ninja `
-            -DBUILD_TESTING=ON `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DQV2RAY_AUTO_DEPLOY=OFF `
-            -DQV2RAY_USE_V5_CORE=ON `
-            -DCURL_INCLUDE_DIR="$env:CURL_INCLUDE_DIR" `
-            -DCURL_LIBRARY="$env:CURL_LIBRARY"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Build application and supported regression targets
-        shell: pwsh
-        run: |
-          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety connection_context_resolver http_request_safety crash_diagnostic_safety settings_compatibility --parallel 2 2>&1 | Tee-Object -FilePath build.log
-          $buildExitCode = $LASTEXITCODE
-          if ($buildExitCode -ne 0) { exit $buildExitCode }
-
-      - name: Upload Windows build log on failure
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: data-safety-windows-build-log
-          path: build.log
-          if-no-files-found: error
-
-      - name: Run supported regression tests
-        shell: pwsh
-        run: |
-          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety|connection_context_resolver|http_request_safety|crash_diagnostic_safety|settings_compatibility)' 2>&1 | Tee-Object -FilePath ctest.log
-          $testExitCode = $LASTEXITCODE
-          if ($testExitCode -ne 0) { exit $testExitCode }
-
-      - name: Upload Windows test log on failure
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: data-safety-windows-test-log
-          path: ctest.log
-          if-no-files-found: error

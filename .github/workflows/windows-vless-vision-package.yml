@@ -5,13 +5,12 @@ on:
     branches:
       - dev
     paths:
-      - ".github/workflows/windows-vless-vision-package.yml"
+      - ".github/workflows/*.yml"
       - ".github/release-dependencies.json"
-      - ".github/scripts/install-pinned-xray-windows.ps1"
-      - ".github/scripts/install-pinned-geo-windows.ps1"
-      - ".github/scripts/verify-release-inputs.py"
+      - ".github/scripts/**"
       - ".github/xray-fixtures/geo-routing-*.json"
       - "src/**"
+      - "test/**"
       - "assets/**"
       - "3rdparty/**"
       - "libs/**"
@@ -39,7 +38,7 @@ concurrency:
 
 jobs:
   package:
-    name: Qt 5.15.2 / MSVC 14.2
+    name: Qt 5.15.2 / MSVC 14.2 build, tests, package
     runs-on: windows-2022
     timeout-minutes: 45
     env:
@@ -51,6 +50,21 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
+          fetch-depth: 0
+
+      - name: Check committed whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            git diff --check "${{ github.event.before }}" "${{ github.sha }}"
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            git diff-tree --check --root HEAD
+          fi
 
       - name: Install MSVC 14.2 environment
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
@@ -88,7 +102,15 @@ jobs:
           aqtversion: '==3.3.0'
           py7zrversion: '==1.0.0'
 
+      - name: Restore pinned Windows dependency bundle
+        id: qv2ray-deps-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: libs/x64-windows
+          key: qv2ray-deps-windows-x64-${{ hashFiles('.github/release-dependencies.json', 'libs/setup-libs.sh') }}
+
       - name: Download pinned historical Qv2ray Windows dependencies
+        if: steps.qv2ray-deps-cache.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -97,7 +119,7 @@ jobs:
           cd libs
           ./setup-libs.sh windows x64
 
-      - name: Locate CURL in the Windows dependency bundle
+      - name: Locate CURL and runtime dependencies
         shell: pwsh
         run: |
           $prefix = (Resolve-Path "libs/x64-windows").Path
@@ -107,28 +129,65 @@ jobs:
           $library = Get-ChildItem $prefix -Recurse -File |
             Where-Object { $_.Name -in @('libcurl.lib', 'curl.lib') -and $_.FullName -notmatch '[\\/]debug[\\/]' } |
             Select-Object -First 1
+          $runtime = Join-Path $prefix "bin"
 
           if (-not $header) { throw "CURL header was not found below $prefix" }
           if (-not $library) { throw "CURL import library was not found below $prefix" }
+          if (-not (Test-Path $runtime)) { throw "Windows runtime dependency directory was not found at $runtime" }
 
           $include = Split-Path (Split-Path $header.FullName -Parent) -Parent
           "CURL_INCLUDE_DIR=$include" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "CURL_LIBRARY=$($library.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $runtime | Out-File $env:GITHUB_PATH -Append -Encoding utf8
           Write-Host "CURL include directory: $include"
           Write-Host "CURL library: $($library.FullName)"
 
-      - name: Configure and build Qv2ray-Z Release
+      - name: Configure Qv2ray-Z with regression tests
         shell: pwsh
         run: |
           cmake -S . -B build -G Ninja `
+            -DBUILD_TESTING=ON `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_INSTALL_PREFIX="$PWD/build/deployment" `
+            -DQV2RAY_AUTO_DEPLOY=OFF `
             -DQV2RAY_USE_V5_CORE=ON `
             -DCURL_INCLUDE_DIR="$env:CURL_INCLUDE_DIR" `
             -DCURL_LIBRARY="$env:CURL_LIBRARY"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build --config Release --target qv2ray --parallel
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build application and supported regression targets
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety connection_context_resolver http_request_safety crash_diagnostic_safety settings_compatibility --parallel 2>&1 | Tee-Object -FilePath build.log
+          $buildExitCode = $LASTEXITCODE
+          if ($buildExitCode -ne 0) { exit $buildExitCode }
+
+      - name: Upload Windows build log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-authoritative-build-log
+          path: build.log
+          if-no-files-found: error
+
+      - name: Run supported regression tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety|connection_context_resolver|http_request_safety|crash_diagnostic_safety|settings_compatibility)' 2>&1 | Tee-Object -FilePath ctest.log
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
+      - name: Upload Windows test log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-authoritative-test-log
+          path: ctest.log
+          if-no-files-found: error
+
+      - name: Install Qv2ray-Z Release
+        shell: pwsh
+        run: |
           cmake --install build --config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
