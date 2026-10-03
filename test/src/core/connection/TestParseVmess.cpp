@@ -89,3 +89,32 @@ SCENARIO("Test Parse VMess V1 url", "[ParseVMessV1]")
         }
     }
 }
+
+TEST_CASE("Modern VMess parser does not retain query state across calls")
+{
+    QvTestApplication app;
+    const QString uuid = "40980939-f6bd-4b17-ad26-c2aed2f1b3fc";
+
+    QString firstAlias;
+    QString firstError;
+    const auto first = vmess_new::Deserialize(
+        "vmess://ws:40980939-f6bd-4b17-ad26-c2aed2f1b3fc-0@example.com:443?host=first.example&path=%2Ffirst#first",
+        &firstAlias, &firstError);
+    REQUIRE(firstError.isEmpty());
+    REQUIRE(firstAlias == "first");
+    REQUIRE(QJsonIO::GetValue(first, { "outbounds", 0, "streamSettings", "wsSettings", "headers", "Host" }) == "first.example");
+    REQUIRE(QJsonIO::GetValue(first, { "outbounds", 0, "streamSettings", "wsSettings", "path" }) == "/first");
+    REQUIRE(QJsonIO::GetValue(first, { "outbounds", 0, "settings", "vnext", 0, "users", 0, "id" }) == uuid);
+
+    QString secondAlias;
+    QString secondError;
+    const auto second = vmess_new::Deserialize(
+        "vmess://ws:40980939-f6bd-4b17-ad26-c2aed2f1b3fc-0@example.net:8443?host=second.example&path=%2Fsecond#second",
+        &secondAlias, &secondError);
+    REQUIRE(secondError.isEmpty());
+    REQUIRE(secondAlias == "second");
+    REQUIRE(QJsonIO::GetValue(second, { "outbounds", 0, "streamSettings", "wsSettings", "headers", "Host" }) == "second.example");
+    REQUIRE(QJsonIO::GetValue(second, { "outbounds", 0, "streamSettings", "wsSettings", "path" }) == "/second");
+    REQUIRE(QJsonIO::GetValue(second, { "outbounds", 0, "settings", "vnext", 0, "address" }) == "example.net");
+    REQUIRE(QJsonIO::GetValue(second, { "outbounds", 0, "settings", "vnext", 0, "port" }).toInt() == 8443);
+}

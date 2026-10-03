@@ -77,6 +77,12 @@ namespace Qv2ray::core::connection
             // its compatibility alias. Keep Qv2ray storage and share links on
             // `tcp`, while accepting either spelling on import.
             const auto type = linkType == "raw" ? QStringLiteral("tcp") : linkType;
+            const static QStringList supportedTransports{ "tcp", "http", "ws", "kcp", "quic", "grpc" };
+            if (!supportedTransports.contains(type))
+            {
+                *errMessage = QObject::tr("Unsupported VLESS transport: %1").arg(type);
+                return CONFIGROOT();
+            }
             if (type != "tcp")
                 QJsonIO::SetValue(stream, type, "network");
 

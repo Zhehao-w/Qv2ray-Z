@@ -216,4 +216,22 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(stream.network == "tcp");
         REQUIRE(stream.security == "tls");
     }
+
+    SECTION("Unsupported transports are rejected without returning a partial config")
+    {
+        const static auto url =
+            "vless://b0dd64e4-0fbd-4038-9139-d1f32a68a0dc@example.com:443?type=xhttp&security=reality&path=%2Fapi&host=cdn.example.com&mode=auto#Unsupported%20XHTTP";
+
+        const auto direct = vless::Deserialize(url, &alias, &errMessage);
+        REQUIRE(direct.isEmpty());
+        REQUIRE(errMessage.contains("Unsupported VLESS transport"));
+
+        alias.clear();
+        errMessage.clear();
+        QString groupName;
+        const auto converted = ConvertConfigFromString(url, &alias, &errMessage, &groupName);
+        REQUIRE(converted.isEmpty());
+        REQUIRE(errMessage.contains("Unsupported VLESS transport"));
+        REQUIRE(alias == "Unsupported XHTTP");
+    }
 }
