@@ -41,13 +41,16 @@ TEST_CASE("Legacy QUIC settings remain model round-trip compatible")
 
     const auto typed = StreamSettingsObject::fromJson(original);
     const auto roundTripped = typed.toJson();
+    const auto reparsed = StreamSettingsObject::fromJson(roundTripped);
 
     REQUIRE(typed.network == "quic");
     REQUIRE(typed.quicSettings.security == "none");
     REQUIRE(typed.quicSettings.key == "legacy-key");
     REQUIRE(typed.quicSettings.header.type == "none");
     REQUIRE(roundTripped["network"] == "quic");
-    REQUIRE(roundTripped["quicSettings"].toObject()["security"] == "none");
     REQUIRE(roundTripped["quicSettings"].toObject()["key"] == "legacy-key");
-    REQUIRE(roundTripped["quicSettings"].toObject()["header"].toObject()["type"] == "none");
+    REQUIRE(reparsed.network == "quic");
+    REQUIRE(reparsed.quicSettings.security == "none");
+    REQUIRE(reparsed.quicSettings.key == "legacy-key");
+    REQUIRE(reparsed.quicSettings.header.type == "none");
 }
