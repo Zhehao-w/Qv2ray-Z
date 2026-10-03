@@ -4,6 +4,9 @@
 #include "base/VLESSShareLinkOpaque.hpp"
 #include "core/handler/ConfigHandler.hpp"
 
+#include <QUrl>
+#include <QUrlQuery>
+
 namespace Qv2ray::core::connection
 {
     namespace serialization
@@ -29,17 +32,6 @@ namespace Qv2ray::core::connection
                 }
                 return true;
             };
-            const auto rejectedRemovedVlessTransport = [errMessage](const CONFIGROOT &conf)
-            {
-                const auto outbounds = conf.value("outbounds").toArray();
-                if (outbounds.isEmpty())
-                    return false;
-                const auto network = outbounds.first().toObject().value("streamSettings").toObject().value("network").toString("tcp");
-                if (network != "quic")
-                    return false;
-                *errMessage = QObject::tr("Unsupported VLESS transport: %1").arg(network);
-                return true;
-            };
 
             QList<std::pair<QString, CONFIGROOT>> connectionConf;
             if (link.startsWith("vmess://") && link.contains("@"))
@@ -55,8 +47,16 @@ namespace Qv2ray::core::connection
                 auto conf = vless::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
                     return {};
-                if (rejectedRemovedVlessTransport(conf))
+
+                const QUrl inboundUrl(link);
+                const QUrlQuery inboundQuery(inboundUrl);
+                const auto requestedTransport =
+                    inboundQuery.hasQueryItem("type") ? inboundQuery.queryItemValue("type") : QStringLiteral("tcp");
+                if (requestedTransport == QStringLiteral("quic"))
+                {
+                    *errMessage = QObject::tr("Unsupported VLESS transport: %1").arg(requestedTransport);
                     return {};
+                }
 
                 const auto opaqueQueryItems = Qv2ray::base::vless_share::ExtractOpaqueQueryItems(link);
                 if (!opaqueQueryItems.isEmpty())
