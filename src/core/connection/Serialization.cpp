@@ -29,6 +29,14 @@ namespace Qv2ray::core::connection
                 }
                 return true;
             };
+            const auto rejectedRemovedVlessTransport = [errMessage](const CONFIGROOT &conf)
+            {
+                const auto network = QJsonIO::GetValue(conf, { "outbounds", 0, "streamSettings", "network" }).toString("tcp");
+                if (network != "quic")
+                    return false;
+                *errMessage = QObject::tr("Unsupported VLESS transport: %1").arg(network);
+                return true;
+            };
 
             QList<std::pair<QString, CONFIGROOT>> connectionConf;
             if (link.startsWith("vmess://") && link.contains("@"))
@@ -43,6 +51,8 @@ namespace Qv2ray::core::connection
             {
                 auto conf = vless::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
+                    return {};
+                if (rejectedRemovedVlessTransport(conf))
                     return {};
 
                 const auto opaqueQueryItems = Qv2ray::base::vless_share::ExtractOpaqueQueryItems(link);
@@ -129,6 +139,9 @@ namespace Qv2ray::core::connection
             {
                 return "";
             }
+
+            if (type == "vless" && streamSettings.value("network").toString("tcp") == "quic")
+                return "(Unsupported VLESS transport)";
 
             if (type == "vmess")
             {
