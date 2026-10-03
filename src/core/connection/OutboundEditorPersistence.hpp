@@ -29,7 +29,7 @@ namespace Qv2ray::core::connection
     inline void PreserveUnknownNestedObjectFields(const QJsonObject &originalParent, QJsonObject &editedParent, const QString &field,
                                                   const QSet<QString> &managedFields)
     {
-        if (!originalParent.value(field).isObject() || !editedParent.value(field).isObject())
+        if (!originalParent.value(field).isObject())
             return;
 
         const auto originalObject = originalParent.value(field).toObject();
@@ -41,12 +41,12 @@ namespace Qv2ray::core::connection
     inline void PreserveTypedTransportHeaderFields(const QJsonObject &originalStream, QJsonObject &editedStream, const QString &settingsField,
                                                    const bool tcpHeader)
     {
-        if (!originalStream.value(settingsField).isObject() || !editedStream.value(settingsField).isObject())
+        if (!originalStream.value(settingsField).isObject())
             return;
 
         const auto originalSettings = originalStream.value(settingsField).toObject();
         auto editedSettings = editedStream.value(settingsField).toObject();
-        if (!originalSettings.value("header").isObject() || !editedSettings.value("header").isObject())
+        if (!originalSettings.value("header").isObject())
             return;
 
         const auto originalHeader = originalSettings.value("header").toObject();
