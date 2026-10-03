@@ -1,0 +1,50 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "outbounds": [
+    {
+      "tag": "reality-finalmask-validation",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "198.51.100.1",
+            "port": 443,
+            "users": [
+              {
+                "id": "00000000-0000-4000-8000-000000000005",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "reality-finalmask.example.invalid",
+          "fingerprint": "chrome",
+          "password": "44SnKuqOTdFW80xXTKNzb-EDSVln7KRa6ziLFXbvhV0",
+          "shortId": "0123456789abcdef",
+          "spiderX": "/"
+        },
+        "finalmask": {
+          "tcp": [
+            {
+              "type": "fragment",
+              "settings": {
+                "packets": "tlshello",
+                "length": "3-5",
+                "delay": "10-20",
+                "maxSplit": "2-4"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

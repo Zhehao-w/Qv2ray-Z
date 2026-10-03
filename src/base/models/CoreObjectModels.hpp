@@ -350,12 +350,13 @@ namespace Qv2ray::base::objects
         transfer::QuicObject quicSettings;
         transfer::gRPCObject grpcSettings;
         QJsonObject xhttpSettings;
+        QJsonObject finalmask;
         JSONSTRUCT_COMPARE(StreamSettingsObject, network, security, sockopt, //
                            tcpSettings, tlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings, grpcSettings,
-                           xhttpSettings)
+                           xhttpSettings, finalmask)
         JSONSTRUCT_REGISTER(StreamSettingsObject, F(network, security, sockopt),
                             F(tcpSettings, tlsSettings, realitySettings, kcpSettings, wsSettings, httpSettings, dsSettings, quicSettings,
-                              grpcSettings, xhttpSettings))
+                              grpcSettings, xhttpSettings, finalmask))
     };
 
     struct FakeDNSObject

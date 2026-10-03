@@ -5,8 +5,53 @@
 
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QUrl>
 
 #define QV_MODULE_NAME "VLESSImporter"
+
+namespace
+{
+    bool IsHexDigit(const QChar ch)
+    {
+        const auto value = ch.unicode();
+        return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f') || (value >= 'A' && value <= 'F');
+    }
+
+    bool DecodeQueryItemStrict(const QString &link, const QString &key, bool *found, QString *decoded)
+    {
+        *found = false;
+        decoded->clear();
+
+        const auto queryStart = link.indexOf('?');
+        if (queryStart < 0)
+            return true;
+        const auto fragmentStart = link.indexOf('#', queryStart + 1);
+        const auto rawQuery = fragmentStart < 0 ? link.mid(queryStart + 1) : link.mid(queryStart + 1, fragmentStart - queryStart - 1);
+
+        for (const auto &item : rawQuery.split('&'))
+        {
+            const auto equals = item.indexOf('=');
+            const auto rawKey = equals < 0 ? item : item.left(equals);
+            if (rawKey != key)
+                continue;
+            if (*found)
+                return false;
+
+            *found = true;
+            const auto rawValue = equals < 0 ? QString{} : item.mid(equals + 1);
+            for (int i = 0; i < rawValue.size(); ++i)
+            {
+                if (rawValue.at(i) != '%')
+                    continue;
+                if (i + 2 >= rawValue.size() || !IsHexDigit(rawValue.at(i + 1)) || !IsHexDigit(rawValue.at(i + 2)))
+                    return false;
+                i += 2;
+            }
+            *decoded = QUrl::fromPercentEncoding(rawValue.toUtf8());
+        }
+        return true;
+    }
+}
 
 namespace Qv2ray::core::connection
 {
@@ -189,6 +234,28 @@ namespace Qv2ray::core::connection
                     }
                     QJsonIO::SetValue(stream, extraDocument.object(), { "xhttpSettings", "extra" });
                 }
+            }
+
+            // FinalMask is an opaque stream-level object. Decode it directly
+            // from the original link so malformed percent escapes cannot be
+            // normalized away by QUrl/QUrlQuery before validation.
+            bool hasFinalMask = false;
+            QString finalMaskText;
+            if (!DecodeQueryItemStrict(str, QStringLiteral("fm"), &hasFinalMask, &finalMaskText))
+            {
+                *errMessage = QObject::tr("Invalid FinalMask query encoding");
+                return CONFIGROOT();
+            }
+            if (hasFinalMask)
+            {
+                QJsonParseError parseError;
+                const auto finalMaskDocument = QJsonDocument::fromJson(finalMaskText.toUtf8(), &parseError);
+                if (parseError.error != QJsonParseError::NoError || !finalMaskDocument.isObject())
+                {
+                    *errMessage = QObject::tr("Invalid FinalMask JSON object");
+                    return CONFIGROOT();
+                }
+                QJsonIO::SetValue(stream, finalMaskDocument.object(), "finalmask");
             }
 
             // tls-wise settings

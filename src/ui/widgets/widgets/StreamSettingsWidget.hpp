@@ -89,6 +89,7 @@ class StreamSettingsWidget
   private:
     bool SelectTransportEditor(const QString &network);
     void RefreshXhttpExtraText();
+    void RefreshFinalMaskText();
 
     QvMessageBusSlotDecl;
     StreamSettingsObject stream;
@@ -98,4 +99,5 @@ class StreamSettingsWidget
     QLineEdit *xhttpPathTxt = nullptr;
     QComboBox *xhttpModeCB = nullptr;
     QPlainTextEdit *xhttpExtraTxt = nullptr;
+    QPlainTextEdit *finalMaskTxt = nullptr;
 };

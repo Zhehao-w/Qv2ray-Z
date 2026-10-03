@@ -86,6 +86,52 @@ StreamSettingsWidget::StreamSettingsWidget(QWidget *parent) : QWidget(parent)
         RefreshXhttpExtraText();
     });
 
+    // FinalMask is intentionally an opaque stream-level object. Keep the UI
+    // limited to preview/edit/reset so Qv2ray does not duplicate Xray grammar.
+    auto *finalMaskPage = new QWidget(tabWidget);
+    finalMaskPage->setObjectName(QStringLiteral("finalMaskPage"));
+    auto *finalMaskLayout = new QFormLayout(finalMaskPage);
+    auto *finalMaskContainer = new QWidget(finalMaskPage);
+    auto *finalMaskContainerLayout = new QVBoxLayout(finalMaskContainer);
+    finalMaskContainerLayout->setContentsMargins(0, 0, 0, 0);
+    finalMaskTxt = new QPlainTextEdit(finalMaskContainer);
+    finalMaskTxt->setObjectName(QStringLiteral("finalMaskTxt"));
+    finalMaskTxt->setReadOnly(true);
+    finalMaskTxt->setLineWrapMode(QPlainTextEdit::NoWrap);
+    finalMaskTxt->setMinimumHeight(120);
+    finalMaskTxt->setTabChangesFocus(true);
+    const auto finalMaskToolTip =
+        tr("Advanced Xray traffic masking applied after transport/security. Paste a FinalMask JSON object supported by the bundled Xray core.");
+    finalMaskTxt->setToolTip(finalMaskToolTip);
+    finalMaskPage->setToolTip(finalMaskToolTip);
+    finalMaskContainerLayout->addWidget(finalMaskTxt);
+
+    auto *finalMaskButtons = new QHBoxLayout;
+    auto *editFinalMaskBtn = new QPushButton(tr("Edit"), finalMaskContainer);
+    editFinalMaskBtn->setObjectName(QStringLiteral("editFinalMaskBtn"));
+    auto *resetFinalMaskBtn = new QPushButton(tr("Reset"), finalMaskContainer);
+    resetFinalMaskBtn->setObjectName(QStringLiteral("resetFinalMaskBtn"));
+    finalMaskButtons->addWidget(editFinalMaskBtn);
+    finalMaskButtons->addWidget(resetFinalMaskBtn);
+    finalMaskButtons->addStretch();
+    finalMaskContainerLayout->addLayout(finalMaskButtons);
+    finalMaskLayout->addRow(tr("Configuration"), finalMaskContainer);
+    tabWidget->addTab(finalMaskPage, tr("FinalMask"));
+
+    QWidget::setTabOrder(finalMaskTxt, editFinalMaskBtn);
+    QWidget::setTabOrder(editFinalMaskBtn, resetFinalMaskBtn);
+
+    connect(editFinalMaskBtn, &QPushButton::clicked, this, [this]() {
+        JsonEditor editor(stream.finalmask, this);
+        stream.finalmask = editor.OpenEditor();
+        RefreshFinalMaskText();
+    });
+    connect(resetFinalMaskBtn, &QPushButton::clicked, this, [this]() {
+        stream.finalmask = QJsonObject{};
+        RefreshFinalMaskText();
+    });
+    RefreshFinalMaskText();
+
     QvMessageBusConnect(StreamSettingsWidget);
 }
 
@@ -147,6 +193,15 @@ void StreamSettingsWidget::RefreshXhttpExtraText()
         xhttpExtraTxt->setPlainText(tr("Invalid XHTTP extra: expected a JSON object"));
         RED(xhttpExtraTxt);
     }
+}
+
+void StreamSettingsWidget::RefreshFinalMaskText()
+{
+    if (stream.finalmask.isEmpty())
+        finalMaskTxt->setPlainText(tr("Disabled"));
+    else
+        finalMaskTxt->setPlainText(JsonToString(stream.finalmask));
+    BLACK(finalMaskTxt);
 }
 
 void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
@@ -245,6 +300,8 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
         xhttpModeCB->setCurrentText(stream.xhttpSettings.value("mode").toString("auto"));
         RefreshXhttpExtraText();
     }
+    // FinalMask
+    RefreshFinalMaskText();
     // SOCKOPT
     {
         tProxyCB->setCurrentText(stream.sockopt.tproxy);
