@@ -79,8 +79,10 @@ namespace Qv2ray::core::connection
         // StreamSettingsObject uses typed objects for several Xray settings.
         // Unknown keys inside those objects would otherwise be discarded by
         // fromJson() -> toJson(). Keep only keys outside the fields that the
-        // current model/editor owns, so explicit user edits and resets remain
-        // authoritative.
+        // current editor owns, so explicit user edits and resets remain
+        // authoritative. TLS certificates are intentionally not managed here:
+        // the current certificate editor is inactive, so preserve that array
+        // wholesale instead of rebuilding it through the narrower typed model.
         PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("sockopt"),
                                           { "mark", "tcpFastOpen", "tproxy", "tcpKeepAliveInterval" });
 
@@ -90,7 +92,7 @@ namespace Qv2ray::core::connection
             {
                 PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("tlsSettings"),
                                                   { "serverName", "fingerprint", "enableSessionResumption", "disableSystemRoot", "alpn",
-                                                    "pinnedPeerCertificateChainSha256", "certificates" });
+                                                    "pinnedPeerCertificateChainSha256" });
             }
             else if (editedSecurity == QStringLiteral("reality"))
             {

@@ -123,7 +123,12 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
           QJsonObject{ { "serverName", "old.example.com" },
                        { "minVersion", "1.3" },
                        { "cipherSuites", "TLS_AES_128_GCM_SHA256" },
-                       { "curvePreferences", QJsonArray{ "X25519MLKEM768" } } } },
+                       { "curvePreferences", QJsonArray{ "X25519MLKEM768" } },
+                       { "certificates",
+                         QJsonArray{ QJsonObject{ { "usage", "encipherment" },
+                                                  { "certificateFile", "cert.pem" },
+                                                  { "ocspStapling", 3600 },
+                                                  { "buildChain", true } } } } } },
         { "tcpSettings", QJsonObject{ { "header", QJsonObject{ { "type", "none" } } }, { "acceptProxyProtocol", true } } }
     };
 
@@ -147,6 +152,10 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
     REQUIRE(tls["minVersion"] == "1.3");
     REQUIRE(tls["cipherSuites"] == "TLS_AES_128_GCM_SHA256");
     REQUIRE(tls["curvePreferences"].toArray() == QJsonArray{ "X25519MLKEM768" });
+    const auto certificates = tls["certificates"].toArray();
+    REQUIRE(certificates.size() == 1);
+    REQUIRE(certificates.first().toObject()["ocspStapling"] == 3600);
+    REQUIRE(certificates.first().toObject()["buildChain"].toBool());
 
     const auto tcp = resultStream["tcpSettings"].toObject();
     REQUIRE(tcp["header"].toObject()["type"] == "http");
