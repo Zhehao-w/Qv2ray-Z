@@ -1,6 +1,7 @@
 #include "Serialization.hpp"
 
 #include "Generation.hpp"
+#include "base/VLESSShareLinkOpaque.hpp"
 #include "core/handler/ConfigHandler.hpp"
 
 namespace Qv2ray::core::connection
@@ -43,6 +44,14 @@ namespace Qv2ray::core::connection
                 auto conf = vless::Deserialize(link, aliasPrefix, errMessage);
                 if (!parsedConfigIsUsable(conf))
                     return {};
+
+                const auto opaqueQueryItems = Qv2ray::base::vless_share::ExtractOpaqueQueryItems(link);
+                if (!opaqueQueryItems.isEmpty())
+                {
+                    QJsonIO::SetValue(conf, opaqueQueryItems, "outbounds", 0, "streamSettings",
+                                      Qv2ray::base::vless_share::OpaqueQueryMetadataKey());
+                }
+
                 TLSOptionsFilter(conf);
                 connectionConf << std::pair{ *aliasPrefix, conf };
             }
@@ -140,6 +149,11 @@ namespace Qv2ray::core::connection
                 bool ok = false;
                 sharelink = PluginHost->SerializeOutbound(type, settings, streamSettings, alias, groupName, &ok);
                 Q_UNUSED(ok)
+                if (type == "vless")
+                {
+                    sharelink = Qv2ray::base::vless_share::AppendOpaqueQueryItems(
+                        sharelink, streamSettings.value(Qv2ray::base::vless_share::OpaqueQueryMetadataKey()).toArray());
+                }
             }
 
             return sharelink;

@@ -35,3 +35,14 @@ inline StreamTransportEditor StreamTransportEditorForNetwork(const QString &netw
         return StreamTransportEditor::Xhttp;
     return StreamTransportEditor::Invalid;
 }
+
+inline int StreamSecurityEditorIndexForValue(const QString &security)
+{
+    if (security.isEmpty() || security == "none")
+        return 0;
+    if (security == "tls")
+        return 1;
+    if (security == "reality")
+        return 2;
+    return -1;
+}

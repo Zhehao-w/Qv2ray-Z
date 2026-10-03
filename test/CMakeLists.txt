@@ -18,6 +18,7 @@ ADD_QV2RAY_TEST(parse_vmess_url src/core/connection/TestParseVmess.cpp)
 ADD_QV2RAY_TEST(parse_vless_url src/core/connection/TestParseVLESS.cpp)
 target_sources(parse_vless_url PRIVATE
     src/core/connection/TestVLESSEncryption.cpp
+    src/core/connection/TestVLESSOpaqueQuery.cpp
     src/core/connection/TestXHTTP.cpp
     src/core/connection/TestFinalMask.cpp
     src/core/connection/TestStreamTransportMapping.cpp
