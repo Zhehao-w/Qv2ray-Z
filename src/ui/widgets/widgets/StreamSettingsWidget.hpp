@@ -42,11 +42,6 @@ class StreamSettingsWidget
     void on_kcpUploadCapacSB_valueChanged(int arg1);
     void on_kcpWriteBufferSB_valueChanged(int arg1);
 
-    // QUIC
-    void on_quicHeaderTypeCB_currentIndexChanged(int arg1);
-    void on_quicKeyTxt_textEdited(const QString &arg1);
-    void on_quicSecurityCB_currentIndexChanged(int arg1);
-
     // TLS/REALITY
     void on_alpnTxt_textEdited(const QString &arg1);
     void on_enableSessionResumptionCB_stateChanged(int arg1);
