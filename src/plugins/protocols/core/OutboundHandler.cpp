@@ -2,6 +2,7 @@
 
 #include "3rdparty/QJsonStruct/QJsonIO.hpp"
 
+#include <QJsonDocument>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -94,6 +95,9 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
             query.addQueryItem("encryption", encryption);
 
         const auto network = QJsonIO::GetValue(objStream, "network").toString("tcp");
+        const static QStringList supportedTransports{ "tcp", "http", "ws", "kcp", "quic", "grpc", "xhttp" };
+        if (!supportedTransports.contains(network))
+            return "(Unsupported VLESS transport)";
         if (network != "tcp" || isVision)
             query.addQueryItem("type", network);
 
@@ -161,6 +165,22 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
             const auto multiMode = QJsonIO::GetValue(objStream, { "grpcSettings", "multiMode" }).toBool(false);
             if (multiMode)
                 query.addQueryItem("mode", "multi");
+        }
+        else if (network == "xhttp")
+        {
+            const auto xhttp = QJsonIO::GetValue(objStream, "xhttpSettings").toObject();
+            for (const auto &key : { QStringLiteral("host"), QStringLiteral("path"), QStringLiteral("mode") })
+            {
+                if (xhttp.contains(key))
+                    query.addQueryItem(key, xhttp.value(key).toString());
+            }
+            if (xhttp.contains("extra"))
+            {
+                if (!xhttp.value("extra").isObject())
+                    return "(Invalid XHTTP extra JSON object)";
+                const auto extra = QJsonDocument(xhttp.value("extra").toObject()).toJson(QJsonDocument::Compact);
+                query.addQueryItem("extra", QString::fromUtf8(extra));
+            }
         }
         // -------- TLS RELATED --------
         const auto tlsKey = security == "reality" ? "realitySettings" : "tlsSettings";
