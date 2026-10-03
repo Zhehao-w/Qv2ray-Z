@@ -17,6 +17,7 @@ ADD_QV2RAY_TEST(parse_ss_url src/core/connection/TestParseSS.cpp)
 ADD_QV2RAY_TEST(parse_vmess_url src/core/connection/TestParseVmess.cpp)
 ADD_QV2RAY_TEST(parse_vless_url src/core/connection/TestParseVLESS.cpp)
 target_sources(parse_vless_url PRIVATE
+    src/core/connection/TestVLESSEncryption.cpp
     src/core/connection/VLESSOutboundSerializerTestHelper.cpp
     src/core/connection/VLESSOutboundSerializerTestHelper.hpp
     ${CMAKE_SOURCE_DIR}/src/plugins/protocols/core/OutboundHandler.cpp)
