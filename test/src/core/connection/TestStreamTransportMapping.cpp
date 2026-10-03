@@ -14,3 +14,12 @@ TEST_CASE("Stream transport editor mapping is explicit and index independent")
     REQUIRE(StreamTransportEditorForNetwork("xhttp") == StreamTransportEditor::Xhttp);
     REQUIRE(StreamTransportEditorForNetwork("unknown") == StreamTransportEditor::Invalid);
 }
+
+TEST_CASE("Stream security editor mapping fails closed for unsupported values")
+{
+    REQUIRE(StreamSecurityEditorIndexForValue("none") == 0);
+    REQUIRE(StreamSecurityEditorIndexForValue("tls") == 1);
+    REQUIRE(StreamSecurityEditorIndexForValue("reality") == 2);
+    REQUIRE(StreamSecurityEditorIndexForValue("future-security") == -1);
+    REQUIRE(StreamSecurityEditorIndexForValue("") == -1);
+}

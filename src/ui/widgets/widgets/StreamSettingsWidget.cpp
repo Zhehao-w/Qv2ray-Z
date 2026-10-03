@@ -215,10 +215,12 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
         LOG("Unsupported Transport Type:", stream.network);
     // TLS and REALITY
     {
-        const static QMap<QString, int> securityIndexMap{ { "none", 0 }, { "tls", 1 }, { "reality", 2 } };
-        if (securityIndexMap.contains(stream.security))
-            securityTypeCB->setCurrentIndex(securityIndexMap[stream.security]);
-        else
+        const auto securityIndex = StreamSecurityEditorIndexForValue(stream.security);
+        {
+            const QSignalBlocker blocker(securityTypeCB);
+            securityTypeCB->setCurrentIndex(securityIndex);
+        }
+        if (securityIndex < 0)
             LOG("Unsupported Security Type:", stream.security);
 
         serverNameTxt->setText(stream.tlsSettings.serverName);
@@ -233,7 +235,7 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
         realityShortIdTxt->setText(stream.realitySettings.shortId);
         realityMldsa65VerifyTxt->setText(stream.realitySettings.mldsa65Verify);
         realitySpiderXTxt->setText(stream.realitySettings.spiderX);
-        on_securityTypeCB_currentIndexChanged(securityTypeCB->currentIndex());
+        on_securityTypeCB_currentIndexChanged(securityIndex);
     }
     // TCP
     {
@@ -495,8 +497,12 @@ void StreamSettingsWidget::on_transportCombo_currentIndexChanged(int arg1)
 
 void StreamSettingsWidget::on_securityTypeCB_currentIndexChanged(int arg1)
 {
-    stream.security = securityTypeCB->itemText(arg1).toLower();
-    const auto isReality = stream.security == "reality";
+    const auto selectedSecurity = arg1 >= 0 ? securityTypeCB->itemText(arg1).toLower() : QString{};
+    const auto hasSupportedSecurity = StreamSecurityEditorIndexForValue(selectedSecurity) == arg1 && arg1 >= 0;
+    if (hasSupportedSecurity)
+        stream.security = selectedSecurity;
+
+    const auto isReality = hasSupportedSecurity && stream.security == "reality";
     realityPasswordLabel->setVisible(isReality);
     realityPasswordTxt->setVisible(isReality);
     realityShortIdLabel->setVisible(isReality);
@@ -505,13 +511,13 @@ void StreamSettingsWidget::on_securityTypeCB_currentIndexChanged(int arg1)
     realityMldsa65VerifyTxt->setVisible(isReality);
     realitySpiderXLabel->setVisible(isReality);
     realitySpiderXTxt->setVisible(isReality);
-    enableSessionResumptionCB->setVisible(!isReality);
-    disableSystemRoot->setVisible(!isReality);
-    alpnLabel->setVisible(!isReality);
-    alpnTxt->setVisible(!isReality);
-    certificatesLabel->setVisible(!isReality);
-    openCertEditorBtn->setVisible(!isReality);
-    pinnedPeerCertificateChainSha256Btn->setVisible(!isReality);
+    enableSessionResumptionCB->setVisible(hasSupportedSecurity && !isReality);
+    disableSystemRoot->setVisible(hasSupportedSecurity && !isReality);
+    alpnLabel->setVisible(hasSupportedSecurity && !isReality);
+    alpnTxt->setVisible(hasSupportedSecurity && !isReality);
+    certificatesLabel->setVisible(hasSupportedSecurity && !isReality);
+    openCertEditorBtn->setVisible(hasSupportedSecurity && !isReality);
+    pinnedPeerCertificateChainSha256Btn->setVisible(hasSupportedSecurity && !isReality);
 }
 
 void StreamSettingsWidget::on_serverNameTxt_textEdited(const QString &arg1)
