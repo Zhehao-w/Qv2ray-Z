@@ -41,23 +41,11 @@ namespace Qv2ray::core::connection::generation::filters
         if (dnsRouteInTag.isEmpty())
             return;
 
-        const QJsonObject dnsRoutingRuleObj{ { "outboundTag", "dns-out" }, { "port", "53" }, { "type", "field" }, { "inboundTag", dnsRouteInTag } };
-
-        // DNS Outbound
-        QJsonIO::SetValue(root, dnsOutboundObj, "outbounds", root["outbounds"].toArray().count());
-        // DNS Route
-        auto _rules = QJsonIO::GetValue(root, "routing", "rules").toArray();
-        _rules.prepend(dnsRoutingRuleObj);
-        QJsonIO::SetValue(root, _rules, "routing", "rules");
-    }
-
-    void BypassBTFilter(CONFIGROOT &root)
-    {
-        static const QJsonObject bypassBTRuleObj{ { "protocol", QJsonArray{ "bittorrent" } },
-                                                  { "outboundTag", OUTBOUND_TAG_DIRECT },
+        const QJsonObject dnsRoutingRuleObj{ { "outboundTag", "dns-out" },
+                                                  { "outboundTag", "dns-out" },
                                                   { "type", "field" } };
         auto _rules = QJsonIO::GetValue(root, "routing", "rules").toArray();
-        _rules.prepend(bypassBTRuleObj);
+        _rules.prepend(dnsRoutingRuleObj);
         QJsonIO::SetValue(root, _rules, "routing", "rules");
     }
 
@@ -83,21 +71,21 @@ namespace Qv2ray::core::connection::generation::filters
                 QJsonIO::SetValue(root, tag, subKey, i, "tag");
             }
 
+            // Xray v26.3.27 rejects legacy mKCP header and seed fields.
+            // Strip them only from the final runtime copy for both inbounds and
+            // outbounds so persisted configurations keep their compatibility data.
+            const auto streamSettings = QJsonIO::GetValue(root, subKey, i, "streamSettings").toObject();
+            const auto network = streamSettings.value("network").toString();
+            const auto method = streamSettings.value("method").toString();
+            if (network == QStringLiteral("kcp") || network == QStringLiteral("mkcp") || method == QStringLiteral("kcp") ||
+                method == QStringLiteral("mkcp"))
+            {
+                QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "header");
+                QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "seed");
+            }
+
             if (subKey == QStringLiteral("outbounds"))
             {
-                // Xray v26.3.27 rejects legacy mKCP header and seed fields.
-                // Strip them only from the final runtime copy so persisted
-                // configurations keep their original compatibility data.
-                const auto streamSettings = QJsonIO::GetValue(root, subKey, i, "streamSettings").toObject();
-                const auto network = streamSettings.value("network").toString();
-                const auto method = streamSettings.value("method").toString();
-                if (network == QStringLiteral("kcp") || network == QStringLiteral("mkcp") || method == QStringLiteral("kcp") ||
-                    method == QStringLiteral("mkcp"))
-                {
-                    QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "header");
-                    QJsonIO::SetValue(root, QJsonIO::Undefined, subKey, i, "streamSettings", "kcpSettings", "seed");
-                }
-
                 // Opaque VLESS share-link query items are Qv2ray-Z persistence
                 // metadata, not Xray streamSettings. The final runtime pass reaches
                 // both simple and complex outbounds, so strip the reserved key here
