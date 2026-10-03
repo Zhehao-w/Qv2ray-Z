@@ -17,10 +17,6 @@ StreamSettingsWidget::StreamSettingsWidget(QWidget *parent) : QWidget(parent)
 {
     setupUi(this);
 
-    const auto removedQuicIndex = transportCombo->findText(QStringLiteral("quic"), Qt::MatchExactly);
-    if (removedQuicIndex >= 0)
-        transportCombo->removeItem(removedQuicIndex);
-
     // XHTTP is maintained programmatically so the transport/page relationship
     // is explicit instead of depending on matching Designer indices.
     xhttpStackPage = new QWidget(v2rayStackView);
@@ -284,12 +280,6 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
     {
         dsPathTxt->setText(stream.dsSettings.path);
     }
-    // QUIC compatibility state is still loaded so legacy configs can round-trip unchanged.
-    {
-        quicKeyTxt->setText(stream.quicSettings.key);
-        quicSecurityCB->setCurrentText(stream.quicSettings.security);
-        quicHeaderTypeCB->setCurrentText(stream.quicSettings.header.type);
-    }
     // gRPC
     {
         grpcServiceNameTxt->setText(stream.grpcSettings.serviceName);
@@ -383,21 +373,6 @@ void StreamSettingsWidget::on_tcpFastOpenCB_stateChanged(int arg1)
 void StreamSettingsWidget::on_tProxyCB_currentIndexChanged(int arg1)
 {
     stream.sockopt.tproxy = tProxyCB->itemText(arg1);
-}
-
-void StreamSettingsWidget::on_quicSecurityCB_currentIndexChanged(int arg1)
-{
-    stream.quicSettings.security = quicSecurityCB->itemText(arg1);
-}
-
-void StreamSettingsWidget::on_quicKeyTxt_textEdited(const QString &arg1)
-{
-    stream.quicSettings.key = arg1;
-}
-
-void StreamSettingsWidget::on_quicHeaderTypeCB_currentIndexChanged(int arg1)
-{
-    stream.quicSettings.header.type = quicHeaderTypeCB->itemText(arg1);
 }
 
 void StreamSettingsWidget::on_tcpHeaderTypeCB_currentIndexChanged(int arg1)
