@@ -24,6 +24,7 @@ target_sources(parse_vless_url PRIVATE
     src/core/connection/TestStreamTransportMapping.cpp
     src/core/connection/TestRemovedQuicTransport.cpp
     src/core/connection/TestRemovedHttpTransport.cpp
+    src/core/connection/TestRemovedKcpLegacyFields.cpp
     src/core/connection/VLESSOutboundSerializerTestHelper.cpp
     src/core/connection/VLESSOutboundSerializerTestHelper.hpp
     ${CMAKE_SOURCE_DIR}/src/plugins/protocols/core/OutboundHandler.cpp)
