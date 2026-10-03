@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "xray": {
     "version": "v26.3.27",
     "assets": {
@@ -10,6 +10,28 @@
       "windows-x64": {
         "name": "Xray-windows-64.zip",
         "sha256": "d004c39288ce9ada487c6f398c7c545f7d749e44bdfdd59dbc9f865afba4e1ad"
+      }
+    }
+  },
+  "geo": {
+    "rules": {
+      "repository": "Loyalsoldier/v2ray-rules-dat",
+      "version": "202610022207",
+      "assets": {
+        "geoip.dat": {
+          "sha256": "391b522361c52804e486a98b53d97f3d9c1d3e4e4217bb34954774a0b456b9fd"
+        },
+        "geosite.dat": {
+          "sha256": "5a4ad03ee622a2e4703bb9c1647f22e60157aba04bb013025a937f27da49e007"
+        }
+      }
+    },
+    "cn_private": {
+      "repository": "Loyalsoldier/geoip",
+      "version": "202610011501",
+      "asset": {
+        "name": "geoip-only-cn-private.dat",
+        "sha256": "8a5c9008467177dee6bed2c20d9952e7a01566977465daa92402e3fb517e7c8b"
       }
     }
   },
