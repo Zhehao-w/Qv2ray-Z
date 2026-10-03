@@ -65,7 +65,19 @@ jobs:
 
       - name: Verify pinned release inputs
         shell: pwsh
-        run: python .github/scripts/verify-release-inputs.py
+        run: |
+          $output = & python .github/scripts/verify-release-inputs.py 2>&1
+          $verifyExitCode = $LASTEXITCODE
+          $output | Tee-Object -FilePath verify-release-inputs.log
+          if ($verifyExitCode -ne 0) { exit $verifyExitCode }
+
+      - name: Upload release-input verifier log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-input-verifier-log
+          path: verify-release-inputs.log
+          if-no-files-found: error
 
       - name: Install Qt 5.15.2
         uses: jurplel/install-qt-action/action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1 internal action
