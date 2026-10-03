@@ -139,7 +139,7 @@ TEST_CASE("Outbound editor persistence preserves unmodeled fields inside active 
         { "tlsSettings", QJsonObject{ { "serverName", "new.example.com" } } },
         { "tcpSettings", QJsonObject{ { "header", QJsonObject{ { "type", "http" } } } } }
     };
-    auto edited = GenerateOutboundEntry("proxy", "vless", {}, editedStream);
+    auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
 
     const auto resultStream = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject();
     const auto sockopt = resultStream["sockopt"].toObject();
@@ -177,7 +177,7 @@ TEST_CASE("Outbound editor persistence does not carry security-specific unknown 
         { "security", "reality" },
         { "realitySettings", QJsonObject{ { "serverName", "new.example.com" }, { "password", "key" } } }
     };
-    auto edited = GenerateOutboundEntry("proxy", "vless", {}, editedStream);
+    auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
 
     const auto resultStream = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject();
     REQUIRE(resultStream["security"] == "reality");
@@ -197,7 +197,7 @@ TEST_CASE("Outbound editor persistence drops opaque VLESS query metadata across 
     };
 
     const QJsonObject editedStream{ { "network", "tcp" }, { "security", "tls" } };
-    auto edited = GenerateOutboundEntry("proxy", "vless", {}, editedStream);
+    auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
     const auto resultStream = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject();
 
     REQUIRE_FALSE(resultStream.contains(Qv2ray::base::vless_share::OpaqueQueryMetadataKey()));
