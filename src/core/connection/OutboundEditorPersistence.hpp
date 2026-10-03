@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base/Qv2rayBase.hpp"
+#include "base/VLESSShareLinkOpaque.hpp"
 
 namespace Qv2ray::core::connection
 {
@@ -55,17 +56,24 @@ namespace Qv2ray::core::connection
         if (originalNetwork != editedNetwork)
             return edited;
 
+        const auto originalSecurity = NormalizedStreamSecurity(originalStream);
+        const auto editedSecurity = NormalizedStreamSecurity(editedStream);
+
         // These are the stream-level fields represented by StreamSettingsObject.
         // Preserve only fields outside that model. When the user switches the
         // transport, do not carry unknown settings from the old transport into
-        // the new one.
+        // the new one. Opaque share-link query metadata is also discarded on an
+        // explicit security switch because an unknown item may be security-specific.
         const QSet<QString> managedStreamFields{ "network",       "security",      "sockopt",       "tlsSettings",  "realitySettings",
                                                  "tcpSettings",   "kcpSettings",   "wsSettings",    "httpSettings", "dsSettings",
                                                  "quicSettings",  "grpcSettings",  "xhttpSettings", "finalmask" };
         for (auto it = originalStream.constBegin(); it != originalStream.constEnd(); ++it)
         {
-            if (!managedStreamFields.contains(it.key()))
-                editedStream.insert(it.key(), it.value());
+            if (managedStreamFields.contains(it.key()))
+                continue;
+            if (it.key() == Qv2ray::base::vless_share::OpaqueQueryMetadataKey() && originalSecurity != editedSecurity)
+                continue;
+            editedStream.insert(it.key(), it.value());
         }
 
         // StreamSettingsObject uses typed objects for several Xray settings.
@@ -76,8 +84,6 @@ namespace Qv2ray::core::connection
         PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("sockopt"),
                                           { "mark", "tcpFastOpen", "tproxy", "tcpKeepAliveInterval" });
 
-        const auto originalSecurity = NormalizedStreamSecurity(originalStream);
-        const auto editedSecurity = NormalizedStreamSecurity(editedStream);
         if (originalSecurity == editedSecurity)
         {
             if (editedSecurity == QStringLiteral("tls"))

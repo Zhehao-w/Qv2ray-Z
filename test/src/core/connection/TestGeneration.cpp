@@ -175,3 +175,21 @@ TEST_CASE("Outbound editor persistence does not carry security-specific unknown 
     REQUIRE_FALSE(resultStream["tlsSettings"].toObject().contains("minVersion"));
     REQUIRE(resultStream["realitySettings"].toObject()["password"] == "key");
 }
+
+TEST_CASE("Outbound editor persistence drops opaque VLESS query metadata across a security switch")
+{
+    OUTBOUND original;
+    original["protocol"] = "vless";
+    original["streamSettings"] = QJsonObject{
+        { "network", "tcp" },
+        { "security", "reality" },
+        { Qv2ray::base::vless_share::OpaqueQueryMetadataKey(),
+          QJsonArray{ QJsonObject{ { "key", "futureRealityOption" }, { "value", "keep-only-with-reality" } } } }
+    };
+
+    const QJsonObject editedStream{ { "network", "tcp" }, { "security", "tls" } };
+    auto edited = GenerateOutboundEntry("proxy", "vless", {}, editedStream);
+    const auto resultStream = PreserveUneditedOutboundFields(original, edited)["streamSettings"].toObject();
+
+    REQUIRE_FALSE(resultStream.contains(Qv2ray::base::vless_share::OpaqueQueryMetadataKey()));
+}
