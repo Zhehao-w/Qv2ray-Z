@@ -1,8 +1,8 @@
 #include "base/Qv2rayBaseApplication.hpp"
 using namespace Qv2ray;
-int fakeArgc = 1;
-char fakeArgv0[] = "qv2ray-test";
-char *fakeArgv[]{ fakeArgv0, nullptr };
+inline int fakeArgc = 1;
+inline char fakeArgv0[] = "qv2ray-test";
+inline char *fakeArgv[]{ fakeArgv0, nullptr };
 
 class QvTestApplication
     : public QCoreApplication
@@ -15,6 +15,6 @@ class QvTestApplication
     virtual MessageOpt MessageBoxAsk(QWidget *, const QString &, const QString &, const QList<MessageOpt> &) override
     {
         return {};
-    };
+    }
     virtual void OpenURL(const QString &) override{};
 };
