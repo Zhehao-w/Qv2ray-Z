@@ -146,11 +146,11 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
 
                 const auto key = QJsonIO::GetValue(objStream, { "quicSettings", "key" }).toString();
                 query.addQueryItem("key", QUrl::toPercentEncoding(key));
-
-                const auto headerType = QJsonIO::GetValue(objStream, { "quicSettings", "header", "type" }).toString("none");
-                if (headerType != "none")
-                    query.addQueryItem("headerType", headerType);
             }
+
+            const auto headerType = QJsonIO::GetValue(objStream, { "quicSettings", "header", "type" }).toString("none");
+            if (headerType != "none")
+                query.addQueryItem("headerType", headerType);
         }
         else if (network == "grpc")
         {

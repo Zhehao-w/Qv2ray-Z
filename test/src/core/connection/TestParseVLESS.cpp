@@ -235,3 +235,38 @@ TEST_CASE("Test VLESS URL Parsing")
         REQUIRE(alias == "Unsupported XHTTP");
     }
 }
+
+TEST_CASE("VLESS QUIC header type round trips independently of QUIC encryption")
+{
+    QvTestApplication app;
+    QJsonObject settings;
+    QJsonIO::SetValue(settings, "example.com", { "vnext", 0, "address" });
+    QJsonIO::SetValue(settings, 443, { "vnext", 0, "port" });
+    QJsonIO::SetValue(settings, "b0dd64e4-0fbd-4038-9139-d1f32a68a0dc", { "vnext", 0, "users", 0, "id" });
+    QJsonIO::SetValue(settings, "none", { "vnext", 0, "users", 0, "encryption" });
+
+    StreamSettingsObject stream;
+    stream.network = "quic";
+    stream.quicSettings.security = "none";
+    stream.quicSettings.header.type = "wireguard";
+
+    const auto link = SerializeVLESSOutboundForTest("roundtrip", settings, stream.toJson());
+    const QUrlQuery query{ QUrl(link) };
+    INFO("Serialized link: " << link.toStdString());
+    REQUIRE(query.queryItemValue("type") == "quic");
+    REQUIRE(!query.hasQueryItem("quicSecurity"));
+    REQUIRE(!query.hasQueryItem("key"));
+    REQUIRE(query.queryItemValue("headerType") == "wireguard");
+
+    QString alias;
+    QString error;
+    const auto result = vless::Deserialize(link, &alias, &error);
+    REQUIRE(error.isEmpty());
+    REQUIRE(alias == "roundtrip");
+    const auto outbound = result["outbounds"].toArray().first().toObject();
+    const auto parsed = StreamSettingsObject::fromJson(outbound["streamSettings"]);
+    REQUIRE(parsed.network == "quic");
+    REQUIRE(parsed.quicSettings.security == "none");
+    REQUIRE(parsed.quicSettings.key.isEmpty());
+    REQUIRE(parsed.quicSettings.header.type == "wireguard");
+}

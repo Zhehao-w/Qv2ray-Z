@@ -107,7 +107,8 @@ namespace Qv2ray::core::connection
                 {
                     stream.quicSettings.security = getQueryValue("security", "none");
                     stream.quicSettings.key = getQueryValue("key", "");
-                    stream.quicSettings.header.type = getQueryValue("type", "none");
+                    const auto headerKey = query.hasQueryItem("type") ? QStringLiteral("type") : QStringLiteral("headers");
+                    stream.quicSettings.header.type = getQueryValue(headerKey, "none");
                 }
                 else if (net == "grpc")
                 {
@@ -175,7 +176,7 @@ namespace Qv2ray::core::connection
                 if (!stream.quicSettings.key.isEmpty())
                     query.addQueryItem("key", stream.quicSettings.key);
                 if (!stream.quicSettings.header.type.isEmpty() && stream.quicSettings.header.type != "none")
-                    query.addQueryItem("headers", stream.quicSettings.header.type);
+                    query.addQueryItem("type", stream.quicSettings.header.type);
             }
             else if (stream.network == "grpc")
             {
