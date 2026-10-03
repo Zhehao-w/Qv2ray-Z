@@ -17,6 +17,10 @@ StreamSettingsWidget::StreamSettingsWidget(QWidget *parent) : QWidget(parent)
 {
     setupUi(this);
 
+    const auto removedQuicIndex = transportCombo->findText(QStringLiteral("quic"), Qt::MatchExactly);
+    if (removedQuicIndex >= 0)
+        transportCombo->removeItem(removedQuicIndex);
+
     // XHTTP is maintained programmatically so the transport/page relationship
     // is explicit instead of depending on matching Designer indices.
     xhttpStackPage = new QWidget(v2rayStackView);
@@ -161,7 +165,6 @@ bool StreamSettingsWidget::SelectTransportEditor(const QString &network)
         case StreamTransportEditor::WebSocket: page = wsStackPage; break;
         case StreamTransportEditor::Kcp: page = mKCPStackPage; break;
         case StreamTransportEditor::DomainSocket: page = dsStackPage; break;
-        case StreamTransportEditor::Quic: page = quicStackPage; break;
         case StreamTransportEditor::Grpc: page = grpcStackPage; break;
         case StreamTransportEditor::Xhttp: page = xhttpStackPage; break;
         case StreamTransportEditor::Invalid: break;
@@ -281,7 +284,7 @@ void StreamSettingsWidget::SetStreamObject(const StreamSettingsObject &sso)
     {
         dsPathTxt->setText(stream.dsSettings.path);
     }
-    // QUIC
+    // QUIC compatibility state is still loaded so legacy configs can round-trip unchanged.
     {
         quicKeyTxt->setText(stream.quicSettings.key);
         quicSecurityCB->setCurrentText(stream.quicSettings.security);
