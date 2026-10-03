@@ -71,19 +71,33 @@ for data in "${assets[@]}"; do
         fi
     fi
 
-    echo "Downloading pinned Qv2ray-deps asset: $NAME (asset id $ASSET_ID)"
-    declare -a asset_headers=(
-        -H 'Accept: application/octet-stream'
-        -H 'X-GitHub-Api-Version: 2022-11-28'
-    )
-    if [[ -n "$GITHUB_API_TOKEN" ]]; then
-        asset_headers+=( -H "Authorization: Bearer $GITHUB_API_TOKEN" )
+    ARCHIVE="$DOWNLOAD_DIR/$NAME"
+    if [[ -f "$ARCHIVE" ]]; then
+        ACTUAL_SIZE="$(wc -c < "$ARCHIVE" | tr -d '[:space:]')"
+        if [[ "$ACTUAL_SIZE" == "$API_SIZE" ]]; then
+            echo "Using cached pinned Qv2ray-deps asset: $NAME (asset id $ASSET_ID)"
+        else
+            echo "Cached Qv2ray-deps asset size mismatch for $NAME; downloading a fresh copy" >&2
+            rm -f "$ARCHIVE"
+        fi
     fi
-    curl -fL --retry 3 --retry-all-errors \
-        "${asset_headers[@]}" \
-        "https://api.github.com/repos/Qv2ray/Qv2ray-deps/releases/assets/$ASSET_ID" \
-        -o "$DOWNLOAD_DIR/$NAME"
-    ACTUAL_SIZE="$(wc -c < "$DOWNLOAD_DIR/$NAME" | tr -d '[:space:]')"
+
+    if [[ ! -f "$ARCHIVE" ]]; then
+        echo "Downloading pinned Qv2ray-deps asset: $NAME (asset id $ASSET_ID)"
+        declare -a asset_headers=(
+            -H 'Accept: application/octet-stream'
+            -H 'X-GitHub-Api-Version: 2022-11-28'
+        )
+        if [[ -n "$GITHUB_API_TOKEN" ]]; then
+            asset_headers+=( -H "Authorization: Bearer $GITHUB_API_TOKEN" )
+        fi
+        curl -fL --retry 3 --retry-all-errors \
+            "${asset_headers[@]}" \
+            "https://api.github.com/repos/Qv2ray/Qv2ray-deps/releases/assets/$ASSET_ID" \
+            -o "$ARCHIVE"
+    fi
+
+    ACTUAL_SIZE="$(wc -c < "$ARCHIVE" | tr -d '[:space:]')"
     if [[ "$ACTUAL_SIZE" != "$API_SIZE" ]]; then
         echo "Downloaded size mismatch for $NAME: expected $API_SIZE, got $ACTUAL_SIZE" >&2
         exit 1

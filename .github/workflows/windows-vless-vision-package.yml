@@ -103,15 +103,14 @@ jobs:
           aqtversion: '==3.3.0'
           py7zrversion: '==1.0.0'
 
-      - name: Restore pinned Windows dependency bundle
+      - name: Restore pinned Windows dependency archives
         id: qv2ray-deps-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: libs/x64-windows
+          path: libs/deps/downloaded
           key: qv2ray-deps-windows-x64-${{ hashFiles('.github/release-dependencies.json', 'libs/setup-libs.sh') }}
 
-      - name: Download pinned historical Qv2ray Windows dependencies
-        if: steps.qv2ray-deps-cache.outputs.cache-hit != 'true'
+      - name: Prepare pinned historical Qv2ray Windows dependencies
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
