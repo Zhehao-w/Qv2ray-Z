@@ -131,7 +131,7 @@ void GroupManager::onRCMExportConnectionTriggered()
             // Apply export filter
             exportConnectionFilter(root);
             //
-            if (filePath.endsWith(".json"))
+            if (!filePath.endsWith(".json", Qt::CaseInsensitive))
             {
                 filePath += ".json";
             }
