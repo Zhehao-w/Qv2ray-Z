@@ -3,6 +3,7 @@
 #include "base/models/QvComplexConfigModels.hpp"
 #include "core/CoreUtils.hpp"
 #include "core/connection/Generation.hpp"
+#include "core/connection/RoutingJsonPreservation.hpp"
 #include "core/handler/ConfigHandler.hpp"
 #include "utils/QvHelpers.hpp"
 
@@ -10,6 +11,14 @@
 
 namespace Qv2ray::core::handler
 {
+    namespace
+    {
+        QJsonValue MergeEditedRouteSettings(const QJsonValue &original, const QJsonValue &baseline, const QJsonValue &current)
+        {
+            return Qv2ray::core::connection::routing_json::MergeEditedRouteSettings(original, baseline, current);
+        }
+    } // namespace
+
     RouteHandler::RouteHandler(QObject *parent) : QObject(parent)
     {
         const auto routesPath = QV2RAY_CONFIG_DIR + "routes.json";
@@ -58,7 +67,12 @@ namespace Qv2ray::core::handler
 
         auto routingObject = routeStorageObject;
         for (const auto &key : configs.keys())
-            routingObject[key.toString()] = configs[key].toJson();
+        {
+            const auto original = routeStorageObject.value(key.toString());
+            const auto current = configs[key].toJson();
+            const auto baseline = GroupRoutingConfig::fromJson(original.toObject()).toJson();
+            routingObject[key.toString()] = original.isUndefined() ? current : MergeEditedRouteSettings(original, baseline, current);
+        }
 
         QString error;
         if (!route_storage::SaveRouteStorage(QV2RAY_CONFIG_DIR + "routes.json", routeStorageState, routingObject, &error))
@@ -243,6 +257,18 @@ namespace Qv2ray::core::handler
         return result;
     }
 
+    std::optional<QString> RouteHandler::GetRuntimeConfigError(const CONFIGROOT &root) const
+    {
+        if (route_storage::IsRouteStorageWritable(routeStorageState))
+            return std::nullopt;
+        // Complex configs still depend on group DNS if they do not supply their own.
+        if (IsComplexConfig(root) && root.value("dns").isObject() && !root.value("dns").toObject().isEmpty())
+            return std::nullopt;
+        return tr("Cannot generate the connection configuration because routes.json is invalid or unreadable. "
+                  "Repair or restore the file and restart Qv2ray-Z. The original file has been preserved.\n\n%1")
+            .arg(routeStorageError);
+    }
+
     CONFIGROOT RouteHandler::GenerateFinalConfig(const ConnectionGroupPair &p, bool api) const
     {
         return GenerateFinalConfig(ConnectionManager->GetConnectionRoot(p.connectionId), ConnectionManager->GetGroupRoutingId(p.groupId), api);
@@ -253,6 +279,11 @@ namespace Qv2ray::core::handler
     // We need copy construct here
     CONFIGROOT RouteHandler::GenerateFinalConfig(CONFIGROOT root, const GroupRoutingId &routingId, bool hasAPI) const
     {
+        if (const auto error = GetRuntimeConfigError(root); error)
+        {
+            LOG(*error);
+            return CONFIGROOT{};
+        }
         const auto &config = configs.contains(routingId) ? configs[routingId] : GlobalConfig.defaultRouteConfig;
         //
         const auto &connConf = config.overrideConnectionConfig ? config.connectionConfig : GlobalConfig.defaultRouteConfig.connectionConfig;

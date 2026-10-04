@@ -145,12 +145,15 @@ jobs:
       - name: Configure Qv2ray-Z with regression tests
         shell: pwsh
         run: |
+          $runRoutingUiSafety = ("${{ github.event_name }}" -eq "workflow_dispatch") -or ([int]"${{ github.run_attempt }}" -gt 1)
+          $routingUiSafety = if ($runRoutingUiSafety) { "ON" } else { "OFF" }
           cmake -S . -B build -G Ninja `
             -DBUILD_TESTING=ON `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_INSTALL_PREFIX="$PWD/build/deployment" `
             -DQV2RAY_AUTO_DEPLOY=OFF `
             -DQV2RAY_USE_V5_CORE=ON `
+            -DQV2RAY_BUILD_ROUTING_UI_SAFETY="$routingUiSafety" `
             -DCURL_INCLUDE_DIR="$env:CURL_INCLUDE_DIR" `
             -DCURL_LIBRARY="$env:CURL_LIBRARY"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -171,6 +174,23 @@ jobs:
           path: build.log
           if-no-files-found: error
 
+      - name: Build routing UI safety regression
+        id: build-routing-ui-safety
+        if: github.event_name == 'workflow_dispatch' || github.run_attempt > 1
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target routing_ui_safety --parallel 2>&1 | Tee-Object -FilePath routing-ui-build.log
+          $buildExitCode = $LASTEXITCODE
+          if ($buildExitCode -ne 0) { exit $buildExitCode }
+
+      - name: Upload routing UI build log on failure
+        if: failure() && steps.build-routing-ui-safety.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-routing-ui-build-log
+          path: routing-ui-build.log
+          if-no-files-found: error
+
       - name: Run supported regression tests
         id: run-regressions
         shell: pwsh
@@ -185,6 +205,23 @@ jobs:
         with:
           name: windows-authoritative-test-log
           path: ctest.log
+          if-no-files-found: error
+
+      - name: Run routing UI safety regression
+        id: run-routing-ui-safety
+        if: github.event_name == 'workflow_dispatch' || github.run_attempt > 1
+        shell: pwsh
+        run: |
+          ctest --test-dir build --output-on-failure -C Release -R '^QV2RAY_TEST_routing_ui_safety$' 2>&1 | Tee-Object -FilePath routing-ui-safety.log
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
+      - name: Upload routing UI test log on failure
+        if: failure() && steps.run-routing-ui-safety.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-routing-ui-test-log
+          path: routing-ui-safety.log
           if-no-files-found: error
 
       - name: Install Qv2ray-Z Release

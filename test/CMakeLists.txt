@@ -51,3 +51,23 @@ target_sources(data_safety PRIVATE
 ADD_QV2RAY_TEST(connection_context_resolver src/core/handler/TestConnectionContextResolver.cpp)
 ADD_QV2RAY_TEST(http_request_safety src/utils/TestHTTPRequestHelper.cpp)
 ADD_QV2RAY_TEST(crash_diagnostic_safety src/utils/TestDiagnosticSafety.cpp)
+
+# This target compiles most of the UI again. Keep it out of regular commit CI and
+# enable it only for explicit UI validation.
+option(QV2RAY_BUILD_ROUTING_UI_SAFETY "Build the full routing UI safety regression target" OFF)
+if(QV2RAY_BUILD_ROUTING_UI_SAFETY)
+    find_package(Qt5 REQUIRED COMPONENTS Test)
+    ADD_QV2RAY_TEST(routing_ui_safety src/ui/widgets/TestRoutingUiSafety.cpp)
+    target_sources(routing_ui_safety PRIVATE
+        ${QV2RAY_UI_SOURCES}
+        ${QV2RAY_PLATFORM_SOURCES}
+        ${QV2RAY_QRC_RESOURCES})
+    target_include_directories(routing_ui_safety PRIVATE ${QNODEEDITOR_INCLUDE_PATH})
+    target_link_libraries(routing_ui_safety PRIVATE
+        Qt5::Test ${QNODEEDITOR_LIBRARY} ${QV2RAY_PLATFORM_LIBS} ${QV2RAY_QRENCODE_LIBRARY})
+    set_tests_properties(QV2RAY_TEST_routing_ui_safety PROPERTIES TIMEOUT 60)
+    if(NOT WIN32)
+        set_tests_properties(QV2RAY_TEST_routing_ui_safety PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    endif()
+endif()

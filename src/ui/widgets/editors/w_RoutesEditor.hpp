@@ -78,6 +78,7 @@ class RouteEditor
     bool routingEditingSupported = true;
     QString routingUnsupportedReason;
     QString domainStrategy;
+    QJsonObject auxiliaryBaseline;
     //
     CONFIGROOT root;
     CONFIGROOT original;

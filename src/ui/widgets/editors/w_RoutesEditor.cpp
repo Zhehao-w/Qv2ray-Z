@@ -112,18 +112,31 @@ RouteEditor::RouteEditor(QJsonObject connection, QWidget *parent) : QvDialog("Ro
         routingEditingSupported = IsGraphicalRoutingStateSupported(root.value("routing").toObject(), &routingUnsupportedReason);
     }
     nodeDispatcher->LoadFullConfig(root);
-    dnsWidget->SetDNSObject(DNSObject::fromJson(root["dns"].toObject()), FakeDNSObject::fromJson(root["fakedns"].toObject()));
+    dnsWidget->SetDNSObject(DNSObject{}, FakeDNSObject::fromJson(root.value("fakedns").toObject()));
+    dnsWidget->SetDNSJson(root.value("dns"));
+    if (root.contains("dns") && !root.value("dns").isObject())
+        dnsWidget->setEnabled(false);
+    if (root.contains("fakedns") && !root.value("fakedns").isObject())
+    {
+        dnsWidget->findChild<QWidget *>("fakeDNSIPPool")->setEnabled(false);
+        dnsWidget->findChild<QWidget *>("fakeDNSIPPoolSize")->setEnabled(false);
+    }
     //
-    domainStrategy = root["routing"].toObject()["domainStrategy"].toString();
+    domainStrategy = root.value("routing").toObject()["domainStrategy"].toString();
     domainStrategyCombo->setCurrentText(domainStrategy);
     //
     // Set default outboung combo text AFTER adding all outbounds.
-    defaultOutboundTag = getTag(OUTBOUND(root["outbounds"].toArray().first().toObject()));
+    defaultOutboundTag = getTag(OUTBOUND(root.value("outbounds").toArray().first().toObject()));
     defaultOutboundCombo->setCurrentText(defaultOutboundTag);
     //
-    bfListenIPTxt->setText(root["browserForwarder"].toObject()["listenAddr"].toString());
-    bfListenPortTxt->setValue(root["browserForwarder"].toObject()["listenPort"].toInt());
-    obSubjectSelectorTxt->setPlainText(root["observatory"].toObject()["subjectSelector"].toVariant().toStringList().join(NEWLINE));
+    bfListenIPTxt->setText(root.value("browserForwarder").toObject()["listenAddr"].toString());
+    bfListenPortTxt->setValue(root.value("browserForwarder").toObject()["listenPort"].toInt());
+    obSubjectSelectorTxt->setPlainText(root.value("observatory").toObject()["subjectSelector"].toVariant().toStringList().join(NEWLINE));
+
+    auxiliaryBaseline = { { "fakedns", dnsWidget->GetDNSObject().second.toJson() },
+                          { "browserForwarder", QJsonObject{ { "listenAddr", bfListenIPTxt->text() }, { "listenPort", bfListenPortTxt->value() } } },
+                          { "observatory",
+                            QJsonObject{ { "subjectSelector", QJsonArray::fromStringList(SplitLines(obSubjectSelectorTxt->toPlainText())) } } } };
 
     for (const auto &group : ConnectionManager->AllGroups())
     {
@@ -294,26 +307,28 @@ CONFIGROOT RouteEditor::OpenEditor()
             outboundsArray.append(outboundJsonObject);
     }
     root["outbounds"] = outboundsArray;
-    // Process DNS
-    const auto &[dns, fakedns] = dnsWidget->GetDNSObject();
-    root["dns"] = GenerateDNS(dns);
-    root["fakedns"] = fakedns.toJson();
+    // Preserve opaque fields and patch only values changed from the displayed state.
+    if (dnsWidget->isEnabled())
+        root["dns"] = dnsWidget->GetDNSJson();
+    const auto MergeEditedFields = [&](const QString &key, const QJsonObject &current)
     {
-        // Process Browser Forwarder
-        if (!bfListenIPTxt->text().trimmed().isEmpty())
+        const auto baseline = auxiliaryBaseline.value(key).toObject();
+        auto object = original.value(key).toObject();
+        bool changed = false;
+        for (const auto &field : current.keys())
         {
-            root["browserForwarder"] = QJsonObject{
-                { "listenAddr", bfListenIPTxt->text() },
-                { "listenPort", bfListenPortTxt->value() },
-            };
+            if (current.value(field) != baseline.value(field))
+            {
+                object[field] = current.value(field);
+                changed = true;
+            }
         }
-    }
-    {
-        // Process Observatory
-        QJsonObject observatory;
-        observatory["subjectSelector"] = QJsonArray::fromStringList(SplitLines(obSubjectSelectorTxt->toPlainText()));
-        root["observatory"] = observatory;
-    }
+        if (changed)
+            root[key] = object;
+    };
+    MergeEditedFields("fakedns", dnsWidget->GetDNSObject().second.toJson());
+    MergeEditedFields("browserForwarder", { { "listenAddr", bfListenIPTxt->text() }, { "listenPort", bfListenPortTxt->value() } });
+    MergeEditedFields("observatory", { { "subjectSelector", QJsonArray::fromStringList(SplitLines(obSubjectSelectorTxt->toPlainText())) } });
     return root;
 }
 

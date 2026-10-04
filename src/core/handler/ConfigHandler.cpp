@@ -478,8 +478,14 @@ namespace Qv2ray::core::handler
             return false;
         }
 
-        connections[identifier.connectionId].lastConnected = system_clock::to_time_t(system_clock::now());
         CONFIGROOT root = GetConnectionRoot(identifier.connectionId);
+        if (const auto error = RouteManager->GetRuntimeConfigError(root); error)
+        {
+            QvMessageBoxWarn(nullptr, tr("Cannot start connection"), *error);
+            return false;
+        }
+
+        connections[identifier.connectionId].lastConnected = system_clock::to_time_t(system_clock::now());
         const auto fullConfig = RouteManager->GenerateFinalConfig(root, groups[identifier.groupId].routeConfigId);
         auto errMsg = kernelHandler->StartConnection(identifier, fullConfig);
         if (errMsg)

@@ -226,3 +226,77 @@ TEST_CASE("graphical routing fails closed on unsupported unsafe structures")
     REQUIRE_FALSE(IsGraphicalRoutingStateSupported(QJsonObject{ { "rules", QJsonObject{ { "not", "an array" } } } }, &reason));
     REQUIRE_FALSE(reason.isEmpty());
 }
+
+TEST_CASE("group route merge preserves opaque array element fields across modeled edits and movement")
+{
+    const QJsonArray originalServers{
+        QJsonObject{ { "address", "1.1.1.1" }, { "skipFallback", true }, { "futureServer", "first" } },
+        QJsonObject{ { "address", "8.8.8.8" }, { "futureServer", "second" } },
+    };
+    const QJsonArray baselineServers{
+        QJsonObject{ { "address", "1.1.1.1" } },
+        QJsonObject{ { "address", "8.8.8.8" } },
+    };
+    const QJsonObject original{ { "dnsConfig", QJsonObject{ { "servers", originalServers } } } };
+    const QJsonObject baseline{ { "dnsConfig", QJsonObject{ { "servers", baselineServers } } } };
+
+    SECTION("modeled field edit retains opaque fields on the edited element")
+    {
+        auto currentServers = baselineServers;
+        currentServers[0] = QJsonObject{ { "address", "9.9.9.9" } };
+        const QJsonObject current{ { "dnsConfig", QJsonObject{ { "servers", currentServers } } } };
+        const auto mergedServers = MergeEditedRouteSettings(original, baseline, current)
+                                       .toObject()
+                                       .value("dnsConfig")
+                                       .toObject()
+                                       .value("servers")
+                                       .toArray();
+        REQUIRE(mergedServers[0].toObject().value("address") == "9.9.9.9");
+        REQUIRE(mergedServers[0].toObject().value("skipFallback").toBool());
+        REQUIRE(mergedServers[0].toObject().value("futureServer") == "first");
+        REQUIRE(mergedServers[1] == originalServers[1]);
+    }
+
+    SECTION("reordered unchanged elements keep their original opaque identity")
+    {
+        const QJsonArray currentServers{ baselineServers[1], baselineServers[0] };
+        const QJsonObject current{ { "dnsConfig", QJsonObject{ { "servers", currentServers } } } };
+        const auto mergedServers = MergeEditedRouteSettings(original, baseline, current)
+                                       .toObject()
+                                       .value("dnsConfig")
+                                       .toObject()
+                                       .value("servers")
+                                       .toArray();
+        REQUIRE(mergedServers[0] == originalServers[1]);
+        REQUIRE(mergedServers[1] == originalServers[0]);
+    }
+
+    SECTION("removed elements do not force surviving elements through typed serialization")
+    {
+        const QJsonArray currentServers{ baselineServers[1] };
+        const QJsonObject current{ { "dnsConfig", QJsonObject{ { "servers", currentServers } } } };
+        const auto mergedServers = MergeEditedRouteSettings(original, baseline, current)
+                                       .toObject()
+                                       .value("dnsConfig")
+                                       .toObject()
+                                       .value("servers")
+                                       .toArray();
+        REQUIRE(mergedServers == QJsonArray{ originalServers[1] });
+    }
+
+    SECTION("new elements do not inherit opaque fields from an existing element")
+    {
+        auto currentServers = baselineServers;
+        currentServers.append(QJsonObject{ { "address", "4.4.4.4" } });
+        const QJsonObject current{ { "dnsConfig", QJsonObject{ { "servers", currentServers } } } };
+        const auto mergedServers = MergeEditedRouteSettings(original, baseline, current)
+                                       .toObject()
+                                       .value("dnsConfig")
+                                       .toObject()
+                                       .value("servers")
+                                       .toArray();
+        REQUIRE(mergedServers[0] == originalServers[0]);
+        REQUIRE(mergedServers[1] == originalServers[1]);
+        REQUIRE(mergedServers[2] == currentServers[2]);
+    }
+}

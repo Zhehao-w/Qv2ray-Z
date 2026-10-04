@@ -14,6 +14,7 @@
 #include <QFileDialog>
 #include <QListWidgetItem>
 #include <QSignalBlocker>
+#include <QTimer>
 
 using namespace Qv2ray::ui::group_manager_safety;
 
@@ -163,6 +164,15 @@ void GroupManager::onRCMDeleteConnectionTriggered()
 void GroupManager::onRCMExportConnectionTriggered()
 {
     const auto &list = GET_SELECTED_CONNECTION_IDS(SELECTED_ROWS_INDEX);
+    // Preflight the entire selection before opening dialogs or replacing any export file.
+    for (const auto &id : list)
+    {
+        if (const auto error = RouteManager->GetRuntimeConfigError(ConnectionManager->GetConnectionRoot(id)); error)
+        {
+            QvMessageBoxWarn(this, tr("Cannot export connection"), *error);
+            return;
+        }
+    }
     QFileDialog d;
     switch (list.count())
     {
@@ -326,7 +336,7 @@ QvMessageBusSlotImpl(GroupManager)
 
 GroupManager::~GroupManager(){};
 
-bool GroupManager::saveCurrentRouteSettings()
+bool GroupManager::saveCurrentRouteSettings(QString *error)
 {
     if (currentGroupId == NullGroupId)
         return true;
@@ -335,14 +345,17 @@ bool GroupManager::saveCurrentRouteSettings()
     const auto &[dns, fakedns] = dnsSettingsWidget->GetDNSObject();
     const auto dnsAccepted = RouteManager->SetDNSSettings(routeId, dnsSettingsGB->isChecked(), dns, fakedns);
     const auto routeAccepted = RouteManager->SetAdvancedRouteSettings(routeId, routeSettingsGB->isChecked(), routeSettingsWidget->GetRouteConfig());
-    if (GroupRouteSettersAccepted(dnsAccepted, routeAccepted))
+    if (GroupRouteSettersAccepted(dnsAccepted, routeAccepted) && RouteManager->SaveRoutes())
         return true;
 
     auto reason = RouteManager->GetRouteStorageError();
     if (reason.isEmpty())
         reason = tr("routes.json is read-only for this session.");
-    QvMessageBoxWarn(this, tr("Routing settings are read-only"),
-                     tr("Routing settings could not be saved. The Group Editor will remain open on the current group.\n\n%1").arg(reason));
+    const auto message = tr("Routing settings could not be saved. The Group Editor will remain open on the current group.\n\n%1").arg(reason);
+    if (error)
+        *error = message;
+    else
+        QvMessageBoxWarn(this, tr("Could not save routing settings"), message);
     return false;
 }
 
@@ -381,7 +394,7 @@ void GroupManager::on_updateButton_clicked()
         qApp->processEvents();
         ConnectionManager->UpdateSubscription(currentGroupId);
         this->setEnabled(true);
-        on_groupList_itemClicked(groupList->currentItem());
+        loadCurrentGroup(groupList->currentItem());
     }
 }
 
@@ -389,6 +402,8 @@ void GroupManager::on_removeGroupButton_clicked()
 {
     if (QvMessageBoxAsk(this, tr("Remove a Group"), tr("All connections will be moved to default group, do you want to continue?")) == Yes)
     {
+        if (!saveCurrentRouteSettings())
+            return;
         if (const auto error = ConnectionManager->DeleteGroup(currentGroupId))
         {
             QvMessageBoxWarn(this, tr("Remove Group"), *error);
@@ -397,14 +412,17 @@ void GroupManager::on_removeGroupButton_clicked()
 
         auto item = groupList->currentItem();
         int index = groupList->row(item);
-        groupList->removeItemWidget(item);
-        delete item;
+        {
+            const QSignalBlocker blocker(groupList);
+            currentGroupId = NullGroupId;
+            delete groupList->takeItem(index);
+            groupList->setCurrentItem(nullptr);
+        }
         if (groupList->count() > 0)
         {
             index = std::max(index, 0);
             index = std::min(index, groupList->count() - 1);
             groupList->setCurrentItem(groupList->item(index));
-            on_groupList_itemClicked(groupList->item(index));
         }
         else
         {
@@ -422,10 +440,10 @@ void GroupManager::on_buttonBox_accepted()
 
 void GroupManager::on_groupList_itemSelectionChanged()
 {
-    groupInfoGroupBox->setEnabled(groupList->selectedItems().count() > 0);
+    groupInfoGroupBox->setEnabled(!routeSaveErrorPending && groupList->selectedItems().count() > 0);
 }
 
-void GroupManager::on_groupList_itemClicked(QListWidgetItem *item)
+void GroupManager::loadCurrentGroup(QListWidgetItem *item)
 {
     if (item == nullptr)
     {
@@ -512,15 +530,37 @@ void GroupManager::on_ExcludeKeywords_textChanged()
 
 void GroupManager::on_groupList_currentItemChanged(QListWidgetItem *current, QListWidgetItem *priv)
 {
-    if (priv && !saveCurrentRouteSettings())
+    if (routeSaveErrorPending)
+        return;
+    QString error;
+    if (priv && !saveCurrentRouteSettings(&error))
     {
-        const QSignalBlocker blocker(groupList);
-        groupList->setCurrentItem(priv);
+        routeSaveErrorPending = true;
+        groupInfoGroupBox->setEnabled(false);
+        const auto groupId = currentGroupId;
+        // Finish Qt's current/selection update before restoring it or entering a modal event loop.
+        QTimer::singleShot(0, this,
+                           [this, groupId, error]()
+                           {
+                               for (int i = 0; i < groupList->count(); ++i)
+                               {
+                                   auto *item = groupList->item(i);
+                                   if (GroupId(item->data(Qt::UserRole).toString()) == groupId)
+                                   {
+                                       const QSignalBlocker blocker(groupList);
+                                       groupList->setCurrentItem(item, QItemSelectionModel::ClearAndSelect);
+                                       break;
+                                   }
+                               }
+                               routeSaveErrorPending = false;
+                               on_groupList_itemSelectionChanged();
+                               QvMessageBoxWarn(this, tr("Could not save routing settings"), error);
+                           });
         return;
     }
     if (current)
     {
-        on_groupList_itemClicked(current);
+        loadCurrentGroup(current);
     }
 }
 

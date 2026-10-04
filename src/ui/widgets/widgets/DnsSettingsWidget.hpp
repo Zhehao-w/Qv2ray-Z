@@ -20,6 +20,8 @@ class DnsSettingsWidget
     void SetDNSObject(const DNSObject &dns, const FakeDNSObject &fakeDNS);
     std::pair<DNSObject, FakeDNSObject> GetDNSObject();
     bool CheckIsValidDNS() const;
+    void SetDNSJson(const QJsonValue &value);
+    QJsonValue GetDNSJson();
 
   private slots:
     void on_dnsClientIPTxt_textEdited(const QString &arg1);
@@ -51,6 +53,16 @@ class DnsSettingsWidget
     void ShowCurrentDnsServerDetails();
     void ProcessDnsPortEnabledState();
     QvMessageBusSlotDecl;
+    bool isLoading = false;
+    bool preserveJson = false;
+    QJsonValue originalJson;
+    DNSObject baselineDns;
+    struct ServerJsonState
+    {
+        QJsonValue original;
+        DNSObject::DNSServerObject baseline;
+    };
+    QList<ServerJsonState> serverJsonStates;
     DNSObject dns;
     FakeDNSObject fakeDNS;
     // int currentServerIndex;
