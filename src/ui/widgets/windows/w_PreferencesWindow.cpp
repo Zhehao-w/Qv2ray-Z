@@ -323,7 +323,7 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     fpPasswordTx->setText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.password);
     fpAddressTx->setText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.serverAddress);
     fpTypeCombo->setCurrentText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.type);
-    fpPortSB->setValue(CurrentConfig.defaultRouteConfig.port);
+    fpPortSB->setValue(CurrentConfig.defaultRouteConfig.forwardProxyConfig.port);
     fpUseAuthCB->setChecked(CurrentConfig.defaultRouteConfig.forwardProxyConfig.useAuth);
     fpUsernameTx->setEnabled(fpUseAuthCB->isChecked());
     fpPasswordTx->setEnabled(fpUseAuthCB->isChecked());
