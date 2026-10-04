@@ -1,6 +1,7 @@
 #include "OutboundHandler.hpp"
 
 #include "3rdparty/QJsonStruct/QJsonIO.hpp"
+#include "base/VLESSSettingsCompatibility.hpp"
 
 #include <QJsonDocument>
 #include <QUrl>
@@ -32,7 +33,7 @@ const Qv2rayPlugin::OutboundInfoObject BuiltinSerializer::GetOutboundInfo(const 
     }
     else if (protocol == "vless")
     {
-        const auto vless = VLESSServerObject::fromJson(outbound["vnext"].toArray().first());
+        const auto vless = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(outbound));
         obj[INFO_SERVER] = vless.address;
         obj[INFO_PORT] = vless.port;
     }
@@ -52,10 +53,14 @@ const void BuiltinSerializer::SetOutboundInfo(const QString &protocol, const Qv2
         QJsonIO::SetValue(outbound, info[INFO_SERVER].toString(), "servers", 0, "address");
         QJsonIO::SetValue(outbound, info[INFO_PORT].toInt(), "servers", 0, "port");
     }
-    else if ((QStringList{ "vless", "vmess" }).contains(protocol))
+    else if (protocol == "vmess")
     {
         QJsonIO::SetValue(outbound, info[INFO_SERVER].toString(), "vnext", 0, "address");
         QJsonIO::SetValue(outbound, info[INFO_PORT].toInt(), "vnext", 0, "port");
+    }
+    else if (protocol == "vless")
+    {
+        outbound = Qv2ray::base::vless_settings::SetHostAddress(outbound, info[INFO_SERVER].toString(), info[INFO_PORT].toInt());
     }
 }
 
@@ -77,17 +82,25 @@ const QString BuiltinSerializer::SerializeOutbound(const QString &protocol, cons
     }
     if (protocol == "vless")
     {
+        if (Qv2ray::base::vless_settings::DetectRepresentation(obj) == Qv2ray::base::vless_settings::Representation::Unsupported)
+            return "(Unsupported VLESS settings representation)";
+
+        const auto vless = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(obj));
+        if (vless.users.isEmpty())
+            return "(Invalid VLESS settings)";
+        const auto &user = vless.users.front();
+
         QUrl url;
         url.setFragment(alias);
         url.setScheme(protocol);
-        url.setHost(QJsonIO::GetValue(obj, { "vnext", 0, "address" }).toString());
-        url.setPort(QJsonIO::GetValue(obj, { "vnext", 0, "port" }).toInt());
-        url.setUserName(QJsonIO::GetValue(obj, { "vnext", 0, "users", 0, "id" }).toString());
+        url.setHost(vless.address);
+        url.setPort(vless.port);
+        url.setUserName(user.id);
 
         // -------- COMMON INFORMATION --------
         QUrlQuery query;
-        const auto encryption = QJsonIO::GetValue(obj, { "vnext", 0, "users", 0, "encryption" }).toString("none");
-        const auto flow = QJsonIO::GetValue(obj, "vnext", 0, "users", 0, "flow").toString();
+        const auto encryption = user.encryption;
+        const auto flow = user.flow;
         if (!flow.isEmpty() && !QStringList{ "xtls-rprx-vision", "xtls-rprx-vision-udp443" }.contains(flow))
             return "(Unsupported VLESS flow)";
         const auto isVision = flow == "xtls-rprx-vision" || flow == "xtls-rprx-vision-udp443";
