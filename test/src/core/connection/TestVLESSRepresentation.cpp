@@ -31,6 +31,40 @@ namespace
                                        { "futureUserField", "stale-but-preserved" } } } }
         };
     }
+
+    QJsonObject EditorServerFor(const QJsonObject &settings)
+    {
+        auto server = Qv2ray::base::vless_settings::ServerForEditing(settings);
+        auto users = server.value(QStringLiteral("users")).toArray();
+        if (users.isEmpty())
+            users.append(QJsonObject{});
+        auto user = users.first().toObject();
+        if (!user.contains(QStringLiteral("encryption")))
+            user.insert(QStringLiteral("encryption"), QStringLiteral("none"));
+        users[0] = user;
+        server.insert(QStringLiteral("users"), users);
+        return server;
+    }
+
+    QJsonObject SetEditorHost(QJsonObject server, const QString &address, const int port)
+    {
+        server.insert(QStringLiteral("address"), address);
+        server.insert(QStringLiteral("port"), port);
+        return server;
+    }
+
+    QJsonObject SetEditorUser(QJsonObject server, const QString &id, const QString &encryption)
+    {
+        auto users = server.value(QStringLiteral("users")).toArray();
+        if (users.isEmpty())
+            users.append(QJsonObject{});
+        auto user = users.first().toObject();
+        user.insert(QStringLiteral("id"), id);
+        user.insert(QStringLiteral("encryption"), encryption);
+        users[0] = user;
+        server.insert(QStringLiteral("users"), users);
+        return server;
+    }
 }
 
 TEST_CASE("Flat VLESS settings remain authoritative and preserve opaque data")
@@ -50,22 +84,18 @@ TEST_CASE("Flat VLESS settings remain authoritative and preserve opaque data")
 
     REQUIRE(Qv2ray::base::vless_settings::DetectRepresentation(settings) == Qv2ray::base::vless_settings::Representation::Flat);
 
-    auto model = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(settings));
-    REQUIRE(model.address == "flat.example");
-    REQUIRE(model.port == 443);
-    REQUIRE(model.users.size() == 1);
-    REQUIRE(model.users.front().id == TEST_UUID);
-    REQUIRE(model.users.front().encryption == MODERN_ENCRYPTION);
-    REQUIRE(model.users.front().flow == "xtls-rprx-vision");
+    const auto baseline = EditorServerFor(settings);
+    REQUIRE(baseline.value("address") == "flat.example");
+    REQUIRE(baseline.value("port") == 443);
+    const auto baselineUser = baseline.value("users").toArray().first().toObject();
+    REQUIRE(baselineUser.value("id") == TEST_UUID);
+    REQUIRE(baselineUser.value("encryption") == MODERN_ENCRYPTION);
+    REQUIRE(baselineUser.value("flow") == "xtls-rprx-vision");
+    REQUIRE(Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, baseline) == settings);
 
-    const auto baseline = model.toJson();
-    REQUIRE(Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, model.toJson()) == settings);
-
-    model.address = "edited-flat.example";
-    model.port = 8443;
-    model.users.front().id = UPDATED_UUID;
-    model.users.front().encryption = "none";
-    const auto edited = Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, model.toJson());
+    auto editedServer = SetEditorHost(baseline, "edited-flat.example", 8443);
+    editedServer = SetEditorUser(editedServer, UPDATED_UUID, "none");
+    const auto edited = Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, editedServer);
 
     REQUIRE(edited.value("address") == "edited-flat.example");
     REQUIRE(edited.value("port") == 8443);
@@ -122,15 +152,12 @@ TEST_CASE("VNext VLESS managed edits preserve nested opaque data and array membe
 
     REQUIRE(Qv2ray::base::vless_settings::DetectRepresentation(settings) == Qv2ray::base::vless_settings::Representation::VNext);
 
-    auto model = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(settings));
-    const auto baseline = model.toJson();
-    REQUIRE(Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, model.toJson()) == settings);
+    const auto baseline = EditorServerFor(settings);
+    REQUIRE(Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, baseline) == settings);
 
-    model.address = "edited-vnext.example";
-    model.port = 8443;
-    model.users.front().id = UPDATED_UUID;
-    model.users.front().encryption = MODERN_ENCRYPTION;
-    const auto edited = Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, model.toJson());
+    auto editedServer = SetEditorHost(baseline, "edited-vnext.example", 8443);
+    editedServer = SetEditorUser(editedServer, UPDATED_UUID, MODERN_ENCRYPTION);
+    const auto edited = Qv2ray::base::vless_settings::ApplyManagedServerChanges(settings, baseline, editedServer);
 
     REQUIRE_FALSE(edited.contains("address"));
     REQUIRE_FALSE(edited.contains("id"));
@@ -140,12 +167,12 @@ TEST_CASE("VNext VLESS managed edits preserve nested opaque data and array membe
     REQUIRE(editedVNext.size() == 2);
     REQUIRE(editedVNext.at(1).toObject() == secondServer);
 
-    const auto editedServer = editedVNext.first().toObject();
-    REQUIRE(editedServer.value("address") == "edited-vnext.example");
-    REQUIRE(editedServer.value("port") == 8443);
-    REQUIRE(editedServer.value("futureServerField") == firstServer.value("futureServerField"));
+    const auto editedFirstServer = editedVNext.first().toObject();
+    REQUIRE(editedFirstServer.value("address") == "edited-vnext.example");
+    REQUIRE(editedFirstServer.value("port") == 8443);
+    REQUIRE(editedFirstServer.value("futureServerField") == firstServer.value("futureServerField"));
 
-    const auto editedUsers = editedServer.value("users").toArray();
+    const auto editedUsers = editedFirstServer.value("users").toArray();
     REQUIRE(editedUsers.size() == 2);
     REQUIRE(editedUsers.at(1).toObject() == secondUser);
     const auto editedUser = editedUsers.first().toObject();
@@ -159,15 +186,11 @@ TEST_CASE("VNext VLESS managed edits preserve nested opaque data and array membe
 
 TEST_CASE("VLESS initialization adds required defaults without normalizing persisted missing fields")
 {
-    VLESSServerObject newModel;
-    if (newModel.users.isEmpty())
-        newModel.users.push_back({});
-    const auto newBaseline = newModel.toJson();
-    newModel.address = "new.example";
-    newModel.port = 443;
-    newModel.users.front().id = TEST_UUID;
+    const auto newBaseline = EditorServerFor({});
+    auto newEdited = SetEditorHost(newBaseline, "new.example", 443);
+    newEdited = SetEditorUser(newEdited, TEST_UUID, "none");
 
-    const auto initialized = Qv2ray::base::vless_settings::ApplyManagedServerChanges({}, newBaseline, newModel.toJson());
+    const auto initialized = Qv2ray::base::vless_settings::ApplyManagedServerChanges({}, newBaseline, newEdited);
     REQUIRE_FALSE(initialized.contains("address"));
     const auto initializedServer = initialized.value("vnext").toArray().first().toObject();
     REQUIRE(initializedServer.value("address") == "new.example");
@@ -187,11 +210,10 @@ TEST_CASE("VLESS initialization adds required defaults without normalizing persi
                                   { "users", QJsonArray{ existingUser } },
                                   { "futureServerField", true } } } }
     };
-    auto existingModel = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(existingSettings));
-    const auto existingBaseline = existingModel.toJson();
-    existingModel.address = "host-only-edit.example";
+    const auto existingBaseline = EditorServerFor(existingSettings);
+    const auto existingEditedServer = SetEditorHost(existingBaseline, "host-only-edit.example", 443);
     const auto existingEdited =
-        Qv2ray::base::vless_settings::ApplyManagedServerChanges(existingSettings, existingBaseline, existingModel.toJson());
+        Qv2ray::base::vless_settings::ApplyManagedServerChanges(existingSettings, existingBaseline, existingEditedServer);
     const auto preservedUser = existingEdited.value("vnext").toArray().first().toObject().value("users").toArray().first().toObject();
     REQUIRE(preservedUser.value("id") == TEST_UUID);
     REQUIRE_FALSE(preservedUser.contains("encryption"));
@@ -200,21 +222,18 @@ TEST_CASE("VLESS initialization adds required defaults without normalizing persi
     const QJsonObject noUsersSettings{
         { "vnext", QJsonArray{ QJsonObject{ { "address", "no-users.example" }, { "port", 443 }, { "futureServerField", 9 } } } }
     };
-    auto noUsersModel = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(noUsersSettings));
-    if (noUsersModel.users.isEmpty())
-        noUsersModel.users.push_back({});
-    const auto noUsersBaseline = noUsersModel.toJson();
-    noUsersModel.address = "host-only-no-users.example";
-    const auto hostOnly = Qv2ray::base::vless_settings::ApplyManagedServerChanges(noUsersSettings, noUsersBaseline, noUsersModel.toJson());
+    const auto noUsersBaseline = EditorServerFor(noUsersSettings);
+    const auto hostOnlyServerEdit = SetEditorHost(noUsersBaseline, "host-only-no-users.example", 443);
+    const auto hostOnly =
+        Qv2ray::base::vless_settings::ApplyManagedServerChanges(noUsersSettings, noUsersBaseline, hostOnlyServerEdit);
     const auto hostOnlyServer = hostOnly.value("vnext").toArray().first().toObject();
     REQUIRE(hostOnlyServer.value("address") == "host-only-no-users.example");
     REQUIRE_FALSE(hostOnlyServer.contains("users"));
     REQUIRE(hostOnlyServer.value("futureServerField") == 9);
 
-    noUsersModel.address = "no-users.example";
-    noUsersModel.users.front().id = UPDATED_UUID;
+    const auto userEditedServer = SetEditorUser(noUsersBaseline, UPDATED_UUID, "none");
     const auto userCreated =
-        Qv2ray::base::vless_settings::ApplyManagedServerChanges(noUsersSettings, noUsersBaseline, noUsersModel.toJson());
+        Qv2ray::base::vless_settings::ApplyManagedServerChanges(noUsersSettings, noUsersBaseline, userEditedServer);
     const auto createdUser = userCreated.value("vnext").toArray().first().toObject().value("users").toArray().first().toObject();
     REQUIRE(createdUser.value("id") == UPDATED_UUID);
     REQUIRE(createdUser.value("encryption") == "none");
