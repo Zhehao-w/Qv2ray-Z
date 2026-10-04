@@ -214,6 +214,7 @@ QScrollBar::handle:horizontal:hover {
 QScrollBar::add-line:horizontal,
 QScrollBar::sub-line:horizontal {
     width: 0;
+    height: 0;
     border: 0;
     background: transparent;
 }
@@ -291,6 +292,10 @@ QLabel#appTitleLabel {
 QLabel#appSubtitleLabel {
     color: #7a7a80;
     padding-left: 4px;
+}
+
+QPushButton#connectBtn {
+    min-width: 68px;
 }
 
 QPushButton#newConnectionBtn,
