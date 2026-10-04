@@ -5,6 +5,7 @@
 #include "core/handler/RouteHandler.hpp"
 #include "ui/widgets/Qv2rayWidgetApplication.hpp"
 #include "ui/widgets/editors/w_RoutesEditor.hpp"
+#include "ui/widgets/styles/StyleManager.hpp"
 #include "ui/widgets/widgets/DnsSettingsWidget.hpp"
 #include "ui/widgets/windows/w_GroupManager.hpp"
 #include "utils/QvHelpers.hpp"
@@ -146,6 +147,10 @@ int main(int argc, char **argv)
 {
     RoutingTestApplication app(argc, argv);
     application = &app;
+    // The shipped application installs Fusion and the built-in stylesheet
+    // before showing dialogs. Exercise the same initialization in these tests.
+    QvStyleManager style;
+    style.ApplyStyle();
     return Catch::Session().run(argc, argv);
 }
 
@@ -332,8 +337,11 @@ TEST_CASE("Failed modal group save keeps selected group form and subsequent writ
     Fixture fixture("{broken");
     const auto second = ConnectionManager->CreateGroup("second", false);
     REQUIRE(second != NullGroupId);
+    INFO("Creating the group dialog");
     GroupManager manager;
+    INFO("Group dialog constructed; showing it");
     manager.show();
+    INFO("Group dialog shown; processing pending events");
     application->processEvents();
     auto *list = Child<QListWidget>(manager, "groupList");
     auto *previous = list->currentItem();
@@ -344,6 +352,7 @@ TEST_CASE("Failed modal group save keeps selected group form and subsequent writ
             target = list->item(i);
     REQUIRE(target);
     application->modalWarnings = true;
+    INFO("Sending the group selection input");
     if (mouse)
         QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier, list->visualItemRect(target).center());
     else
@@ -363,8 +372,11 @@ TEST_CASE("Successful mouse group switch loads once and clears old DNS host rows
     Fixture fixture;
     const auto second = ConnectionManager->CreateGroup("second", false);
     REQUIRE(second != NullGroupId);
+    INFO("Creating the group dialog");
     GroupManager manager;
+    INFO("Group dialog constructed; showing it");
     manager.show();
+    INFO("Group dialog shown; processing pending events");
     application->processEvents();
     auto *list = Child<QListWidget>(manager, "groupList");
     auto *previous = list->currentItem();
