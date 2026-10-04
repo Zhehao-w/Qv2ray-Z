@@ -1,7 +1,6 @@
 #pragma once
 #include "base/Qv2rayBase.hpp"
 #include "components/plugins/QvPluginHost.hpp"
-#include "core/connection/OutboundEditorPersistence.hpp"
 #include "ui/common/QvMessageBus.hpp"
 #include "ui/widgets/widgets/StreamSettingsWidget.hpp"
 #include "ui_w_OutboundEditor.h"
