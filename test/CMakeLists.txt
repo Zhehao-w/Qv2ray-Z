@@ -40,6 +40,8 @@ target_sources(generation PRIVATE
     src/core/connection/TestConfigEditorPersistence.cpp)
 ADD_QV2RAY_TEST(qjsonio libs/QJsonStruct/QJsonIO.cpp)
 ADD_QV2RAY_TEST(settings_compatibility src/core/settings/TestSettingsCompatibility.cpp)
+target_sources(settings_compatibility PRIVATE
+    src/ui/widgets/TestUiPolishPolicy.cpp)
 ADD_QV2RAY_TEST(realping src/components/latency/TestRealPing.cpp)
 ADD_QV2RAY_TEST(kernel_path_resolver src/core/kernel/TestKernelPathResolver.cpp)
 ADD_QV2RAY_TEST(kernel_process_lifecycle src/core/kernel/TestKernelProcessLifecycle.cpp)
@@ -52,7 +54,6 @@ target_sources(data_safety PRIVATE
 ADD_QV2RAY_TEST(connection_context_resolver src/core/handler/TestConnectionContextResolver.cpp)
 ADD_QV2RAY_TEST(http_request_safety src/utils/TestHTTPRequestHelper.cpp)
 ADD_QV2RAY_TEST(crash_diagnostic_safety src/utils/TestDiagnosticSafety.cpp)
-ADD_QV2RAY_TEST(ui_polish_policy src/ui/widgets/TestUiPolishPolicy.cpp)
 
 # This target compiles most of the UI again. Keep it out of regular commit CI and
 # enable it only for explicit UI validation.
