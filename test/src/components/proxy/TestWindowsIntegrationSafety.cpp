@@ -144,7 +144,7 @@ TEST_CASE("Proxy recovery location index round-trips independently of the select
 #endif
 }
 
-TEST_CASE("Disconnect cleanup follows durable proxy ownership instead of the automatic proxy preference")
+TEST_CASE("Disconnect cleanup survives recovery record disappearance")
 {
     using namespace Qv2ray::components::proxy::safety;
 
@@ -152,18 +152,25 @@ TEST_CASE("Disconnect cleanup follows durable proxy ownership instead of the aut
     REQUIRE(directory.isValid());
     REQUIRE_FALSE(HasProxyRecoveryRecord(directory.path()));
 
+    // Missing durable metadata must select the non-notifying recovery path,
+    // never skip lifecycle cleanup: the active ownership snapshot can already
+    // be loaded in memory even when a portable/network-backed path disappears.
+    REQUIRE(SelectProxyDisconnectCleanupMode(false, false) == ProxyDisconnectCleanupMode::RecoverOwnership);
+    REQUIRE(SelectProxyDisconnectCleanupMode(true, false) == ProxyDisconnectCleanupMode::RecoverOwnership);
+
     const auto recoveryPath = ProxyRecoveryRecordPathForConfig(directory.path());
     QFile recovery(recoveryPath);
     REQUIRE(recovery.open(QIODevice::WriteOnly | QIODevice::Truncate));
     REQUIRE(recovery.write("{malformed-but-owned") > 0);
     recovery.close();
 
-    // The lifecycle must still attempt fail-closed cleanup for an existing
-    // ownership record. Whether automatic proxy mode is currently enabled is
-    // deliberately not part of this ownership decision.
     REQUIRE(HasProxyRecoveryRecord(directory.path()));
+    REQUIRE(SelectProxyDisconnectCleanupMode(false, true) == ProxyDisconnectCleanupMode::ClearWithNotification);
+    REQUIRE(SelectProxyDisconnectCleanupMode(true, true) == ProxyDisconnectCleanupMode::RecoverOwnership);
+
     REQUIRE(QFile::remove(recoveryPath));
     REQUIRE_FALSE(HasProxyRecoveryRecord(directory.path()));
+    REQUIRE(SelectProxyDisconnectCleanupMode(false, false) == ProxyDisconnectCleanupMode::RecoverOwnership);
 }
 
 TEST_CASE("Proxy lifecycle management stays fail-closed without process ownership")
