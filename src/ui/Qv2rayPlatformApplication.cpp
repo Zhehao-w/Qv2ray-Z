@@ -188,12 +188,13 @@ Qv2rayExitReason Qv2rayPlatformApplication::RunQv2ray()
 #ifdef Q_OS_WIN
     // The durable recovery record is the Windows ownership authority. Release
     // owned proxy state on every real disconnect, regardless of the current
-    // automatic-proxy preference. Automatic mode keeps its existing MainWindow
+    // automatic-proxy preference, but never bypass the startup fail-closed
+    // ownership/access gate. Automatic mode keeps its existing MainWindow
     // notification path; manual mode emits the clear event from this lifecycle
     // hook because no UI cleanup will follow.
     connect(ConnectionManager, &QvConfigHandler::OnDisconnected, this, [](const ConnectionGroupPair &) {
         using namespace Qv2ray::components::proxy::safety;
-        if (!HasProxyRecoveryRecord(QvCoreApplication->ConfigPath))
+        if (!CanManageSystemProxy() || !HasProxyRecoveryRecord(QvCoreApplication->ConfigPath))
             return;
 
         const auto automaticProxy = GlobalConfig.inboundConfig.systemProxySettings.setSystemProxy;
@@ -229,7 +230,8 @@ void Qv2rayPlatformApplication::quitInternal()
     // OnDisconnected normally releases current ownership. Keep a final,
     // idempotent ownership recovery before teardown so exit cannot leave a
     // loopback proxy behind if the normal disconnect signal path was skipped.
-    if (!RecoverSystemProxyIfNeeded())
+    // If startup blocked proxy management, preserve that fail-closed decision.
+    if (Qv2ray::components::proxy::safety::CanManageSystemProxy() && !RecoverSystemProxyIfNeeded())
         LOG("Windows system proxy ownership could not be released safely during shutdown; recovery state was retained for the next retry.");
 #endif
     RouteManager->SaveRoutes();
