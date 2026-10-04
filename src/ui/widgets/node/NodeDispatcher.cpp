@@ -1,6 +1,7 @@
 #include "NodeDispatcher.hpp"
 
 #include "core/CoreUtils.hpp"
+#include "core/connection/RoutingJsonPreservation.hpp"
 #include "models/InboundNodeModel.hpp"
 #include "models/OutboundNodeModel.hpp"
 #include "models/RuleNodeModel.hpp"
@@ -9,6 +10,8 @@
 #include <nodes/Node>
 
 #define QV_MODULE_NAME "NodeDispatcher"
+
+using namespace Qv2ray::core::connection::routing_json;
 
 NodeDispatcher::NodeDispatcher(QObject *parent) : QObject(parent)
 {
@@ -54,20 +57,25 @@ void NodeDispatcher::LoadFullConfig(const CONFIGROOT &root)
 
     for (const auto &item : root["routing"].toObject()["rules"].toArray())
     {
-        auto _ = CreateRule(RuleObject::fromJson(item.toObject()));
+        const auto originalRule = item.toObject();
+        const auto tag = CreateRule(RuleObject::fromJson(originalRule));
+        ruleJsonState[tag] = { true, originalRule, rules.value(tag)->toJson() };
     }
 
     for (const auto &balancer : root["routing"].toObject()["balancers"].toArray())
     {
-        const auto array = balancer.toObject()["selector"].toArray();
+        const auto originalBalancer = balancer.toObject();
+        const auto array = originalBalancer["selector"].toArray();
         QStringList selector;
         for (const auto &item : array)
         {
             selector << item.toString();
         }
-        QString strategyType = balancer.toObject()["strategy"].toObject()["type"].toString("random");
-        const auto meta = make_balancer_outbound(selector, strategyType, balancer.toObject()["tag"].toString());
-        auto _ = CreateOutbound(meta);
+        QString strategyType = originalBalancer["strategy"].toObject()["type"].toString("random");
+        const auto meta = make_balancer_outbound(selector, strategyType, originalBalancer["tag"].toString());
+        const auto tag = CreateOutbound(meta);
+        const auto stored = outbounds.value(tag);
+        balancerJsonState[tag] = { true, originalBalancer, ManagedBalancerJson(stored->getDisplayName(), stored->outboundTags, stored->strategyType) };
     }
 
     for (const auto &rule : rules)
@@ -141,6 +149,7 @@ void NodeDispatcher::OnNodeDeleted(const QtNodes::Node &node)
     else if (isOutbound)
     {
         CLEANUP(outbound);
+        balancerJsonState.remove(outboundTag);
         const auto object = *outbound;
         if (object.metaType == METAOUTBOUND_CHAIN)
         {
@@ -151,6 +160,7 @@ void NodeDispatcher::OnNodeDeleted(const QtNodes::Node &node)
     else if (isRule)
     {
         CLEANUP(rule);
+        ruleJsonState.remove(ruleTag);
         emit OnRuleDeleted(*rule);
     }
     else

@@ -2,6 +2,7 @@
 
 #include "components/plugins/QvPluginHost.hpp"
 #include "core/connection/Generation.hpp"
+#include "core/connection/RoutingJsonPreservation.hpp"
 #include "core/handler/ConfigHandler.hpp"
 #include "ui/widgets/node/NodeBase.hpp"
 #include "ui/widgets/node/models/InboundNodeModel.hpp"
@@ -28,6 +29,7 @@
 #define QV_MODULE_NAME "RouteEditor"
 
 using namespace QtNodes;
+using namespace Qv2ray::core::connection::routing_json;
 using namespace Qv2ray::ui::nodemodels;
 
 namespace
@@ -100,6 +102,15 @@ RouteEditor::RouteEditor(QJsonObject connection, QWidget *parent) : QvDialog("Ro
     SetUpLayout(chainEditorUIWidget, chainWidget);
     SetUpLayout(dnsEditorUIWidget, dnsWidget);
     //
+    if (root.contains("routing") && !root.value("routing").isObject())
+    {
+        routingEditingSupported = false;
+        routingUnsupportedReason = QStringLiteral("routing root is not an object");
+    }
+    else
+    {
+        routingEditingSupported = IsGraphicalRoutingStateSupported(root.value("routing").toObject(), &routingUnsupportedReason);
+    }
     nodeDispatcher->LoadFullConfig(root);
     dnsWidget->SetDNSObject(DNSObject::fromJson(root["dns"].toObject()), FakeDNSObject::fromJson(root["fakedns"].toObject()));
     //
@@ -208,6 +219,14 @@ CONFIGROOT RouteEditor::OpenEditor()
     if (result != QDialog::Accepted)
         return original;
 
+    if (!routingEditingSupported)
+    {
+        QvMessageBoxWarn(this, tr("Routing configuration is read-only"),
+                         tr("The graphical routing editor cannot safely represent this routing state. No changes were saved.\n\n%1")
+                             .arg(routingUnsupportedReason));
+        return original;
+    }
+
     const auto &[inbounds, rules, outbounds] = nodeDispatcher->GetData();
     //
     // Inbounds
@@ -227,11 +246,10 @@ CONFIGROOT RouteEditor::OpenEditor()
         if (rules.contains(ruleTag))
         {
             const auto &ruleObject = rules[ruleTag];
-            auto ruleJson = ruleObject.toJson();
-            if (ruleJson["outboundTag"].toString().isEmpty())
-                ruleJson.remove("outboundTag");
-            else
-                ruleJson.remove("balancerTag");
+            const auto managedRule = ruleObject.toJson();
+            const auto persistence = nodeDispatcher->GetRuleJsonState(ruleTag);
+            const auto ruleJson = persistence.hasOriginal ? MergeManagedRoutingRule(persistence.original, persistence.baseline, managedRule)
+                                                          : NormalizeNewRoutingRule(managedRule);
             rulesJsonArray << ruleJson;
         }
         else
@@ -246,18 +264,15 @@ CONFIGROOT RouteEditor::OpenEditor()
     {
         if (out.metaType != METAOUTBOUND_BALANCER)
             continue;
-        BalancerObject o;
-        o.tag = out.getDisplayName();
-        o.selector = out.outboundTags;
-        o.strategy.type = out.strategyType;
-        balancersArray << o.toJson();
+        const auto managedBalancer = ManagedBalancerJson(out.getDisplayName(), out.outboundTags, out.strategyType);
+        const auto persistence = nodeDispatcher->GetBalancerJsonState(out.getDisplayName());
+        balancersArray << (persistence.hasOriginal
+                               ? MergeManagedRoutingBalancer(persistence.original, persistence.baseline, managedBalancer)
+                               : managedBalancer);
     }
 
-    QJsonObject routingObject;
-    routingObject["domainStrategy"] = domainStrategy;
-    routingObject["rules"] = rulesJsonArray;
-    routingObject["balancers"] = balancersArray;
-    root["routing"] = routingObject;
+    const auto originalRouting = original.value("routing").toObject();
+    root["routing"] = MergeRoutingRoot(originalRouting, originalRouting.value("domainStrategy").toString(), domainStrategy, rulesJsonArray, balancersArray);
 
     // QJsonArray Outbounds
     QJsonArray outboundsArray;
