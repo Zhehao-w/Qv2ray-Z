@@ -2,6 +2,7 @@
 
 #include "CommonTypes.hpp"
 #include "QvGUIPluginInterface.hpp"
+#include "base/SingleServerSettingsCompatibility.hpp"
 #include "ui_vmess.h"
 
 class VmessOutboundEditor
@@ -27,15 +28,15 @@ class VmessOutboundEditor
     void SetContent(const QJsonObject &content) override;
     const QJsonObject GetContent() const override
     {
-        auto result = content;
-        QJsonArray vnext;
-        vnext.append(vmess.toJson());
-        result.insert("vnext", vnext);
-        return result;
+        return Qv2ray::base::single_server_settings::ApplyManagedFirstServerChanges(
+            content, QStringLiteral("vnext"), originalManagedServer, vmess.toJson(),
+            { QStringLiteral("address"), QStringLiteral("port") }, QStringLiteral("users"),
+            { QStringLiteral("id"), QStringLiteral("alterId"), QStringLiteral("security") });
     }
 
   private:
     VMessServerObject vmess;
+    QJsonObject originalManagedServer;
 
   protected:
     void changeEvent(QEvent *e) override;
