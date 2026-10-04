@@ -34,7 +34,7 @@ class HttpOutboundEditor
         PLUGIN_EDITOR_LOADING_SCOPE({
             if (http.users.isEmpty())
                 http.users.push_back({});
-            originalManagedServer = http.toJson();
+            originalManagedServer = ManagedServerJson();
             http_UserNameTxt->setText(http.users.first().user);
             http_PasswordTxt->setText(http.users.first().pass);
         })
@@ -43,7 +43,7 @@ class HttpOutboundEditor
     const QJsonObject GetContent() const override
     {
         return Qv2ray::base::single_server_settings::ApplyManagedFirstServerChanges(
-            content, QStringLiteral("servers"), originalManagedServer, http.toJson(),
+            content, QStringLiteral("servers"), originalManagedServer, ManagedServerJson(),
             { QStringLiteral("address"), QStringLiteral("port") }, QStringLiteral("users"),
             { QStringLiteral("user"), QStringLiteral("pass") }, true);
     }
@@ -56,6 +56,14 @@ class HttpOutboundEditor
     void on_http_UserNameTxt_textEdited(const QString &arg1);
 
   private:
+    QJsonObject ManagedServerJson() const
+    {
+        auto result = http.toJson();
+        if (http.users.isEmpty() || (http.users.first().user.isEmpty() && http.users.first().pass.isEmpty()))
+            result.remove(QStringLiteral("users"));
+        return result;
+    }
+
     HttpServerObject http;
     QJsonObject originalManagedServer;
 };
