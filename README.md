@@ -44,7 +44,8 @@ The release package includes:
 - a verified official Xray-core Windows x64 binary
 - `geoip.dat`
 - `geosite.dat`
-- release build metadata
+- `geoip-only-cn-private.dat`
+- `release-manifest.json` with source, Xray, Geo, Qt, and toolchain metadata
 
 The bundled Xray binary and assets are ready for normal use. Advanced users can still point Qv2ray-Z at custom core or asset paths from Preferences when needed.
 
@@ -52,17 +53,53 @@ The bundled Xray binary and assets are ready for normal use. Advanced users can 
 
 The maintained configuration paths currently include:
 
-- VLESS over TCP / RAW
+- VLESS
+- modern VLESS `encryption` values preserved verbatim through supported import/export and runtime generation
 - TLS
 - REALITY
 - `xtls-rprx-vision`
 - `xtls-rprx-vision-udp443`
 - REALITY ML-DSA-65 verification (`pqv` / `mldsa65Verify`)
+- TCP
+- WebSocket
+- mKCP using current Xray-supported fields
+- gRPC
+- XHTTP
+- FinalMask
 - modern VLESS share-link import and export
+- preservation of unknown / duplicate / raw VLESS query metadata across supported round-trips
 - bundled Xray executable discovery
-- compatibility with current official Xray-core releases
+- compatibility with the pinned official Xray-core release
 
-Unsupported legacy XTLS modes from the original codebase have been removed from normal configuration generation.
+### Configuration safety
+
+Qv2ray-Z keeps editing and import/export conservative when a configuration contains data the maintained UI does not own:
+
+- unmanaged outbound JSON is preserved during supported editor saves
+- unknown and nested transport fields are preserved instead of being dropped by typed editor round-trips
+- unsupported stream-security metadata and opaque TLS certificate fields are preserved rather than silently normalized away
+- unknown, duplicate, and raw VLESS query metadata is preserved across supported share-link round-trips
+- Qv2ray-internal preservation metadata is stripped before the final Xray runtime configuration is generated
+- cleanup does not automatically translate retired features into superficially similar modern features
+
+For example, legacy HTTP transport is not migrated to XHTTP, and legacy mKCP Header camouflage is not migrated to FinalMask.
+
+### Disabled or removed legacy surfaces
+
+The maintained product intentionally does not expose or generate several historical Qv2ray/Xray paths that are retired, unsupported by current Xray-core, or no longer useful for this Windows-focused client:
+
+- legacy QUIC transport
+- legacy HTTP / H2 / H3 stream transport
+- legacy mKCP Header camouflage
+- legacy mKCP Seed
+- legacy SSD (`ssd://`) share-link import
+- obsolete MTProto outbound editor
+- inactive Android and historical Debian / Snap / RPM packaging paths
+- unreachable inbound placeholder editors that were never part of the maintained build
+
+Some old persisted model fields are intentionally retained for backward compatibility and lossless loading. Their presence in the data model does **not** mean they can be newly created, exported, or passed to modern Xray at runtime. Unsupported runtime fields are rejected or stripped at the final runtime boundary rather than silently migrated to unrelated modern features.
+
+In particular, FinalMask is a current Xray feature and is not treated as legacy transport/header camouflage.
 
 ## Import and daily use
 
@@ -103,9 +140,17 @@ For example, **Bypass Mainland China** sends:
 
 Explicit custom routing rules keep higher priority, and advanced routing controls remain available when needed.
 
+## Release integrity
+
+The authoritative release target is Windows x64 with Qt 5.15.2 and MSVC 14.2. The release pipeline builds and runs the maintained regression targets, installs and deploys the application, verifies pinned release inputs, downloads and verifies the pinned official Xray binary and Geo assets, validates routing fixtures with Xray, and smoke-tests the packaged output.
+
+Pinned release metadata covers the official Xray binary, `geoip.dat`, `geosite.dat`, `geoip-only-cn-private.dat`, and the retained Windows dependency archives. The generated `release-manifest.json` records the source commit and verified release inputs used for the package.
+
 ## Compatibility and scope
 
 Qv2ray-Z is intentionally Windows-focused and conservative about new features. Current maintenance emphasizes stable behavior with modern official Xray-core, removal of retired or unreachable legacy paths, and UI cleanup without changing proven protocol behavior.
+
+Existing configuration data is handled conservatively: cleanup work avoids destructive automatic migration and avoids silently rewriting unrelated or unknown configuration fields.
 
 New protocol support is not a current project goal. Legacy features that are no longer supported by modern Xray-core or by the maintained Windows product may be unavailable even if they existed in historical Qv2ray releases.
 
