@@ -43,5 +43,6 @@ ADD_QV2RAY_TEST(windows_integration_safety src/components/proxy/TestWindowsInteg
 ADD_QV2RAY_TEST(data_safety src/core/handler/TestDataSafety.cpp)
 target_sources(data_safety PRIVATE src/core/handler/TestRoutingPersistence.cpp)
 ADD_QV2RAY_TEST(connection_context_resolver src/core/handler/TestConnectionContextResolver.cpp)
+ADD_QV2RAY_TEST(group_manager_safety src/ui/widgets/windows/TestGroupManagerSafety.cpp)
 ADD_QV2RAY_TEST(http_request_safety src/utils/TestHTTPRequestHelper.cpp)
 ADD_QV2RAY_TEST(crash_diagnostic_safety src/utils/TestDiagnosticSafety.cpp)
