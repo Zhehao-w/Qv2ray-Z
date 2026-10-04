@@ -3,7 +3,6 @@
 #include "VLESSOutboundSerializerTestHelper.hpp"
 #include "base/VLESSSettingsCompatibility.hpp"
 #include "base/VLESSShareLinkOpaque.hpp"
-#include "plugins/protocols/core/OutboundHandler.hpp"
 #include "src/core/connection/Serialization.hpp"
 
 #include <QJsonArray>
@@ -78,16 +77,11 @@ TEST_CASE("Flat VLESS settings remain authoritative and preserve opaque data")
     REQUIRE(edited.value("futureFlatField") == settings.value("futureFlatField"));
     REQUIRE(edited.value("vnext") == originalVNext);
 
-    BuiltinSerializer serializer;
-    const auto info = serializer.GetOutboundInfo("vless", settings);
-    REQUIRE(info.value(Qv2rayPlugin::INFO_SERVER).toString() == "flat.example");
-    REQUIRE(info.value(Qv2rayPlugin::INFO_PORT).toInt() == 443);
+    const auto info = GetVLESSOutboundHostForTest(settings);
+    REQUIRE(info.first == "flat.example");
+    REQUIRE(info.second == 443);
 
-    Qv2rayPlugin::OutboundInfoObject changedInfo;
-    changedInfo[Qv2rayPlugin::INFO_SERVER] = "info-edit.example";
-    changedInfo[Qv2rayPlugin::INFO_PORT] = 9443;
-    auto infoEdited = settings;
-    serializer.SetOutboundInfo("vless", changedInfo, infoEdited);
+    const auto infoEdited = SetVLESSOutboundHostForTest(settings, "info-edit.example", 9443);
     REQUIRE(infoEdited.value("address") == "info-edit.example");
     REQUIRE(infoEdited.value("port") == 9443);
     REQUIRE(infoEdited.value("vnext") == originalVNext);
@@ -238,8 +232,7 @@ TEST_CASE("Malformed VLESS settings fail closed instead of guessing a representa
     const QJsonObject pretendEdited{ { "address", "new.example" }, { "port", 8443 } };
     REQUIRE(Qv2ray::base::vless_settings::ApplyManagedServerChanges(malformed, pretendBaseline, pretendEdited) == malformed);
     REQUIRE(Qv2ray::base::vless_settings::SetHostAddress(malformed, "new.example", 8443) == malformed);
-    REQUIRE(BuiltinSerializer().SerializeOutbound("vless", "malformed", {}, malformed, {}) ==
-            "(Unsupported VLESS settings representation)");
+    REQUIRE(SerializeVLESSOutboundForTest("malformed", malformed, {}) == "(Unsupported VLESS settings representation)");
 
     const QJsonObject invalidFlat{
         { "address", QJsonObject{ { "future", "shape" } } },
