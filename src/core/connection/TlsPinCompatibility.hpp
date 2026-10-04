@@ -17,6 +17,24 @@ namespace Qv2ray::core::connection::tls_pin
         return pins;
     }
 
+    inline bool HasCurrentTlsPins(const StreamSettingsObject &stream)
+    {
+        if (stream.security != QStringLiteral("tls"))
+            return false;
+
+        for (const auto &pin : stream.tlsSettings.pinnedPeerCertificateChainSha256)
+        {
+            if (!pin.trimmed().isEmpty())
+                return true;
+        }
+        return false;
+    }
+
+    inline bool CanSerializeCurrentTlsPin(const StreamSettingsObject &stream)
+    {
+        return !HasCurrentTlsPins(stream) || !stream.tlsSettings.serverName.trimmed().isEmpty();
+    }
+
     inline void PrepareTlsPinEditorModel(const QJsonObject &originalStream, StreamSettingsObject &stream)
     {
         // The legacy typed member is retained only as the existing editor's
@@ -63,6 +81,17 @@ namespace Qv2ray::core::connection::tls_pin
                 editedStream.insert("tlsSettings", tls);
             else
                 editedStream.remove("tlsSettings");
+            return;
+        }
+
+        // Bundled Xray v26.3.27 is affected by GHSA-5wf9-h793-w73c. Do not
+        // emit the current pin field without an explicit verification name.
+        // The Outbound Editor blocks this state before save; this branch is
+        // defense-in-depth for any future caller that bypasses the UI gate.
+        if (!editedPins.isEmpty() && tls.value("serverName").toString().trimmed().isEmpty())
+        {
+            tls.remove("pinnedPeerCertSha256");
+            editedStream.insert("tlsSettings", tls);
             return;
         }
 

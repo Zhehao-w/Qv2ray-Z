@@ -20,12 +20,14 @@ class OutboundEditor
     QString GetFriendlyName();
     QString GetDisplayName() const;
 
+  public slots:
+    void accept() override;
+
   private:
     explicit OutboundEditor(QWidget *parent = nullptr);
     QvMessageBusSlotDecl;
 
   private slots:
-    void on_buttonBox_accepted();
     void on_ipLineEdit_textEdited(const QString &arg1);
     void on_muxConcurrencyTxt_valueChanged(int arg1);
     void on_muxEnabledCB_stateChanged(int arg1);

@@ -34,6 +34,7 @@ TEST_CASE("TLS pin editor output is serialized using the current Xray string fie
 {
     StreamSettingsObject model;
     model.security = "tls";
+    model.tlsSettings.serverName = "pin.example";
     model.tlsSettings.pinnedPeerCertificateChainSha256 = { PinA, PinB };
 
     auto editedStream = model.toJson();
@@ -41,6 +42,36 @@ TEST_CASE("TLS pin editor output is serialized using the current Xray string fie
     const auto tls = editedStream.value("tlsSettings").toObject();
 
     REQUIRE(tls.value("pinnedPeerCertSha256").toString() == PinA + "," + PinB);
+    REQUIRE_FALSE(tls.contains("pinnedPeerCertificateChainSha256"));
+}
+
+TEST_CASE("current TLS pin requires a non-empty server name")
+{
+    StreamSettingsObject model;
+    model.security = "tls";
+    model.tlsSettings.pinnedPeerCertificateChainSha256 = { PinA };
+
+    REQUIRE(HasCurrentTlsPins(model));
+    REQUIRE_FALSE(CanSerializeCurrentTlsPin(model));
+
+    model.tlsSettings.serverName = "   ";
+    REQUIRE_FALSE(CanSerializeCurrentTlsPin(model));
+
+    model.tlsSettings.serverName = "pin.example";
+    REQUIRE(CanSerializeCurrentTlsPin(model));
+}
+
+TEST_CASE("TLS pin finalizer refuses to emit an unsafe pin without server name")
+{
+    StreamSettingsObject model;
+    model.security = "tls";
+    model.tlsSettings.pinnedPeerCertificateChainSha256 = { PinA };
+
+    auto editedStream = model.toJson();
+    FinalizeTlsPinForXray({}, editedStream);
+    const auto tls = editedStream.value("tlsSettings").toObject();
+
+    REQUIRE_FALSE(tls.contains("pinnedPeerCertSha256"));
     REQUIRE_FALSE(tls.contains("pinnedPeerCertificateChainSha256"));
 }
 
@@ -79,7 +110,8 @@ TEST_CASE("current TLS pin edits do not rewrite a coexisting legacy field")
     original["streamSettings"] = QJsonObject{
         { "network", "tcp" },
         { "security", "tls" },
-        { "tlsSettings", QJsonObject{ { "pinnedPeerCertSha256", PinA },
+        { "tlsSettings", QJsonObject{ { "serverName", "pin.example" },
+                                      { "pinnedPeerCertSha256", PinA },
                                       { "pinnedPeerCertificateChainSha256", QJsonArray{ LegacyPin } } } }
     };
 
@@ -106,7 +138,7 @@ TEST_CASE("no-op current TLS pin save preserves exact persisted formatting")
     const auto persisted = PinA + ",  " + PinB;
     const QJsonObject originalStream{
         { "security", "tls" },
-        { "tlsSettings", QJsonObject{ { "pinnedPeerCertSha256", persisted } } }
+        { "tlsSettings", QJsonObject{ { "serverName", "pin.example" }, { "pinnedPeerCertSha256", persisted } } }
     };
 
     auto model = StreamSettingsObject::fromJson(originalStream);

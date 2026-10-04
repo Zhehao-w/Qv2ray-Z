@@ -83,6 +83,23 @@ OutboundEditor::~OutboundEditor()
 {
 }
 
+void OutboundEditor::accept()
+{
+    const auto *widget = pluginWidgets.value(outboundType, nullptr);
+    const bool hasStreamSettings = widget && GetProperty(widget, "QV2RAY_INTERNAL_HAS_STREAMSETTINGS");
+    const auto stream = streamSettingsWidget->GetStreamSettings();
+    if (hasStreamSettings && !Qv2ray::core::connection::tls_pin::CanSerializeCurrentTlsPin(stream))
+    {
+        QvMessageBoxWarn(this, tr("TLS certificate pin requires Server Name"),
+                         tr("The bundled Xray v26.3.27 must not use pinnedPeerCertSha256 without a non-empty Server Name because that combination is "
+                            "affected by GHSA-5wf9-h793-w73c. Add a Server Name or clear the TLS certificate pin before saving."));
+        return;
+    }
+
+    resultConfig = generateConnectionJson();
+    QDialog::accept();
+}
+
 OUTBOUND OutboundEditor::OpenEditor()
 {
     int resultCode = this->exec();
@@ -174,11 +191,6 @@ void OutboundEditor::reloadGUI()
                              tr("Please use the JsonEditor or reload the plugin."));
         reject();
     }
-}
-
-void OutboundEditor::on_buttonBox_accepted()
-{
-    resultConfig = generateConnectionJson();
 }
 
 void OutboundEditor::on_ipLineEdit_textEdited(const QString &arg1)
