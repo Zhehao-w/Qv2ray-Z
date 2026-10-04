@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base/Qv2rayBase.hpp"
+#include "core/handler/RouteStorage.hpp"
 
 namespace Qv2ray::core::handler
 {
@@ -10,7 +11,15 @@ namespace Qv2ray::core::handler
       public:
         explicit RouteHandler(QObject *parent = nullptr);
         ~RouteHandler();
-        void SaveRoutes() const;
+        bool SaveRoutes();
+        route_storage::RouteStorageState GetRouteStorageState() const
+        {
+            return routeStorageState;
+        }
+        QString GetRouteStorageError() const
+        {
+            return routeStorageError;
+        }
         //
         std::tuple<bool, QvConfig_DNS, QvConfig_FakeDNS> GetDNSSettings(const GroupRoutingId &id) const
         {
@@ -33,7 +42,16 @@ namespace Qv2ray::core::handler
         bool ExpandChainedOutbounds(CONFIGROOT &) const;
 
       private:
+        bool CanMutateRoutes() const
+        {
+            return route_storage::IsRouteStorageWritable(routeStorageState);
+        }
+
         QHash<GroupRoutingId, GroupRoutingConfig> configs;
+        QJsonObject routeStorageObject;
+        route_storage::RouteStorageState routeStorageState = route_storage::RouteStorageState::Missing;
+        QString routeStorageError;
+        bool routeStorageDirty = false;
     };
     inline ::Qv2ray::core::handler::RouteHandler *RouteManager = nullptr;
 } // namespace Qv2ray::core::handler

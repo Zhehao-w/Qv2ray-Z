@@ -12,40 +12,87 @@ namespace Qv2ray::core::handler
 {
     RouteHandler::RouteHandler(QObject *parent) : QObject(parent)
     {
-        const auto routesJson = JsonFromString(StringFromFile(QV2RAY_CONFIG_DIR + "routes.json"));
-        for (const auto &routeId : routesJson.keys())
+        const auto routesPath = QV2RAY_CONFIG_DIR + "routes.json";
+        const auto snapshot = route_storage::LoadRouteStorage(routesPath);
+        routeStorageState = snapshot.state;
+        routeStorageError = snapshot.error;
+
+        if (routeStorageState == route_storage::RouteStorageState::Valid)
         {
-            configs.insert(GroupRoutingId{ routeId }, GroupRoutingConfig::fromJson(routesJson.value(routeId).toObject()));
+            routeStorageObject = snapshot.object;
+            for (const auto &routeId : routeStorageObject.keys())
+            {
+                const auto value = routeStorageObject.value(routeId);
+                if (!value.isObject())
+                {
+                    LOG("Preserving non-object routes.json entry without treating it as managed routing: " + routeId);
+                    continue;
+                }
+                configs.insert(GroupRoutingId{ routeId }, GroupRoutingConfig::fromJson(value.toObject()));
+            }
+        }
+        else if (routeStorageState == route_storage::RouteStorageState::Invalid ||
+                 routeStorageState == route_storage::RouteStorageState::Unreadable)
+        {
+            LOG("routes.json is invalid or unreadable; routing persistence is read-only for this session: " + routeStorageError);
         }
     }
 
     RouteHandler::~RouteHandler()
     {
-        SaveRoutes();
+        if (routeStorageDirty && !SaveRoutes())
+            LOG("Failed to persist routes.json during shutdown: " + routeStorageError);
     }
 
-    void RouteHandler::SaveRoutes() const
+    bool RouteHandler::SaveRoutes()
     {
-        QJsonObject routingObject;
-        for (const auto &key : configs.keys())
+        if (!CanMutateRoutes())
         {
-            routingObject[key.toString()] = configs[key].toJson();
+            routeStorageError = QStringLiteral("routes.json is invalid or unreadable; ordinary save is blocked until explicit recovery");
+            LOG(routeStorageError);
+            return false;
         }
-        StringToFile(JsonToString(routingObject), QV2RAY_CONFIG_DIR + "routes.json");
+
+        if (!routeStorageDirty)
+            return true;
+
+        auto routingObject = routeStorageObject;
+        for (const auto &key : configs.keys())
+            routingObject[key.toString()] = configs[key].toJson();
+
+        QString error;
+        if (!route_storage::SaveRouteStorage(QV2RAY_CONFIG_DIR + "routes.json", routeStorageState, routingObject, &error))
+        {
+            routeStorageError = error;
+            LOG("Failed to save routes.json: " + routeStorageError);
+            return false;
+        }
+
+        routeStorageObject = routingObject;
+        routeStorageState = route_storage::RouteStorageState::Valid;
+        routeStorageError.clear();
+        routeStorageDirty = false;
+        return true;
     }
 
     bool RouteHandler::SetDNSSettings(const GroupRoutingId &id, bool overrideGlobal, const QvConfig_DNS &dns, const QvConfig_FakeDNS &fakeDNS)
     {
+        if (!CanMutateRoutes())
+            return false;
         configs[id].overrideDNS = overrideGlobal;
         configs[id].dnsConfig = dns;
         configs[id].fakeDNSConfig = fakeDNS;
+        routeStorageDirty = true;
         return true;
     }
 
     bool RouteHandler::SetAdvancedRouteSettings(const GroupRoutingId &id, bool overrideGlobal, const QvConfig_Route &route)
     {
+        if (!CanMutateRoutes())
+            return false;
         configs[id].overrideRoute = overrideGlobal;
         configs[id].routeConfig = route;
+        routeStorageDirty = true;
         return true;
     }
 
