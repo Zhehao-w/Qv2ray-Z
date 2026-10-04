@@ -25,7 +25,8 @@
         "network": "tcp",
         "security": "tls",
         "tlsSettings": {
-          "serverName": "tls-vision.example.invalid"
+          "serverName": "tls-vision.example.invalid",
+          "pinnedPeerCertSha256": "0000000000000000000000000000000000000000000000000000000000000000"
         }
       }
     },

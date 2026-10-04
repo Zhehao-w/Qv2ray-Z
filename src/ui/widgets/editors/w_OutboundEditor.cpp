@@ -2,6 +2,7 @@
 
 #include "core/connection/Generation.hpp"
 #include "core/connection/OutboundEditorPersistence.hpp"
+#include "core/connection/TlsPinCompatibility.hpp"
 #include "plugin-interface/QvGUIPluginInterface.hpp"
 #include "ui/widgets/common/WidgetUIBase.hpp"
 #include "ui/widgets/editors/w_JsonEditor.hpp"
@@ -9,6 +10,7 @@
 
 #include <QFile>
 #include <QIntValidator>
+#include <QPushButton>
 
 #define QV_MODULE_NAME "OutboundEditor"
 
@@ -25,6 +27,12 @@ OutboundEditor::OutboundEditor(QWidget *parent) : QDialog(parent), tag(OUTBOUND_
     //
     streamSettingsWidget = new StreamSettingsWidget(this);
     streamSettingsWidget->SetStreamObject({});
+    if (auto *pinButton = streamSettingsWidget->findChild<QPushButton *>(QStringLiteral("pinnedPeerCertificateChainSha256Btn")))
+    {
+        pinButton->setText(tr("Open pinnedPeerCertSha256 Editor"));
+        pinButton->setToolTip(
+            tr("Edits the current Xray pinnedPeerCertSha256 value. Legacy pinnedPeerCertificateChainSha256 data is preserved unchanged."));
+    }
     transportFrame->addWidget(streamSettingsWidget);
     //
     for (const auto &name : PluginHost->UsablePlugins())
@@ -97,6 +105,7 @@ OUTBOUND OutboundEditor::generateConnectionJson()
 {
     OUTBOUNDSETTING settings;
     auto streaming = streamSettingsWidget->GetStreamSettings().toJson();
+    Qv2ray::core::connection::tls_pin::FinalizeTlsPinForXray(originalConfig.value("streamSettings").toObject(), streaming);
     bool processed = false;
     for (const auto &[protocol, widget] : pluginWidgets.toStdMap())
     {
@@ -130,7 +139,10 @@ void OutboundEditor::reloadGUI()
     outboundType = originalConfig["protocol"].toString("vmess");
     muxConfig = originalConfig.contains("mux") ? originalConfig["mux"].toObject() : QJsonObject{};
     useForwardProxy = originalConfig[QV2RAY_USE_FPROXY_KEY].toBool(false);
-    streamSettingsWidget->SetStreamObject(StreamSettingsObject::fromJson(originalConfig["streamSettings"].toObject()));
+    const auto originalStream = originalConfig["streamSettings"].toObject();
+    auto streamObject = StreamSettingsObject::fromJson(originalStream);
+    Qv2ray::core::connection::tls_pin::PrepareTlsPinEditorModel(originalStream, streamObject);
+    streamSettingsWidget->SetStreamObject(streamObject);
     //
     useFPCB->setChecked(useForwardProxy);
     muxEnabledCB->setChecked(muxConfig["enabled"].toBool());
