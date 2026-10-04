@@ -2,6 +2,7 @@
 
 #include "CommonTypes.hpp"
 #include "QvGUIPluginInterface.hpp"
+#include "base/SingleServerSettingsCompatibility.hpp"
 #include "ui_socksout.h"
 
 class SocksOutboundEditor
@@ -26,14 +27,14 @@ class SocksOutboundEditor
 
     void SetContent(const QJsonObject &source) override
     {
-        auto servers = source["servers"].toArray();
-        if (servers.isEmpty())
-            return;
-        const auto content = servers.first().toObject();
-        socks.loadJson(content);
+        this->content = source;
+        const auto servers = source["servers"].toArray();
+        if (!servers.isEmpty())
+            socks.loadJson(servers.first().toObject());
         PLUGIN_EDITOR_LOADING_SCOPE({
             if (socks.users.isEmpty())
                 socks.users.push_back({});
+            originalManagedServer = socks.toJson();
             socks_UserNameTxt->setText(socks.users.first().user);
             socks_PasswordTxt->setText(socks.users.first().pass);
         })
@@ -41,10 +42,10 @@ class SocksOutboundEditor
 
     const QJsonObject GetContent() const override
     {
-        auto result = socks.toJson();
-        if (socks.users.isEmpty() || (socks.users.first().user.isEmpty() && socks.users.first().pass.isEmpty()))
-            result.remove("users");
-        return QJsonObject{ { "servers", QJsonArray{ result } } };
+        return Qv2ray::base::single_server_settings::ApplyManagedFirstServerChanges(
+            content, QStringLiteral("servers"), originalManagedServer, socks.toJson(),
+            { QStringLiteral("address"), QStringLiteral("port") }, QStringLiteral("users"),
+            { QStringLiteral("user"), QStringLiteral("pass") }, true);
     }
 
   protected:
@@ -56,4 +57,5 @@ class SocksOutboundEditor
 
   private:
     SocksServerObject socks;
+    QJsonObject originalManagedServer;
 };
