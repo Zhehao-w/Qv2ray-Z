@@ -29,15 +29,19 @@ namespace Qv2ray::base::vless_settings
             return Representation::Unsupported;
 
         const auto vnext = settings.value(QStringLiteral("vnext")).toArray();
-        if (vnext.isEmpty() || !vnext.first().isObject())
+        if (vnext.isEmpty())
+            return Representation::VNext;
+        if (!vnext.first().isObject())
             return Representation::Unsupported;
 
         const auto server = vnext.first().toObject();
+        if (!server.contains(QStringLiteral("users")))
+            return Representation::VNext;
         if (!server.value(QStringLiteral("users")).isArray())
             return Representation::Unsupported;
 
         const auto users = server.value(QStringLiteral("users")).toArray();
-        if (users.isEmpty() || !users.first().isObject())
+        if (!users.isEmpty() && !users.first().isObject())
             return Representation::Unsupported;
 
         return Representation::VNext;
@@ -92,14 +96,8 @@ namespace Qv2ray::base::vless_settings
             target.remove(key);
     }
 
-    inline bool HasManagedChanges(const QJsonObject &baselineServer, const QJsonObject &editedServer)
+    inline bool HasManagedUserChanges(const QJsonObject &baselineServer, const QJsonObject &editedServer)
     {
-        for (const auto &key : { QStringLiteral("address"), QStringLiteral("port") })
-        {
-            if (baselineServer.value(key) != editedServer.value(key))
-                return true;
-        }
-
         const auto baselineUser = FirstUser(baselineServer);
         const auto editedUser = FirstUser(editedServer);
         for (const auto &key : { QStringLiteral("id"), QStringLiteral("encryption"), QStringLiteral("flow") })
@@ -110,12 +108,38 @@ namespace Qv2ray::base::vless_settings
         return false;
     }
 
+    inline bool HasManagedChanges(const QJsonObject &baselineServer, const QJsonObject &editedServer)
+    {
+        for (const auto &key : { QStringLiteral("address"), QStringLiteral("port") })
+        {
+            if (baselineServer.value(key) != editedServer.value(key))
+                return true;
+        }
+        return HasManagedUserChanges(baselineServer, editedServer);
+    }
+
+    inline void CopyManagedUserFields(const QJsonObject &editedUser, QJsonObject &target)
+    {
+        for (const auto &key : { QStringLiteral("id"), QStringLiteral("encryption"), QStringLiteral("flow") })
+        {
+            if (editedUser.contains(key))
+                target.insert(key, editedUser.value(key));
+        }
+    }
+
     inline QJsonObject ApplyManagedServerChanges(const QJsonObject &originalSettings, const QJsonObject &baselineServer,
                                                  const QJsonObject &editedServer)
     {
         const auto representation = DetectRepresentation(originalSettings);
         if (representation == Representation::Unsupported || !HasManagedChanges(baselineServer, editedServer))
             return originalSettings;
+
+        // Empty settings belong to a newly created editor entry, not persisted
+        // compatibility data. Initialize its historical vnext representation
+        // from the complete typed editor model so required defaults such as
+        // encryption=none are present for Xray.
+        if (originalSettings.isEmpty())
+            return QJsonObject{ { QStringLiteral("vnext"), QJsonArray{ editedServer } } };
 
         auto result = originalSettings;
         if (representation == Representation::Flat)
@@ -125,14 +149,26 @@ namespace Qv2ray::base::vless_settings
 
             const auto baselineUser = FirstUser(baselineServer);
             const auto editedUser = FirstUser(editedServer);
-            for (const auto &key : { QStringLiteral("id"), QStringLiteral("encryption"), QStringLiteral("flow") })
-                ApplyChangedField(result, baselineUser, editedUser, key);
+            const bool originalHasManagedUser = result.contains(QStringLiteral("id")) || result.contains(QStringLiteral("encryption")) ||
+                                                result.contains(QStringLiteral("flow"));
+            if (!originalHasManagedUser && HasManagedUserChanges(baselineServer, editedServer))
+                CopyManagedUserFields(editedUser, result);
+            else
+            {
+                for (const auto &key : { QStringLiteral("id"), QStringLiteral("encryption"), QStringLiteral("flow") })
+                    ApplyChangedField(result, baselineUser, editedUser, key);
+            }
             return result;
         }
 
         auto vnext = result.value(QStringLiteral("vnext")).toArray();
         if (vnext.isEmpty())
-            vnext.append(QJsonObject{});
+        {
+            vnext.append(editedServer);
+            result.insert(QStringLiteral("vnext"), vnext);
+            return result;
+        }
+
         auto server = vnext.first().toObject();
         ApplyChangedField(server, baselineServer, editedServer, QStringLiteral("address"));
         ApplyChangedField(server, baselineServer, editedServer, QStringLiteral("port"));
@@ -141,12 +177,24 @@ namespace Qv2ray::base::vless_settings
         const auto editedUser = FirstUser(editedServer);
         auto users = server.value(QStringLiteral("users")).toArray();
         if (users.isEmpty())
-            users.append(QJsonObject{});
-        auto user = users.first().toObject();
-        for (const auto &key : { QStringLiteral("id"), QStringLiteral("encryption"), QStringLiteral("flow") })
-            ApplyChangedField(user, baselineUser, editedUser, key);
-        users[0] = user;
-        server.insert(QStringLiteral("users"), users);
+        {
+            if (HasManagedUserChanges(baselineServer, editedServer))
+            {
+                QJsonObject user;
+                CopyManagedUserFields(editedUser, user);
+                users.append(user);
+                server.insert(QStringLiteral("users"), users);
+            }
+        }
+        else
+        {
+            auto user = users.first().toObject();
+            for (const auto &key : { QStringLiteral("id"), QStringLiteral("encryption"), QStringLiteral("flow") })
+                ApplyChangedField(user, baselineUser, editedUser, key);
+            users[0] = user;
+            server.insert(QStringLiteral("users"), users);
+        }
+
         vnext[0] = server;
         result.insert(QStringLiteral("vnext"), vnext);
         return result;
