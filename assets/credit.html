@@ -1,30 +1,48 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
 <html>
-
 <head>
     <meta name="qrichtext" content="1" />
     <style type="text/css">
-        p,
-        li {
-            white-space: pre-wrap;
+        body {
+            font-size: 10pt;
+            font-weight: 400;
+            font-style: normal;
+        }
+        p {
+            margin-top: 0;
+            margin-bottom: 6px;
+            white-space: normal;
+        }
+        .heading {
+            font-weight: 600;
+        }
+        .notice {
+            font-weight: 600;
+            color: #d68952;
         }
     </style>
 </head>
+<body>
+    <p class="heading">Qv2ray-Z</p>
+    <p>A Windows-focused continuation of Qv2ray 2.7.0 for modern official Xray-core.</p>
+    <p><b>Primary release target:</b> Windows 10/11 x64 &middot; Qt 5.15.2 &middot; MSVC 14.2</p>
+    <p><b>Runtime packaging:</b> Release builds bundle a pinned official Xray-core and verified Geo routing assets. The exact source commit, component versions and hashes are recorded in <code>release-manifest.json</code>.</p>
+    <p><b>Maintenance scope:</b> Modern Xray compatibility, conservative configuration preservation, Windows reliability, and removal of retired or unreachable legacy surfaces.</p>
+    <p>Repository: <a href="https://github.com/Zhehao-w/Qv2ray-Z">github.com/Zhehao-w/Qv2ray-Z</a></p>
 
-<body style=" font-family:'WenQuanYi Micro Hei'; font-size:10pt; font-weight:400; font-style:normal;">
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; font-weight:600; color:#d68952;">This program comes with ABSOLUTELY NO WARRANTY.</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; font-weight:600; color:#d68952;">This is free software, and you are welcome to redistribute it under certain conditions.</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2019-2021 Qv2ray Development Group.</span></p>
-    <p style="-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'Noto Sans'; color:#d68952;"><br /></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; font-weight:600; color:#d68952;">Libraries that have been used in Qv2ray are listed below (Sorted by date added):</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2011 SCHUTZ Sacha (@dridk): QJsonModel (MIT)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2016 Singein (@Singein): ScreenShot (MIT)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2021 Itay Grudev (@itay-grudev): SingleApplication (MIT)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2021 paceholder (@paceholder): nodeeditor (Qv2ray group modified version) (BSD-3-Clause)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2019 TheWanderingCoel (@TheWanderingCoel): ShadowClash (launchatlogin) (GPLv3)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2020 DuckSoft (@DuckSoft): QvRPCBridge (WTFPL)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2019 ShadowSocks (@shadowsocks): libQtShadowsocks (LGPLv3)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2015-2020 qBittorrent (Anton Lashkov) (@qBittorrent): speedplotview (GPLv2)</span></p>
-    <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"><span style=" font-family:'MonoSpace'; color:#d68952;">Copyright (c) 2020 feiyangqingyun: QWidgetDemo (Mulan PSL v1)</span></p>
+    <p class="notice">This program comes with ABSOLUTELY NO WARRANTY.</p>
+    <p>This is free software, and you are welcome to redistribute it under the conditions of the GNU General Public License version 3.</p>
+    <p>Based on Qv2ray. Copyright (c) 2019-2021 Qv2ray Development Group. Original project attribution, history, and applicable third-party notices are retained.</p>
+
+    <p class="heading">Retained upstream and third-party attribution</p>
+    <p>Copyright (c) 2011 SCHUTZ Sacha (@dridk): QJsonModel (MIT)</p>
+    <p>Copyright (c) 2016 Singein (@Singein): ScreenShot (MIT)</p>
+    <p>Copyright (c) 2021 Itay Grudev (@itay-grudev): SingleApplication (MIT)</p>
+    <p>Copyright (c) 2021 paceholder (@paceholder): nodeeditor (Qv2ray group modified version) (BSD-3-Clause)</p>
+    <p>Copyright (c) 2019 TheWanderingCoel (@TheWanderingCoel): ShadowClash (launchatlogin) (GPLv3)</p>
+    <p>Copyright (c) 2020 DuckSoft (@DuckSoft): QvRPCBridge (WTFPL)</p>
+    <p>Copyright (c) 2019 ShadowSocks (@shadowsocks): libQtShadowsocks (LGPLv3)</p>
+    <p>Copyright (c) 2015-2020 qBittorrent (Anton Lashkov) (@qBittorrent): speedplotview (GPLv2)</p>
+    <p>Copyright (c) 2020 feiyangqingyun: QWidgetDemo (Mulan PSL v1)</p>
 </body>
 </html>
