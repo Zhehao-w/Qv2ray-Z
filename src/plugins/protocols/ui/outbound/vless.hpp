@@ -2,6 +2,7 @@
 
 #include "CommonTypes.hpp"
 #include "QvGUIPluginInterface.hpp"
+#include "base/VLESSSettingsCompatibility.hpp"
 #include "ui_vless.h"
 
 class VlessOutboundEditor
@@ -27,11 +28,10 @@ class VlessOutboundEditor
     {
         this->content = content;
         PLUGIN_EDITOR_LOADING_SCOPE({
-            if (content["vnext"].toArray().isEmpty())
-                content["vnext"] = QJsonArray{ QJsonObject{} };
-            vless = VLESSServerObject::fromJson(content["vnext"].toArray().first().toObject());
+            vless = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(content));
             if (vless.users.isEmpty())
                 vless.users.push_back({});
+            originalManagedServer = vless.toJson();
             const auto &user = vless.users.front();
             vLessIDTxt->setText(user.id);
             vLessSecurityCombo->setCurrentText(user.encryption);
@@ -41,11 +41,7 @@ class VlessOutboundEditor
 
     const QJsonObject GetContent() const override
     {
-        auto result = content;
-        QJsonArray vnext;
-        vnext.append(vless.toJson());
-        result.insert("vnext", vnext);
-        return result;
+        return Qv2ray::base::vless_settings::ApplyManagedServerChanges(content, originalManagedServer, vless.toJson());
     }
 
   protected:
@@ -53,6 +49,7 @@ class VlessOutboundEditor
 
   private:
     VLESSServerObject vless;
+    QJsonObject originalManagedServer;
 
   private slots:
     void on_flowCombo_currentTextChanged(const QString &arg1);
