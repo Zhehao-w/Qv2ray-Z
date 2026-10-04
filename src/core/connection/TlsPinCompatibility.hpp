@@ -29,24 +29,6 @@ namespace Qv2ray::core::connection::tls_pin
         return pins;
     }
 
-    inline bool HasCurrentTlsPins(const StreamSettingsObject &stream)
-    {
-        if (stream.security != QStringLiteral("tls"))
-            return false;
-
-        for (const auto &pin : stream.tlsSettings.pinnedPeerCertificateChainSha256)
-        {
-            if (!pin.trimmed().isEmpty())
-                return true;
-        }
-        return false;
-    }
-
-    inline bool CanSerializeCurrentTlsPin(const StreamSettingsObject &stream)
-    {
-        return !HasCurrentTlsPins(stream) || !stream.tlsSettings.serverName.trimmed().isEmpty();
-    }
-
     inline QJsonValue RuntimeJsonField(const QJsonObject &object, const QString &field)
     {
         // Go's JSON decoder accepts case-insensitive field names. Ambiguous
@@ -56,6 +38,22 @@ namespace Qv2ray::core::connection::tls_pin
             if (it.key().compare(field, Qt::CaseInsensitive) == 0)
                 value = it.value();
         return value;
+    }
+
+    inline bool HasEffectiveTlsVerificationName(const QJsonObject &tls)
+    {
+        const auto serverName = RuntimeJsonField(tls, "serverName").toString();
+        // Xray maps the case-insensitive fromMitm sentinel to an empty name.
+        // It must not satisfy the guard on transports that do not infer one.
+        if (!serverName.trimmed().isEmpty() && serverName.compare(QStringLiteral("fromMitm"), Qt::CaseInsensitive) != 0)
+            return true;
+
+        // Xray parses this supported alternate verifier as a comma-separated
+        // list of trimmed names, skipping empty entries. Preserve the raw text.
+        for (const auto &name : RuntimeJsonField(tls, "verifyPeerCertByName").toString().split(','))
+            if (!name.trimmed().isEmpty())
+                return true;
+        return false;
     }
 
     inline std::optional<QString> ValidateRuntimeJsonFieldNames(const QJsonObject &object, const QStringList &fields, const QString &location)
@@ -104,17 +102,17 @@ namespace Qv2ray::core::connection::tls_pin
                 const auto tls = RuntimeJsonField(stream, "tlsSettings").toObject();
                 const bool usesTls = RuntimeJsonField(stream, "security").toString().compare(QStringLiteral("tls"), Qt::CaseInsensitive) == 0;
                 if (usesTls)
-                    if (const auto error =
-                            ValidateRuntimeJsonFieldNames(tls, { "pinnedPeerCertSha256", "serverName" }, entry.second + ".tlsSettings");
+                    if (const auto error = ValidateRuntimeJsonFieldNames(tls, { "pinnedPeerCertSha256", "serverName", "verifyPeerCertByName" },
+                                                                         entry.second + ".tlsSettings");
                         error)
                         return error;
                 const auto pin = RuntimeJsonField(tls, "pinnedPeerCertSha256");
-                if (usesTls && pin.isString() && !ParseCurrentTlsPin(pin.toString()).isEmpty() &&
-                    RuntimeJsonField(tls, "serverName").toString().trimmed().isEmpty())
+                if (usesTls && pin.isString() && !ParseCurrentTlsPin(pin.toString()).isEmpty() && !HasEffectiveTlsVerificationName(tls))
                 {
-                    return QObject::tr("Cannot start connection: %1 uses pinnedPeerCertSha256 without a non-empty tlsSettings.serverName. "
+                    return QObject::tr("Cannot start connection: %1 uses pinnedPeerCertSha256 without an effective certificate verification name. "
                                        "The bundled Xray v26.3.27 is affected by GHSA-5wf9-h793-w73c. "
-                                       "Set the intended certificate verification name in the connection's TLS settings or JSON configuration.")
+                                       "Set the intended name in tlsSettings.serverName (not fromMitm), or supply a non-empty name list in "
+                                       "tlsSettings.verifyPeerCertByName.")
                         .arg(entry.second);
                 }
 
@@ -195,17 +193,9 @@ namespace Qv2ray::core::connection::tls_pin
             return;
         }
 
-        // Bundled Xray v26.3.27 is affected by GHSA-5wf9-h793-w73c. Do not
-        // emit the current pin field without an explicit verification name.
-        // The Outbound Editor blocks this state before save; this branch is
-        // defense-in-depth for any future caller that bypasses the UI gate.
-        if (!editedPins.isEmpty() && tls.value("serverName").toString().trimmed().isEmpty())
-        {
-            tls.remove("pinnedPeerCertSha256");
-            editedStream.insert("tlsSettings", tls);
-            return;
-        }
-
+        // Convert the editor representation without discarding an unnamed pin.
+        // The editor and startup validators check the final preserved JSON,
+        // which may contain an opaque verifyPeerCertByName alternate verifier.
         const auto originalTls = originalStream.value("tlsSettings").toObject();
         const auto originalCurrent = originalTls.value("pinnedPeerCertSha256");
 

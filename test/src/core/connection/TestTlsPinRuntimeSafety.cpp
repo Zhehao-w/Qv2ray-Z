@@ -101,6 +101,66 @@ TEST_CASE("Runtime TLS pin validation preserves inactive and unrepresentable met
     REQUIRE(QJsonDocument(root).toJson(QJsonDocument::Compact) == before);
 }
 
+TEST_CASE("The fromMitm sentinel is not an effective TLS certificate verification name")
+{
+    for (const auto &network : { "grpc", "hysteria" })
+        for (const auto &name : { "fromMitm", "FROMMITM", "FrOmMiTm" })
+        {
+            INFO(network);
+            INFO(name);
+            auto stream = PinnedStream(network);
+            auto tls = stream.value("tlsSettings").toObject();
+            tls["serverName"] = name;
+            stream["tlsSettings"] = tls;
+            const auto root = RuntimeRoot(stream);
+            const auto original = QJsonDocument(root).toJson(QJsonDocument::Compact);
+            const auto error = ValidateRuntimeTlsPins(root);
+            REQUIRE(error.has_value());
+            REQUIRE(error->contains("GHSA-5wf9-h793-w73c"));
+            REQUIRE(error->contains("fromMitm"));
+            REQUIRE(QJsonDocument(root).toJson(QJsonDocument::Compact) == original);
+        }
+}
+
+TEST_CASE("A parsed alternate TLS verification-name list satisfies the runtime pin guard")
+{
+    for (const auto &serverName : { "", "fromMitm", "FrOmMiTm" })
+        for (const auto &names : { "pin.example", "  , pin.example, backup.example , ", " , 127.0.0.1 , " })
+        {
+            INFO(serverName);
+            INFO(names);
+            auto stream = PinnedStream();
+            auto tls = stream.value("tlsSettings").toObject();
+            tls["serverName"] = serverName;
+            tls["verifyPeerCertByName"] = names;
+            stream["tlsSettings"] = tls;
+            const auto root = RuntimeRoot(stream);
+            const auto original = QJsonDocument(root).toJson(QJsonDocument::Compact);
+            REQUIRE_FALSE(ValidateRuntimeTlsPins(root).has_value());
+            REQUIRE(QJsonDocument(root).toJson(QJsonDocument::Compact) == original);
+        }
+}
+
+TEST_CASE("An empty or unparseable alternate verifier cannot satisfy the TLS pin guard")
+{
+    for (const auto &names : { QJsonValue(""), QJsonValue("  , \t, \n "), QJsonValue(QJsonArray{ "pin.example" }), QJsonValue(QJsonValue::Null) })
+    {
+        auto stream = PinnedStream();
+        auto tls = stream.value("tlsSettings").toObject();
+        tls["serverName"] = "fromMitm";
+        tls["verifyPeerCertByName"] = names;
+        stream["tlsSettings"] = tls;
+        REQUIRE(ValidateRuntimeTlsPins(RuntimeRoot(stream)).has_value());
+    }
+
+    auto stream = PinnedStream();
+    auto tls = stream.value("tlsSettings").toObject();
+    tls["serverName"] = "pin.example";
+    tls["verifyPeerCertByName"] = "  ,  ";
+    stream["tlsSettings"] = tls;
+    REQUIRE_FALSE(ValidateRuntimeTlsPins(RuntimeRoot(stream)).has_value());
+}
+
 TEST_CASE("Runtime TLS pin validation follows Xray's case-insensitive JSON schema")
 {
     QJsonObject tls{ { "PinnedPeerCertSha256", QString(64, 'a') } };
@@ -116,6 +176,15 @@ TEST_CASE("Runtime TLS pin validation follows Xray's case-insensitive JSON schem
     const auto original = QJsonDocument(root).toJson(QJsonDocument::Compact);
     REQUIRE_FALSE(ValidateRuntimeTlsPins(root).has_value());
     REQUIRE(QJsonDocument(root).toJson(QJsonDocument::Compact) == original);
+
+    tls.remove("ServerName");
+    tls["VerifyPeerCertByName"] = "  , pin.example, ";
+    stream["TLSSettings"] = tls;
+    outbound["StreamSettings"] = stream;
+    root["Outbounds"] = QJsonArray{ outbound };
+    const auto withAlternate = QJsonDocument(root).toJson(QJsonDocument::Compact);
+    REQUIRE_FALSE(ValidateRuntimeTlsPins(root).has_value());
+    REQUIRE(QJsonDocument(root).toJson(QJsonDocument::Compact) == withAlternate);
 }
 
 TEST_CASE("Ambiguous case variants cannot bypass runtime TLS pin validation")
@@ -138,6 +207,12 @@ TEST_CASE("Ambiguous case variants cannot bypass runtime TLS pin validation")
     {
         stream["Security"] = "tls";
         stream["security"] = QJsonValue::Null;
+    }
+    SECTION("alternate verifier case variants cannot hide the effective list")
+    {
+        tls["VerifyPeerCertByName"] = "pin.example";
+        tls["verifyPeerCertByName"] = QJsonValue::Null;
+        stream["tlsSettings"] = tls;
     }
 
     const auto root = RuntimeRoot(stream);
@@ -230,6 +305,26 @@ TEST_CASE("Runtime TLS pin validation checks nested and mixed-case XHTTP downloa
     REQUIRE_FALSE(ValidateRuntimeTlsPins(RuntimeRoot(stream)).has_value());
 }
 
+TEST_CASE("Nested XHTTP TLS pins share the sentinel and alternate-name safety rule")
+{
+    auto download = PinnedStream("xhttp");
+    auto tls = download.value("tlsSettings").toObject();
+    tls["serverName"] = "FrOmMiTm";
+    download["tlsSettings"] = tls;
+    QJsonObject stream{ { "network", "xhttp" }, { "xhttpSettings", QJsonObject{ { "extra", QJsonObject{ { "downloadSettings", download } } } } } };
+    const auto error = ValidateRuntimeTlsPins(RuntimeRoot(stream));
+    REQUIRE(error.has_value());
+    REQUIRE(error->contains("xhttpSettings.extra.downloadSettings"));
+
+    tls["verifyPeerCertByName"] = " , download.example , ";
+    download["tlsSettings"] = tls;
+    stream["xhttpSettings"] = QJsonObject{ { "extra", QJsonObject{ { "downloadSettings", download } } } };
+    const auto root = RuntimeRoot(stream);
+    const auto original = QJsonDocument(root).toJson(QJsonDocument::Compact);
+    REQUIRE_FALSE(ValidateRuntimeTlsPins(root).has_value());
+    REQUIRE(QJsonDocument(root).toJson(QJsonDocument::Compact) == original);
+}
+
 TEST_CASE("Kernel launch rejects unsafe raw TLS pins before replacing the generated config")
 {
     QvTestApplication app;
@@ -243,7 +338,17 @@ TEST_CASE("Kernel launch rejects unsafe raw TLS pins before replacing the genera
     const auto generated = directory.filePath("generated/config.gen.json");
     const QString previous = "previous generated config\r\n";
     REQUIRE(StringToFile(previous, generated));
-    const auto root = RuntimeRoot(PinnedStream());
+    auto stream = PinnedStream();
+    SECTION("missing server name")
+    {
+    }
+    SECTION("fromMitm server-name sentinel")
+    {
+        auto tls = stream.value("tlsSettings").toObject();
+        tls["serverName"] = "FrOmMiTm";
+        stream["tlsSettings"] = tls;
+    }
+    const auto root = RuntimeRoot(stream);
     const auto original = QJsonDocument(root).toJson(QJsonDocument::Compact);
     V2RayKernelInstance instance;
     int errors = 0;
@@ -256,6 +361,30 @@ TEST_CASE("Kernel launch rejects unsafe raw TLS pins before replacing the genera
     REQUIRE(errors == 0);
     REQUIRE(StringFromFile(generated) == previous);
     REQUIRE(QJsonDocument(root).toJson(QJsonDocument::Compact) == original);
+}
+
+TEST_CASE("An alternate TLS verifier reaches kernel validation without losing pin settings")
+{
+    QvTestApplication app;
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    app.ConfigPath = directory.path() + "/";
+    app.StartupArguments = {};
+    GlobalConfig.kernelConfig.KernelPath(directory.filePath("missing-xray"));
+    GlobalConfig.kernelConfig.AssetsPath(directory.path());
+    auto stream = PinnedStream();
+    auto tls = stream.value("tlsSettings").toObject();
+    tls["verifyPeerCertByName"] = " , pin.example , ";
+    stream["tlsSettings"] = tls;
+    const auto root = RuntimeRoot(stream);
+    V2RayKernelInstance instance;
+    const auto error = instance.StartConnection(root);
+    REQUIRE(error.has_value());
+    REQUIRE_FALSE(error->contains("GHSA-5wf9-h793-w73c"));
+    const auto generated = ReadJsonObjectFile(directory.filePath("generated/config.gen.json"));
+    REQUIRE(generated.status == Qv2ray::common::JsonObjectFileStatus::Valid);
+    REQUIRE(generated.object == root);
+    REQUIRE_FALSE(instance.IsKernelRunning());
 }
 
 TEST_CASE("Connection handler rejects unsafe TLS pins before dispatch or connection state changes")

@@ -72,23 +72,7 @@ TEST_CASE("TLS pin editor output is serialized using the current Xray string fie
     REQUIRE_FALSE(tls.contains("pinnedPeerCertificateChainSha256"));
 }
 
-TEST_CASE("current TLS pin requires a non-empty server name")
-{
-    StreamSettingsObject model;
-    model.security = "tls";
-    model.tlsSettings.pinnedPeerCertificateChainSha256 = { PinA };
-
-    REQUIRE(HasCurrentTlsPins(model));
-    REQUIRE_FALSE(CanSerializeCurrentTlsPin(model));
-
-    model.tlsSettings.serverName = "   ";
-    REQUIRE_FALSE(CanSerializeCurrentTlsPin(model));
-
-    model.tlsSettings.serverName = "pin.example";
-    REQUIRE(CanSerializeCurrentTlsPin(model));
-}
-
-TEST_CASE("TLS pin finalizer refuses to emit an unsafe pin without server name")
+TEST_CASE("TLS pin finalizer preserves an unnamed pin for final JSON safety validation")
 {
     StreamSettingsObject model;
     model.security = "tls";
@@ -98,8 +82,31 @@ TEST_CASE("TLS pin finalizer refuses to emit an unsafe pin without server name")
     FinalizeTlsPinForXray({}, editedStream);
     const auto tls = editedStream.value("tlsSettings").toObject();
 
-    REQUIRE_FALSE(tls.contains("pinnedPeerCertSha256"));
+    REQUIRE(tls.value("pinnedPeerCertSha256").toString() == PinA);
     REQUIRE_FALSE(tls.contains("pinnedPeerCertificateChainSha256"));
+    REQUIRE(ValidateRuntimeTlsPins(QJsonObject{ { "outbounds", QJsonArray{ QJsonObject{ { "streamSettings", editedStream } } } } }).has_value());
+}
+
+TEST_CASE("TLS pin editor persistence retains an opaque alternate verification name")
+{
+    const auto names = QStringLiteral(" , pin.example, backup.example , ");
+    OUTBOUND original;
+    original["protocol"] = "vless";
+    original["streamSettings"] = QJsonObject{ { "network", "grpc" },
+                                              { "security", "tls" },
+                                              { "tlsSettings", QJsonObject{ { "pinnedPeerCertSha256", PinA }, { "verifyPeerCertByName", names } } } };
+    const auto originalStream = original.value("streamSettings").toObject();
+    auto model = StreamSettingsObject::fromJson(originalStream);
+    PrepareTlsPinEditorModel(originalStream, model);
+    auto editedStream = model.toJson();
+    FinalizeTlsPinForXray(originalStream, editedStream);
+    const auto edited = GenerateOutboundEntry("proxy", "vless", OUTBOUNDSETTING{}, editedStream);
+    const auto result = PreserveUneditedOutboundFields(original, edited);
+    const auto tls = result.value("streamSettings").toObject().value("tlsSettings").toObject();
+
+    REQUIRE(tls.value("pinnedPeerCertSha256").toString() == PinA);
+    REQUIRE(tls.value("verifyPeerCertByName").toString() == names);
+    REQUIRE_FALSE(ValidateRuntimeTlsPins(QJsonObject{ { "outbounds", QJsonArray{ result } } }).has_value());
 }
 
 TEST_CASE("legacy TLS pin remains opaque on a no-op editor save")

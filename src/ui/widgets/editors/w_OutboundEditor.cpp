@@ -85,18 +85,16 @@ OutboundEditor::~OutboundEditor()
 
 void OutboundEditor::accept()
 {
-    const auto *widget = pluginWidgets.value(outboundType, nullptr);
-    const bool hasStreamSettings = widget && GetProperty(widget, "QV2RAY_INTERNAL_HAS_STREAMSETTINGS");
-    const auto stream = streamSettingsWidget->GetStreamSettings();
-    if (hasStreamSettings && !Qv2ray::core::connection::tls_pin::CanSerializeCurrentTlsPin(stream))
+    const auto candidate = generateConnectionJson();
+    // Validate after restoring opaque TLS fields so a supported alternate
+    // verifier can satisfy the same safety rule used by the launch boundary.
+    if (const auto error = Qv2ray::core::connection::tls_pin::ValidateRuntimeTlsPins(QJsonObject{ { "outbounds", QJsonArray{ candidate } } }); error)
     {
-        QvMessageBoxWarn(this, tr("TLS certificate pin requires Server Name"),
-                         tr("The bundled Xray v26.3.27 must not use pinnedPeerCertSha256 without a non-empty Server Name because that combination is "
-                            "affected by GHSA-5wf9-h793-w73c. Add a Server Name or clear the TLS certificate pin before saving."));
+        QvMessageBoxWarn(this, tr("Invalid TLS certificate pin settings"), *error);
         return;
     }
 
-    resultConfig = generateConnectionJson();
+    resultConfig = candidate;
     QDialog::accept();
 }
 
