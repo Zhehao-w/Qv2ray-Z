@@ -3,6 +3,7 @@
 #include "base/models/QvComplexConfigModels.hpp"
 #include "core/CoreUtils.hpp"
 #include "core/connection/Generation.hpp"
+#include "core/connection/RoutingJsonPreservation.hpp"
 #include "core/handler/ConfigHandler.hpp"
 #include "utils/QvHelpers.hpp"
 
@@ -14,21 +15,7 @@ namespace Qv2ray::core::handler
     {
         QJsonValue MergeEditedRouteSettings(const QJsonValue &original, const QJsonValue &baseline, const QJsonValue &current)
         {
-            if (baseline == current)
-                return original;
-            if (!baseline.isObject() || !current.isObject())
-                return current;
-            auto result = original.toObject();
-            const auto before = baseline.toObject();
-            const auto after = current.toObject();
-            auto keys = before.keys();
-            for (const auto &key : after.keys())
-                if (!keys.contains(key))
-                    keys.append(key);
-            for (const auto &key : keys)
-                if (before.value(key) != after.value(key))
-                    result[key] = MergeEditedRouteSettings(result.value(key), before.value(key), after.value(key));
-            return result;
+            return Qv2ray::core::connection::routing_json::MergeEditedRouteSettings(original, baseline, current);
         }
     } // namespace
 
