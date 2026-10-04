@@ -12,6 +12,13 @@ class NodeDispatcher
     using FullConfig = std::tuple<QMap<QString, INBOUND>, QMap<QString, RuleObject>, QMap<QString, OutboundObjectMeta>>;
 
   public:
+    struct ManagedJsonState
+    {
+        bool hasOriginal = false;
+        QJsonObject original;
+        QJsonObject baseline;
+    };
+
     explicit NodeDispatcher(QObject *parent = nullptr);
     ~NodeDispatcher();
     void InitializeScenes(QtNodes::FlowScene *rule, QtNodes::FlowScene *chain)
@@ -27,6 +34,14 @@ class NodeDispatcher
     [[nodiscard]] QString CreateInbound(INBOUND);
     [[nodiscard]] QString CreateOutbound(OutboundObjectMeta);
     [[nodiscard]] QString CreateRule(RuleObject);
+    ManagedJsonState GetRuleJsonState(const QString &tag) const
+    {
+        return ruleJsonState.value(tag);
+    }
+    ManagedJsonState GetBalancerJsonState(const QString &tag) const
+    {
+        return balancerJsonState.value(tag);
+    }
     bool IsNodeConstructing() const
     {
         return isOperationLocked;
@@ -94,10 +109,14 @@ class NodeDispatcher
             if (newTag.isEmpty())
                 return false;
             PROCESS(outbound)
+            if (balancerJsonState.contains(originalTag))
+                balancerJsonState[newTag] = balancerJsonState.take(originalTag);
         }
         else if constexpr (t == NODE_RULE)
         {
             PROCESS(rule)
+            if (ruleJsonState.contains(originalTag))
+                ruleJsonState[newTag] = ruleJsonState.take(originalTag);
         }
         else
         {
@@ -142,4 +161,6 @@ class NodeDispatcher
     QMap<QString, std::shared_ptr<INBOUND>> inbounds;
     QMap<QString, std::shared_ptr<RuleObject>> rules;
     QMap<QString, std::shared_ptr<OutboundObjectMeta>> outbounds;
+    QMap<QString, ManagedJsonState> ruleJsonState;
+    QMap<QString, ManagedJsonState> balancerJsonState;
 };

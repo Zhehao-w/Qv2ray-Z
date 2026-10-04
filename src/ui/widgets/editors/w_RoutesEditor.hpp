@@ -75,6 +75,8 @@ class RouteEditor
     DnsSettingsWidget *dnsWidget;
     //
     bool isLoading = false;
+    bool routingEditingSupported = true;
+    QString routingUnsupportedReason;
     QString domainStrategy;
     //
     CONFIGROOT root;

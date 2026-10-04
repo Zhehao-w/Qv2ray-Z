@@ -1,13 +1,16 @@
+#include "core/connection/RoutingJsonPreservation.hpp"
 #include "core/handler/RouteStorage.hpp"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QTemporaryDir>
 
 #include "catch.hpp"
 
+using namespace Qv2ray::core::connection::routing_json;
 using namespace Qv2ray::core::handler::route_storage;
 
 namespace
@@ -103,4 +106,111 @@ TEST_CASE("routes.json save failures propagate")
     REQUIRE_FALSE(SaveRouteStorage(path, RouteStorageState::Valid, QJsonObject{ { "route", true } }, &error));
     REQUIRE_FALSE(error.isEmpty());
     REQUIRE(QFileInfo(path).isDir());
+}
+
+TEST_CASE("graphical routing no-op merge preserves modern and opaque rule fields")
+{
+    const QJsonObject originalRule{
+        { "type", "field" },
+        { "domain", QJsonArray{ "example.com" } },
+        { "process", QJsonArray{ "chrome.exe" } },
+        { "user", QJsonArray{ "test-user" } },
+        { "localIP", QJsonArray{ "192.168.1.10" } },
+        { "localPort", "1000-2000" },
+        { "sourceIP", QJsonArray{ "10.0.0.0/8" } },
+        { "customFutureField", QJsonObject{ { "nested", QJsonArray{ 1, 2, 3 } } } },
+        { "outboundTag", "proxy" },
+    };
+    const QJsonObject baseline{
+        { "type", "field" },
+        { "domain", QJsonArray{ "example.com" } },
+        { "outboundTag", "proxy" },
+        { "balancerTag", "" },
+        { "QV2RAY_RULE_ENABLED", true },
+        { "QV2RAY_RULE_TAG", "New Rule" },
+    };
+
+    const auto merged = MergeManagedRoutingRule(originalRule, baseline, baseline);
+    REQUIRE(merged == originalRule);
+}
+
+TEST_CASE("graphical routing managed edit preserves opaque predicates and nested JSON")
+{
+    const QJsonObject customFuture{ { "nested", QJsonArray{ 1, 2, 3 } } };
+    const QJsonObject originalRule{
+        { "type", "field" },
+        { "domain", QJsonArray{ "example.com" } },
+        { "process", QJsonArray{ "chrome.exe" } },
+        { "user", QJsonArray{ "test-user" } },
+        { "localIP", QJsonArray{ "192.168.1.10" } },
+        { "localPort", "1000-2000" },
+        { "sourceIP", QJsonArray{ "10.0.0.0/8" } },
+        { "customFutureField", customFuture },
+        { "outboundTag", "proxy" },
+    };
+    const QJsonObject baseline{
+        { "type", "field" },
+        { "domain", QJsonArray{ "example.com" } },
+        { "outboundTag", "proxy" },
+    };
+    auto current = baseline;
+    current["domain"] = QJsonArray{ "edited.example" };
+
+    const auto merged = MergeManagedRoutingRule(originalRule, baseline, current);
+    REQUIRE(merged.value("domain").toArray() == QJsonArray{ "edited.example" });
+    REQUIRE(merged.value("process") == originalRule.value("process"));
+    REQUIRE(merged.value("user") == originalRule.value("user"));
+    REQUIRE(merged.value("localIP") == originalRule.value("localIP"));
+    REQUIRE(merged.value("localPort") == originalRule.value("localPort"));
+    REQUIRE(merged.value("sourceIP") == originalRule.value("sourceIP"));
+    REQUIRE(merged.value("customFutureField").toObject() == customFuture);
+}
+
+TEST_CASE("graphical routing preserves unknown root and balancer fields")
+{
+    const QJsonObject originalBalancer{
+        { "tag", "balance" },
+        { "selector", QJsonArray{ "proxy" } },
+        { "strategy", QJsonObject{ { "type", "random" }, { "futureStrategyField", QJsonObject{ { "keep", true } } } } },
+        { "fallbackTag", "direct" },
+    };
+    const auto baselineBalancer = ManagedBalancerJson("balance", { "proxy" }, "random");
+    const auto currentBalancer = ManagedBalancerJson("balance", { "proxy", "proxy-2" }, "random");
+    const auto mergedBalancer = MergeManagedRoutingBalancer(originalBalancer, baselineBalancer, currentBalancer);
+
+    REQUIRE(mergedBalancer.value("fallbackTag").toString() == "direct");
+    REQUIRE(mergedBalancer.value("strategy").toObject().value("futureStrategyField").toObject().value("keep").toBool());
+    REQUIRE(mergedBalancer.value("selector").toArray() == QJsonArray{ "proxy", "proxy-2" });
+
+    const QJsonObject originalRule{ { "type", "field" }, { "domain", QJsonArray{ "example.com" } }, { "outboundTag", "proxy" } };
+    const QJsonObject originalRouting{
+        { "domainStrategy", "AsIs" },
+        { "rules", QJsonArray{ originalRule } },
+        { "balancers", QJsonArray{ originalBalancer } },
+        { "customRoot", QJsonObject{ { "opaque", QJsonArray{ 1, 2 } } } },
+    };
+
+    const auto noOpRoot = MergeRoutingRoot(originalRouting, "AsIs", "AsIs", originalRouting.value("rules").toArray(),
+                                            originalRouting.value("balancers").toArray());
+    REQUIRE(noOpRoot == originalRouting);
+
+    const auto editedRoot = MergeRoutingRoot(originalRouting, "AsIs", "AsIs", originalRouting.value("rules").toArray(),
+                                              QJsonArray{ mergedBalancer });
+    REQUIRE(editedRoot.value("customRoot") == originalRouting.value("customRoot"));
+}
+
+TEST_CASE("graphical routing fails closed on unsupported unsafe structures")
+{
+    QString reason;
+    const QJsonObject conflictingRule{
+        { "type", "field" },
+        { "outboundTag", "proxy" },
+        { "balancerTag", "balance" },
+    };
+    REQUIRE_FALSE(IsGraphicalRoutingStateSupported(QJsonObject{ { "rules", QJsonArray{ conflictingRule } } }, &reason));
+    REQUIRE_FALSE(reason.isEmpty());
+
+    reason.clear();
+    REQUIRE_FALSE(IsGraphicalRoutingStateSupported(QJsonObject{ { "rules", QJsonObject{ { "not", "an array" } } } }, &reason));
+    REQUIRE_FALSE(reason.isEmpty());
 }
