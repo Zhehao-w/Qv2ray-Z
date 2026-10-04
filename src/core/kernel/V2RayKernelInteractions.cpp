@@ -3,6 +3,7 @@
 #include "APIBackend.hpp"
 #include "KernelProcessLifecycle.hpp"
 #include "core/connection/ConnectionIO.hpp"
+#include "core/connection/TlsPinCompatibility.hpp"
 #include "utils/QvHelpers.hpp"
 
 #include <QCoreApplication>
@@ -292,6 +293,11 @@ namespace Qv2ray::core::kernel
             LOG("Status is invalid, expect STOPPED when calling StartConnection");
             return tr("Invalid V2Ray Instance Status.");
         }
+
+        // Refuse unsafe raw JSON before writing config.gen.json or executing
+        // any Xray validation/start process. Never remove the user's pin.
+        if (const auto error = core::connection::tls_pin::ValidateRuntimeTlsPins(root); error)
+            return error;
 
         apiEnabled = false;
         const auto json = JsonToString(root);

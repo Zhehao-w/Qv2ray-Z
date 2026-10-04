@@ -47,6 +47,105 @@ namespace Qv2ray::core::connection::tls_pin
         return !HasCurrentTlsPins(stream) || !stream.tlsSettings.serverName.trimmed().isEmpty();
     }
 
+    inline QJsonValue RuntimeJsonField(const QJsonObject &object, const QString &field)
+    {
+        // Go's JSON decoder accepts case-insensitive field names. Ambiguous
+        // case variants are rejected below before interpreting these fields.
+        QJsonValue value(QJsonValue::Undefined);
+        for (auto it = object.constBegin(); it != object.constEnd(); ++it)
+            if (it.key().compare(field, Qt::CaseInsensitive) == 0)
+                value = it.value();
+        return value;
+    }
+
+    inline std::optional<QString> ValidateRuntimeJsonFieldNames(const QJsonObject &object, const QStringList &fields, const QString &location)
+    {
+        for (const auto &field : fields)
+        {
+            int matches = 0;
+            for (auto it = object.constBegin(); it != object.constEnd(); ++it)
+                if (it.key().compare(field, Qt::CaseInsensitive) == 0)
+                    ++matches;
+            if (matches > 1)
+                return QObject::tr("Cannot start connection: %1 contains multiple case variants of %2. "
+                                   "Use a single field spelling so the TLS pin safety check can verify the effective Xray settings.")
+                    .arg(location, field);
+        }
+        return std::nullopt;
+    }
+
+    inline std::optional<QString> ValidateRuntimeTlsPins(const QJsonObject &root)
+    {
+        // Inspect the final raw JSON, not the editor's typed model: imported,
+        // complex and expanded outbounds can bypass the editor entirely.
+        if (const auto error = ValidateRuntimeJsonFieldNames(root, { "outbounds" }, QStringLiteral("configuration")); error)
+            return error;
+        const auto outbounds = RuntimeJsonField(root, "outbounds").toArray();
+        for (int index = 0; index < outbounds.size(); ++index)
+        {
+            const auto outbound = outbounds.at(index).toObject();
+            auto location = QStringLiteral("outbounds[%1]").arg(index);
+            const auto tag = RuntimeJsonField(outbound, "tag").toString();
+            if (!tag.isEmpty())
+                location += QStringLiteral(" (%1)").arg(tag);
+
+            if (const auto error = ValidateRuntimeJsonFieldNames(outbound, { "streamSettings" }, location); error)
+                return error;
+
+            QList<QPair<QJsonObject, QString>> streams{ { RuntimeJsonField(outbound, "streamSettings").toObject(), location + ".streamSettings" } };
+            while (!streams.isEmpty())
+            {
+                const auto entry = streams.takeLast();
+                const auto &stream = entry.first;
+                if (const auto error = ValidateRuntimeJsonFieldNames(
+                        stream, { "security", "tlsSettings", "network", "xhttpSettings", "splithttpSettings" }, entry.second);
+                    error)
+                    return error;
+                const auto tls = RuntimeJsonField(stream, "tlsSettings").toObject();
+                const bool usesTls = RuntimeJsonField(stream, "security").toString().compare(QStringLiteral("tls"), Qt::CaseInsensitive) == 0;
+                if (usesTls)
+                    if (const auto error =
+                            ValidateRuntimeJsonFieldNames(tls, { "pinnedPeerCertSha256", "serverName" }, entry.second + ".tlsSettings");
+                        error)
+                        return error;
+                const auto pin = RuntimeJsonField(tls, "pinnedPeerCertSha256");
+                if (usesTls && pin.isString() && !ParseCurrentTlsPin(pin.toString()).isEmpty() &&
+                    RuntimeJsonField(tls, "serverName").toString().trimmed().isEmpty())
+                {
+                    return QObject::tr("Cannot start connection: %1 uses pinnedPeerCertSha256 without a non-empty tlsSettings.serverName. "
+                                       "The bundled Xray v26.3.27 is affected by GHSA-5wf9-h793-w73c. "
+                                       "Set the intended certificate verification name in the connection's TLS settings or JSON configuration.")
+                        .arg(entry.second);
+                }
+
+                // XHTTP can use a separate TLS download stream. Xray's extra
+                // object replaces transport settings (except host/path/mode),
+                // so inspect only the effective downloadSettings. Do not walk
+                // arbitrary opaque objects that merely resemble TLS settings.
+                const auto network = RuntimeJsonField(stream, "network").toString().toLower();
+                if (network != QStringLiteral("xhttp") && network != QStringLiteral("splithttp"))
+                    continue;
+
+                const auto field =
+                    RuntimeJsonField(stream, "xhttpSettings").isObject() ? QStringLiteral("xhttpSettings") : QStringLiteral("splithttpSettings");
+                auto transport = RuntimeJsonField(stream, field).toObject();
+                auto downloadLocation = entry.second + "." + field;
+                if (const auto error = ValidateRuntimeJsonFieldNames(transport, { "extra" }, downloadLocation); error)
+                    return error;
+                if (!RuntimeJsonField(transport, "extra").isUndefined())
+                {
+                    transport = RuntimeJsonField(transport, "extra").toObject();
+                    downloadLocation += ".extra";
+                }
+                if (const auto error = ValidateRuntimeJsonFieldNames(transport, { "downloadSettings" }, downloadLocation); error)
+                    return error;
+                if (RuntimeJsonField(transport, "downloadSettings").isObject())
+                    streams.append({ RuntimeJsonField(transport, "downloadSettings").toObject(), downloadLocation + ".downloadSettings" });
+            }
+        }
+        return std::nullopt;
+    }
+
     inline void PrepareTlsPinEditorModel(const QJsonObject &originalStream, StreamSettingsObject &stream)
     {
         // The legacy typed member is retained only as the existing editor's
