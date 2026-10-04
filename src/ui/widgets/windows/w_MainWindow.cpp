@@ -841,9 +841,7 @@ void MainWindow::OnEditRequested(const ConnectionId &id)
         auto outboundEntry = w.OpenEditor();
         isChanged = w.result() == QDialog::Accepted;
         editedDisplayName = w.GetDisplayName();
-        QJsonArray outboundsList;
-        outboundsList.push_back(outboundEntry);
-        root.insert("outbounds", outboundsList);
+        root = Qv2ray::core::connection::ReplaceEditedSingleOutbound(outBoundRoot, outboundEntry);
     }
 
     if (isChanged)

@@ -5,6 +5,18 @@
 
 namespace Qv2ray::core::connection
 {
+    inline CONFIGROOT ReplaceEditedSingleOutbound(const CONFIGROOT &originalRoot, const OUTBOUND &editedOutbound)
+    {
+        auto result = originalRoot;
+        auto outbounds = result.value(QStringLiteral("outbounds")).toArray();
+        if (outbounds.isEmpty())
+            outbounds.append(editedOutbound);
+        else
+            outbounds[0] = editedOutbound;
+        result.insert(QStringLiteral("outbounds"), outbounds);
+        return result;
+    }
+
     inline void PreserveUnknownObjectFields(const QJsonObject &original, QJsonObject &edited, const QSet<QString> &managedFields)
     {
         for (auto it = original.constBegin(); it != original.constEnd(); ++it)

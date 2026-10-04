@@ -2,6 +2,7 @@
 
 #include "CommonTypes.hpp"
 #include "QvGUIPluginInterface.hpp"
+#include "base/SingleServerSettingsCompatibility.hpp"
 #include "ui_httpout.h"
 
 class HttpOutboundEditor
@@ -26,14 +27,14 @@ class HttpOutboundEditor
 
     void SetContent(const QJsonObject &source) override
     {
-        auto servers = source["servers"].toArray();
-        if (servers.isEmpty())
-            return;
-        const auto content = servers.first().toObject();
-        http.loadJson(content);
+        this->content = source;
+        const auto servers = source["servers"].toArray();
+        if (!servers.isEmpty())
+            http.loadJson(servers.first().toObject());
         PLUGIN_EDITOR_LOADING_SCOPE({
             if (http.users.isEmpty())
                 http.users.push_back({});
+            originalManagedServer = ManagedServerJson();
             http_UserNameTxt->setText(http.users.first().user);
             http_PasswordTxt->setText(http.users.first().pass);
         })
@@ -41,10 +42,10 @@ class HttpOutboundEditor
 
     const QJsonObject GetContent() const override
     {
-        auto result = http.toJson();
-        if (http.users.isEmpty() || (http.users.first().user.isEmpty() && http.users.first().pass.isEmpty()))
-            result.remove("users");
-        return QJsonObject{ { "servers", QJsonArray{ result } } };
+        return Qv2ray::base::single_server_settings::ApplyManagedFirstServerChanges(
+            content, QStringLiteral("servers"), originalManagedServer, ManagedServerJson(),
+            { QStringLiteral("address"), QStringLiteral("port") }, QStringLiteral("users"),
+            { QStringLiteral("user"), QStringLiteral("pass") }, true);
     }
 
   protected:
@@ -55,5 +56,14 @@ class HttpOutboundEditor
     void on_http_UserNameTxt_textEdited(const QString &arg1);
 
   private:
+    QJsonObject ManagedServerJson() const
+    {
+        auto result = http.toJson();
+        if (http.users.isEmpty() || (http.users.first().user.isEmpty() && http.users.first().pass.isEmpty()))
+            result.remove(QStringLiteral("users"));
+        return result;
+    }
+
     HttpServerObject http;
+    QJsonObject originalManagedServer;
 };
