@@ -41,7 +41,9 @@ ADD_QV2RAY_TEST(kernel_process_lifecycle src/core/kernel/TestKernelProcessLifecy
 ADD_QV2RAY_TEST(threading_hygiene src/core/kernel/TestThreadingHygiene.cpp)
 ADD_QV2RAY_TEST(windows_integration_safety src/components/proxy/TestWindowsIntegrationSafety.cpp)
 ADD_QV2RAY_TEST(data_safety src/core/handler/TestDataSafety.cpp)
-target_sources(data_safety PRIVATE src/core/handler/TestRoutingPersistence.cpp)
+target_sources(data_safety PRIVATE
+    src/core/handler/TestRoutingPersistence.cpp
+    src/ui/widgets/windows/TestGroupManagerSafety.cpp)
 ADD_QV2RAY_TEST(connection_context_resolver src/core/handler/TestConnectionContextResolver.cpp)
 ADD_QV2RAY_TEST(http_request_safety src/utils/TestHTTPRequestHelper.cpp)
 ADD_QV2RAY_TEST(crash_diagnostic_safety src/utils/TestDiagnosticSafety.cpp)

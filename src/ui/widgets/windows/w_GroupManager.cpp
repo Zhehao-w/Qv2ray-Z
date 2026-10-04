@@ -1,5 +1,6 @@
 #include "w_GroupManager.hpp"
 
+#include "GroupManagerSafety.hpp"
 #include "GroupRoutePersistenceSafety.hpp"
 #include "core/connection/Generation.hpp"
 #include "core/handler/ConfigHandler.hpp"
@@ -61,6 +62,11 @@ GroupManager::GroupManager(QWidget *parent) : QvDialog("GroupManager", parent)
         }
     }
 
+    // Keep the dynamically populated context submenus inside the dialog's QObject
+    // ownership tree so closing the Group Manager destroys every action/callback.
+    connectionListRCMenu_CopyToMenu->setParent(connectionListRCMenu);
+    connectionListRCMenu_MoveToMenu->setParent(connectionListRCMenu);
+    connectionListRCMenu_LinkToMenu->setParent(connectionListRCMenu);
     //
     dnsSettingsWidget = new DnsSettingsWidget(this);
     routeSettingsWidget = new RouteSettingsMatrixWidget(GlobalConfig.kernelConfig.AssetsPath(), this);
@@ -82,8 +88,10 @@ GroupManager::GroupManager(QWidget *parent) : QvDialog("GroupManager", parent)
     //
     connect(exportConnectionAction, &QAction::triggered, this, &GroupManager::onRCMExportConnectionTriggered);
     connect(deleteConnectionAction, &QAction::triggered, this, &GroupManager::onRCMDeleteConnectionTriggered);
-    //
-    connect(ConnectionManager, &QvConfigHandler::OnConnectionLinkedWithGroup, [this] { reloadConnectionsList(currentGroupId); });
+    // Bind the functor to this dialog as its context object. Qt will disconnect it
+    // automatically when the Group Manager is destroyed, so reopening cannot leave
+    // a ConnectionManager signal targeting stale UI state.
+    connect(ConnectionManager, &QvConfigHandler::OnConnectionLinkedWithGroup, this, [this] { reloadConnectionsList(currentGroupId); });
     //
     connect(ConnectionManager, &QvConfigHandler::OnGroupCreated, this, &GroupManager::reloadGroupRCMActions);
     connect(ConnectionManager, &QvConfigHandler::OnGroupDeleted, this, &GroupManager::reloadGroupRCMActions);
@@ -111,11 +119,45 @@ GroupManager::GroupManager(QWidget *parent) : QvDialog("GroupManager", parent)
 void GroupManager::onRCMDeleteConnectionTriggered()
 {
     const auto list = GET_SELECTED_CONNECTION_IDS(SELECTED_ROWS_INDEX);
+    if (list.isEmpty())
+        return;
+
+    int destructiveCount = 0;
     for (const auto &item : list)
     {
-        ConnectionManager->RemoveConnectionFromGroup(ConnectionId(item), currentGroupId);
+        const auto membershipCount = ConnectionManager->GetConnectionContainedIn(ConnectionId(item)).count();
+        if (ClassifyConnectionRemoval(membershipCount) == ConnectionRemovalEffect::DeletePersistedConnection)
+            destructiveCount++;
+    }
+
+    if (RequiresDestructiveRemovalConfirmation(destructiveCount))
+    {
+        const auto unlinkOnlyCount = list.count() - destructiveCount;
+        auto message = tr("%1 selected connection(s) will be permanently deleted because the current group is their final persisted membership. This cannot be undone.")
+                           .arg(destructiveCount);
+        if (unlinkOnlyCount > 0)
+        {
+            message += tr("\n\n%1 other selected connection(s) will only be unlinked from this group because they still belong to another group.")
+                           .arg(unlinkOnlyCount);
+        }
+        message += tr("\n\nDo you want to continue?");
+        if (QvMessageBoxAsk(this, tr("Delete persisted connection(s)?"), message) != Yes)
+            return;
+    }
+
+    bool allRemoved = true;
+    for (const auto &item : list)
+    {
+        if (!ConnectionManager->RemoveConnectionFromGroup(ConnectionId(item), currentGroupId))
+            allRemoved = false;
     }
     reloadConnectionsList(currentGroupId);
+
+    if (!allRemoved)
+    {
+        QvMessageBoxWarn(this, tr("Remove Connection"),
+                         tr("One or more selected connections could not be removed. The connection list has been refreshed to show the persisted state."));
+    }
 }
 
 void GroupManager::onRCMExportConnectionTriggered()

@@ -77,9 +77,9 @@ class GroupManager
     QMenu *connectionListRCMenu = new QMenu(this);
     QAction *exportConnectionAction = new QAction(tr("Export Connection(s)"), connectionListRCMenu);
     QAction *deleteConnectionAction = new QAction(tr("Delete Connection(s)"), connectionListRCMenu);
-    QMenu *connectionListRCMenu_CopyToMenu = new QMenu(tr("Copy to..."));
-    QMenu *connectionListRCMenu_MoveToMenu = new QMenu(tr("Move to..."));
-    QMenu *connectionListRCMenu_LinkToMenu = new QMenu(tr("Link to..."));
+    QMenu *connectionListRCMenu_CopyToMenu = new QMenu(tr("Copy to..."), connectionListRCMenu);
+    QMenu *connectionListRCMenu_MoveToMenu = new QMenu(tr("Move to..."), connectionListRCMenu);
+    QMenu *connectionListRCMenu_LinkToMenu = new QMenu(tr("Link to..."), connectionListRCMenu);
     bool isUpdateInProgress = false;
     GroupId currentGroupId = NullGroupId;
     ConnectionId currentConnectionId = NullConnectionId;
