@@ -186,19 +186,21 @@ Qv2rayExitReason Qv2rayPlatformApplication::RunQv2ray()
     ConnectionManager = new QvConfigHandler();
 
 #ifdef Q_OS_WIN
-    // The durable recovery record is the Windows ownership authority. Release
-    // owned proxy state on every real disconnect, regardless of the current
-    // automatic-proxy preference, but never bypass the startup fail-closed
-    // ownership/access gate. Automatic mode keeps its existing MainWindow
-    // notification path; manual mode emits the clear event from this lifecycle
-    // hook because no UI cleanup will follow.
+    // Release owned Windows proxy state on every real disconnect, regardless
+    // of the current automatic-proxy preference or whether the durable record
+    // is still visible. The loaded in-memory ownership snapshot remains valid
+    // for safe compare-and-restore if a portable/network-backed config path
+    // disappears while connected. Never bypass the startup fail-closed gate.
     connect(ConnectionManager, &QvConfigHandler::OnDisconnected, this, [](const ConnectionGroupPair &) {
         using namespace Qv2ray::components::proxy::safety;
-        if (!CanManageSystemProxy() || !HasProxyRecoveryRecord(QvCoreApplication->ConfigPath))
+        if (!CanManageSystemProxy())
             return;
 
         const auto automaticProxy = GlobalConfig.inboundConfig.systemProxySettings.setSystemProxy;
-        const auto released = automaticProxy ? RecoverSystemProxyIfNeeded() : ClearSystemProxy();
+        const auto recoveryRecordVisible = HasProxyRecoveryRecord(QvCoreApplication->ConfigPath);
+        const auto cleanupMode = SelectProxyDisconnectCleanupMode(automaticProxy, recoveryRecordVisible);
+        const auto released = cleanupMode == ProxyDisconnectCleanupMode::ClearWithNotification ? ClearSystemProxy()
+                                                                                               : RecoverSystemProxyIfNeeded();
         if (!released)
             LOG("Windows system proxy ownership could not be released safely after disconnect; recovery state was retained for retry.");
     });
