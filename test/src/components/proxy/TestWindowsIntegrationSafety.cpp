@@ -144,6 +144,28 @@ TEST_CASE("Proxy recovery location index round-trips independently of the select
 #endif
 }
 
+TEST_CASE("Disconnect cleanup follows durable proxy ownership instead of the automatic proxy preference")
+{
+    using namespace Qv2ray::components::proxy::safety;
+
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    REQUIRE_FALSE(HasProxyRecoveryRecord(directory.path()));
+
+    const auto recoveryPath = ProxyRecoveryRecordPathForConfig(directory.path());
+    QFile recovery(recoveryPath);
+    REQUIRE(recovery.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    REQUIRE(recovery.write("{malformed-but-owned") > 0);
+    recovery.close();
+
+    // The lifecycle must still attempt fail-closed cleanup for an existing
+    // ownership record. Whether automatic proxy mode is currently enabled is
+    // deliberately not part of this ownership decision.
+    REQUIRE(HasProxyRecoveryRecord(directory.path()));
+    REQUIRE(QFile::remove(recoveryPath));
+    REQUIRE_FALSE(HasProxyRecoveryRecord(directory.path()));
+}
+
 TEST_CASE("Windows URL protocol command line quotes every argument")
 {
     using namespace Qv2ray::utils::windows;

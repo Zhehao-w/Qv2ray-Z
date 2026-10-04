@@ -185,6 +185,22 @@ Qv2rayExitReason Qv2rayPlatformApplication::RunQv2ray()
     RouteManager = new RouteHandler();
     ConnectionManager = new QvConfigHandler();
 
+#ifdef Q_OS_WIN
+    // Automatic proxy mode already has the existing MainWindow cleanup path.
+    // When the proxy was enabled manually (or the preference was turned off
+    // while connected), the durable ownership record is the authoritative
+    // signal that Windows proxy state still belongs to this Qv2ray session.
+    connect(ConnectionManager, &QvConfigHandler::OnDisconnected, this, [](const ConnectionGroupPair &) {
+        using namespace Qv2ray::components::proxy::safety;
+        if (GlobalConfig.inboundConfig.systemProxySettings.setSystemProxy ||
+            !HasProxyRecoveryRecord(QvCoreApplication->ConfigPath))
+            return;
+
+        if (!ClearSystemProxy())
+            LOG("Windows system proxy ownership could not be released safely after disconnect; recovery state was retained for retry.");
+    });
+#endif
+
     // Persistence callbacks are installed only after configuration loading has
     // succeeded and all state managers exist. Initialization failures and
     // secondary instances therefore cannot enter normal shutdown persistence.
@@ -207,6 +223,13 @@ void Qv2rayPlatformApplication::quitInternal()
 {
     // Do not change the order.
     ConnectionManager->StopConnection();
+#ifdef Q_OS_WIN
+    // OnDisconnected normally releases current ownership. Keep a final,
+    // idempotent ownership recovery before teardown so exit cannot leave a
+    // loopback proxy behind if the normal disconnect signal path was skipped.
+    if (!RecoverSystemProxyIfNeeded())
+        LOG("Windows system proxy ownership could not be released safely during shutdown; recovery state was retained for the next retry.");
+#endif
     RouteManager->SaveRoutes();
     ConnectionManager->SaveConnectionConfig();
     PluginHost->SavePluginSettings();

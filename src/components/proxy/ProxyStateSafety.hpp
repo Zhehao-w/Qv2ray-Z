@@ -129,6 +129,16 @@ namespace Qv2ray::components::proxy::safety
         return QDir(configPath).filePath(QString::fromLatin1(PROXY_RECOVERY_RECORD_FILENAME));
     }
 
+    inline bool HasProxyRecoveryRecord(const QString &configPath)
+    {
+        const auto path = ProxyRecoveryRecordPathForConfig(configPath);
+        // Windows proxy writes are applied only after the recovery record has
+        // been durably written. Treat any existing record, including one that
+        // later proves malformed or unreadable, as a reason to attempt the
+        // fail-closed ownership cleanup path.
+        return !path.isEmpty() && QFile::exists(path);
+    }
+
     inline QString ProxyProcessLockPath()
     {
         const auto directory = ProxySafetyDirectory();
