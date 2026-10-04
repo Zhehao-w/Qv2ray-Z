@@ -4,7 +4,6 @@
 #include "base/VLESSSettingsCompatibility.hpp"
 #include "base/VLESSShareLinkOpaque.hpp"
 #include "plugins/protocols/core/OutboundHandler.hpp"
-#include "src/core/connection/Generation.hpp"
 #include "src/core/connection/Serialization.hpp"
 
 #include <QJsonArray>
