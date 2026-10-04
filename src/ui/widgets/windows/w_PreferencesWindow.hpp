@@ -38,6 +38,23 @@ class PreferencesWindow
         }
     }
 
+  protected:
+    void showEvent(QShowEvent *event) override
+    {
+        QvDialog::showEvent(event);
+        if (property("systemProxyPreferenceMovedToGeneral").toBool())
+            return;
+        setProperty("systemProxyPreferenceMovedToGeneral", true);
+
+        label_59->hide();
+        setSysProxyCB->setParent(groupBox9);
+        setSysProxyCB->setText(tr("Enabled"));
+        setSysProxyCB->setToolTip(
+            tr("Automatically set the system proxy when a connection starts and restore it when disconnected. The tray menu can still enable or disable the current system proxy manually."));
+        formLayout_9->insertRow(2, tr("System Proxy on Connect"), setSysProxyCB);
+        setSysProxyCB->show();
+    }
+
   private:
     void updateColorScheme() override{};
     QvMessageBusSlotDecl override;

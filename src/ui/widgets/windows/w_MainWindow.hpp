@@ -6,6 +6,7 @@
 #include "ui/widgets/models/ConnectionModelHelper.hpp"
 #include "ui/widgets/widgets/ConnectionInfoWidget.hpp"
 #include "ui/widgets/widgets/ConnectionItemWidget.hpp"
+#include "ui/widgets/windows/UiPolishPolicy.hpp"
 #include "ui_w_MainWindow.h"
 
 #include <QHostAddress>
@@ -101,6 +102,27 @@ class MainWindow
     void OnPluginButtonClicked();
 
   protected:
+    void showEvent(QShowEvent *event) override
+    {
+        QMainWindow::showEvent(event);
+        if (property("defaultConnectionWidthApplied").toBool())
+            return;
+        setProperty("defaultConnectionWidthApplied", true);
+
+#if QV2RAY_FEATURE(ui_has_store_state)
+        const auto hasStoredWindowWidth = QvWidgetApplication->UIStates.value("MainWindow").toObject().contains("width");
+#else
+        constexpr auto hasStoredWindowWidth = false;
+#endif
+        const auto currentSizes = splitter->sizes();
+        if (currentSizes.size() < 2)
+            return;
+        const auto layout = Qv2ray::ui::polish::ResolveMainWindowStartupLayout(hasStoredWindowWidth, width(), currentSizes[0], currentSizes[1]);
+        if (layout.windowWidth != width())
+            resize(layout.windowWidth, height());
+        splitter->setSizes({ layout.connectionWidth, layout.contentWidth });
+    }
+
     void timerEvent(QTimerEvent *event) override;
     void keyPressEvent(QKeyEvent *e) override;
     void keyReleaseEvent(QKeyEvent *e) override;
@@ -145,7 +167,7 @@ class MainWindow
     DECL_ACTION(connectionListRCM_Menu, action_RCM_RenameConnection);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_DuplicateConnection);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_TestLatency);
-    DECL_ACTION(connectionListRCM_Menu, action_RCM_RealLatencyTest);
+    DECL_ACTION(connectionListRCM_Menu, action_RCM_TestRealLatency);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_ResetStats);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_DeleteConnection);
     DECL_ACTION(sortMenu, sortAction_ViewFlat);

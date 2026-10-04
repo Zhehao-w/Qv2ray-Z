@@ -52,6 +52,7 @@ target_sources(data_safety PRIVATE
 ADD_QV2RAY_TEST(connection_context_resolver src/core/handler/TestConnectionContextResolver.cpp)
 ADD_QV2RAY_TEST(http_request_safety src/utils/TestHTTPRequestHelper.cpp)
 ADD_QV2RAY_TEST(crash_diagnostic_safety src/utils/TestDiagnosticSafety.cpp)
+ADD_QV2RAY_TEST(ui_polish_policy src/ui/widgets/TestUiPolishPolicy.cpp)
 
 # This target compiles most of the UI again. Keep it out of regular commit CI and
 # enable it only for explicit UI validation.
