@@ -53,6 +53,9 @@ class PreferencesWindow
             tr("Automatically set the system proxy when a connection starts and restore it when disconnected. The tray menu can still enable or disable the current system proxy manually."));
         formLayout_9->insertRow(2, tr("System Proxy on Connect"), setSysProxyCB);
         setSysProxyCB->show();
+        QWidget::setTabOrder(quietModeCB, setSysProxyCB);
+        QWidget::setTabOrder(setSysProxyCB, exitByCloseEventCB);
+        QWidget::setTabOrder(exitByCloseEventCB, noAutoConnectRB);
     }
 
   private:
