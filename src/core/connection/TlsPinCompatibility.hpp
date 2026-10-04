@@ -4,6 +4,18 @@
 
 namespace Qv2ray::core::connection::tls_pin
 {
+    inline QString NormalizeCurrentTlsPinForEditor(QString pin)
+    {
+        // Xray v26.3.27 accepts OpenSSL-style SHA-256 fingerprints by
+        // removing ':' before hex decoding. The retained chain editor only
+        // accepts 64 hexadecimal characters, so mirror Xray's normalization
+        // at the editor boundary. Exact persisted formatting is still kept on
+        // no-op save by comparing this normalized representation below.
+        pin = pin.trimmed();
+        pin.remove(':');
+        return pin;
+    }
+
     inline QStringList ParseCurrentTlsPin(const QString &value)
     {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
@@ -12,7 +24,7 @@ namespace Qv2ray::core::connection::tls_pin
         auto pins = value.split(',', QString::SkipEmptyParts);
 #endif
         for (auto &pin : pins)
-            pin = pin.trimmed();
+            pin = NormalizeCurrentTlsPinForEditor(pin);
         pins.removeAll(QString{});
         return pins;
     }
@@ -114,9 +126,10 @@ namespace Qv2ray::core::connection::tls_pin
         }
         else
         {
-            // Avoid no-op formatting churn. Xray accepts comma-separated hex
-            // with surrounding whitespace, so retain the exact persisted text
-            // when the editor-visible pin list did not change.
+            // Avoid no-op formatting churn. Xray accepts comma-separated hex,
+            // optional OpenSSL ':' separators, and surrounding whitespace, so
+            // retain the exact persisted text when the editor-visible pin list
+            // did not change.
             if (originalCurrent.isString() && ParseCurrentTlsPin(originalCurrent.toString()) == editedPins)
                 tls.insert("pinnedPeerCertSha256", originalCurrent);
             else

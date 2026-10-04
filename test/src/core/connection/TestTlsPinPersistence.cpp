@@ -12,6 +12,14 @@ namespace
     const QString PinA(64, 'a');
     const QString PinB(64, 'b');
     const QString LegacyPin(64, 'c');
+
+    QString OpenSslPin(const QString &pin)
+    {
+        QStringList bytes;
+        for (int i = 0; i < pin.size(); i += 2)
+            bytes.push_back(pin.mid(i, 2));
+        return bytes.join(':');
+    }
 }
 
 TEST_CASE("current TLS pin loads into the existing editor model without exposing legacy authority")
@@ -28,6 +36,25 @@ TEST_CASE("current TLS pin loads into the existing editor model without exposing
 
     const QStringList expectedPins{ PinA, PinB };
     REQUIRE(model.tlsSettings.pinnedPeerCertificateChainSha256 == expectedPins);
+}
+
+TEST_CASE("OpenSSL-style current TLS pin is normalized for the legacy editor and preserved on no-op save")
+{
+    const auto persisted = OpenSslPin(PinA) + ",  " + OpenSslPin(PinB).toUpper();
+    const QJsonObject originalStream{
+        { "security", "tls" },
+        { "tlsSettings", QJsonObject{ { "serverName", "pin.example" }, { "pinnedPeerCertSha256", persisted } } }
+    };
+
+    auto model = StreamSettingsObject::fromJson(originalStream);
+    PrepareTlsPinEditorModel(originalStream, model);
+
+    const QStringList expectedPins{ PinA, PinB.toUpper() };
+    REQUIRE(model.tlsSettings.pinnedPeerCertificateChainSha256 == expectedPins);
+
+    auto editedStream = model.toJson();
+    FinalizeTlsPinForXray(originalStream, editedStream);
+    REQUIRE(editedStream.value("tlsSettings").toObject().value("pinnedPeerCertSha256").toString() == persisted);
 }
 
 TEST_CASE("TLS pin editor output is serialized using the current Xray string field")
