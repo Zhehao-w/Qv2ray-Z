@@ -305,7 +305,8 @@ TEST_CASE("Flat VLESS settings export modern fields and opaque query data withou
     REQUIRE(query.queryItemValue("sid") == "0123456789abcdef");
     REQUIRE(query.queryItemValue("pqv") == "MLDSA65_VERIFY");
     REQUIRE(query.queryItemValue("spx") == "/");
-    REQUIRE(query.queryItemValue("futureOption") == "preserved/wire");
+    REQUIRE(Qv2ray::base::vless_share::ExtractOpaqueQueryItems(exported) ==
+            stream.value(Qv2ray::base::vless_share::OpaqueQueryMetadataKey()).toArray());
 
     QString alias;
     QString error;
