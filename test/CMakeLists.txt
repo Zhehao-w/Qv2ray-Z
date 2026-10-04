@@ -34,7 +34,9 @@ target_include_directories(parse_vless_url PRIVATE
     ${CMAKE_SOURCE_DIR}/src/plugins/common
     ${CMAKE_SOURCE_DIR}/src/plugins/protocols/core)
 ADD_QV2RAY_TEST(generation src/core/connection/TestGeneration.cpp)
-target_sources(generation PRIVATE src/core/connection/TestTlsPinPersistence.cpp)
+target_sources(generation PRIVATE
+    src/core/connection/TestTlsPinPersistence.cpp
+    src/core/connection/TestTlsPinRuntimeSafety.cpp)
 ADD_QV2RAY_TEST(qjsonio libs/QJsonStruct/QJsonIO.cpp)
 ADD_QV2RAY_TEST(settings_compatibility src/core/settings/TestSettingsCompatibility.cpp)
 ADD_QV2RAY_TEST(realping src/components/latency/TestRealPing.cpp)

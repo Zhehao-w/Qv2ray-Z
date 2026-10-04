@@ -2,6 +2,7 @@
 
 #include "components/port/QvPortDetector.hpp"
 #include "core/connection/Generation.hpp"
+#include "core/connection/TlsPinCompatibility.hpp"
 #include "utils/QvHelpers.hpp"
 
 #define QV_MODULE_NAME "KernelHandler"
@@ -74,6 +75,12 @@ namespace Qv2ray::core::handler
 
     std::optional<QString> KernelInstanceHandler::StartConnection(const ConnectionGroupPair &id, CONFIGROOT fullConfig)
     {
+        // Check before stopping the current connection, emitting Connecting
+        // or dispatching plugin kernels. The Xray instance checks again at
+        // its own launch boundary, including calls that bypass this handler.
+        if (const auto error = core::connection::tls_pin::ValidateRuntimeTlsPins(fullConfig); error)
+            return error;
+
         StopConnection();
         if (isConnected)
         {
