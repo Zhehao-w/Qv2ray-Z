@@ -139,7 +139,7 @@ namespace Qv2ray::core::connection
             {
                 PreserveUnknownStreamObjectFields(originalStream, editedStream, QStringLiteral("tlsSettings"),
                                                   { "serverName", "fingerprint", "enableSessionResumption", "disableSystemRoot", "alpn",
-                                                    "pinnedPeerCertificateChainSha256" });
+                                                    "pinnedPeerCertSha256" });
             }
             else if (editedSecurity == QStringLiteral("reality"))
             {
