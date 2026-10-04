@@ -186,17 +186,19 @@ Qv2rayExitReason Qv2rayPlatformApplication::RunQv2ray()
     ConnectionManager = new QvConfigHandler();
 
 #ifdef Q_OS_WIN
-    // Automatic proxy mode already has the existing MainWindow cleanup path.
-    // When the proxy was enabled manually (or the preference was turned off
-    // while connected), the durable ownership record is the authoritative
-    // signal that Windows proxy state still belongs to this Qv2ray session.
+    // The durable recovery record is the Windows ownership authority. Release
+    // owned proxy state on every real disconnect, regardless of the current
+    // automatic-proxy preference. Automatic mode keeps its existing MainWindow
+    // notification path; manual mode emits the clear event from this lifecycle
+    // hook because no UI cleanup will follow.
     connect(ConnectionManager, &QvConfigHandler::OnDisconnected, this, [](const ConnectionGroupPair &) {
         using namespace Qv2ray::components::proxy::safety;
-        if (GlobalConfig.inboundConfig.systemProxySettings.setSystemProxy ||
-            !HasProxyRecoveryRecord(QvCoreApplication->ConfigPath))
+        if (!HasProxyRecoveryRecord(QvCoreApplication->ConfigPath))
             return;
 
-        if (!ClearSystemProxy())
+        const auto automaticProxy = GlobalConfig.inboundConfig.systemProxySettings.setSystemProxy;
+        const auto released = automaticProxy ? RecoverSystemProxyIfNeeded() : ClearSystemProxy();
+        if (!released)
             LOG("Windows system proxy ownership could not be released safely after disconnect; recovery state was retained for retry.");
     });
 #endif
