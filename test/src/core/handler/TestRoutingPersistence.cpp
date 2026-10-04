@@ -92,7 +92,7 @@ TEST_CASE("routes.json valid and missing states support normal persistence")
     REQUIRE(valid.state == RouteStorageState::Valid);
     REQUIRE(valid.object == initial);
 
-    const QJsonObject updated{ { "route-a", QJsonObject{ { "overrideRoute", true } } };
+    const QJsonObject updated{ { "route-a", QJsonObject{ { "overrideRoute", true } } } };
     REQUIRE(SaveRouteStorage(path, valid.state, updated));
     REQUIRE(LoadRouteStorage(path).object == updated);
 }
