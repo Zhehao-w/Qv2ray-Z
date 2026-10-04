@@ -163,6 +163,15 @@ void GroupManager::onRCMDeleteConnectionTriggered()
 void GroupManager::onRCMExportConnectionTriggered()
 {
     const auto &list = GET_SELECTED_CONNECTION_IDS(SELECTED_ROWS_INDEX);
+    // Preflight the entire selection before opening dialogs or replacing any export file.
+    for (const auto &id : list)
+    {
+        if (const auto error = RouteManager->GetRuntimeConfigError(ConnectionManager->GetConnectionRoot(id)); error)
+        {
+            QvMessageBoxWarn(this, tr("Cannot export connection"), *error);
+            return;
+        }
+    }
     QFileDialog d;
     switch (list.count())
     {

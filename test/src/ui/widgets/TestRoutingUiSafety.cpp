@@ -460,3 +460,21 @@ TEST_CASE("Removing a selected group does not save or reload the deleted identif
     REQUIRE(list->currentItem());
     REQUIRE(Child<QLineEdit>(manager, "groupNameTxt")->text() == list->currentItem()->text());
 }
+
+TEST_CASE("Group export rejects damaged route dependencies before any file dialog or file write")
+{
+    const auto count = GENERATE(1, 2);
+    Fixture fixture("{broken");
+    const CONFIGROOT root(QJsonObject{ { "outbounds", QJsonArray{ QJsonObject{ { "protocol", "freedom" }, { "tag", "direct" } } } } });
+    for (int i = 0; i < count; ++i)
+        REQUIRE_FALSE(ConnectionManager->CreateConnection(root, QStringLiteral("export-%1").arg(i)).isEmpty());
+    GroupManager manager;
+    auto *table = Child<QTableWidget>(manager, "connectionsTable");
+    for (int i = 0; i < table->rowCount(); ++i)
+        for (int col = 0; col < table->columnCount(); ++col)
+            table->item(i, col)->setSelected(true);
+    REQUIRE(QMetaObject::invokeMethod(&manager, "onRCMExportConnectionTriggered", Qt::DirectConnection));
+    REQUIRE(application->warnings == 1);
+    REQUIRE(application->warning.contains("routes.json"));
+    REQUIRE(StringFromFile(application->ConfigPath + "routes.json") == "{broken");
+}
