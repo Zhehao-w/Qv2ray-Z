@@ -166,6 +166,20 @@ TEST_CASE("Disconnect cleanup follows durable proxy ownership instead of the aut
     REQUIRE_FALSE(HasProxyRecoveryRecord(directory.path()));
 }
 
+TEST_CASE("Proxy lifecycle management stays fail-closed without process ownership")
+{
+    using namespace Qv2ray::components::proxy::safety;
+
+    // Allowing access alone must never bypass the process ownership lock. The
+    // disconnect/shutdown lifecycle gate uses CanManageSystemProxy(), so a
+    // process that failed startup ownership remains unable to restore proxy
+    // state even when a recovery record exists.
+    SetProxyAccessAllowed(true);
+    REQUIRE_FALSE(CanManageSystemProxy());
+    SetProxyAccessAllowed(false);
+    REQUIRE_FALSE(CanManageSystemProxy());
+}
+
 TEST_CASE("Windows URL protocol command line quotes every argument")
 {
     using namespace Qv2ray::utils::windows;
