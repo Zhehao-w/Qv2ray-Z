@@ -63,6 +63,8 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     qvBuildExInfo->setText(QV2RAY_BUILD_EXTRA_INFO);
     qvBuildTime->setText(__DATE__ " " __TIME__);
     qvPluginInterfaceVersionLabel->setText(tr("Version: %1").arg(QV2RAY_PLUGIN_INTERFACE_VERSION));
+    label_56->setVisible(false);
+    qvPluginInterfaceVersionLabel->setVisible(false);
     //
     // Deep copy
     CurrentConfig.loadJson(GlobalConfig.toJson());
@@ -321,7 +323,7 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     fpPasswordTx->setText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.password);
     fpAddressTx->setText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.serverAddress);
     fpTypeCombo->setCurrentText(CurrentConfig.defaultRouteConfig.forwardProxyConfig.type);
-    fpPortSB->setValue(CurrentConfig.defaultRouteConfig.forwardProxyConfig.port);
+    fpPortSB->setValue(CurrentConfig.defaultRouteConfig.port);
     fpUseAuthCB->setChecked(CurrentConfig.defaultRouteConfig.forwardProxyConfig.useAuth);
     fpUsernameTx->setEnabled(fpUseAuthCB->isChecked());
     fpPasswordTx->setEnabled(fpUseAuthCB->isChecked());
