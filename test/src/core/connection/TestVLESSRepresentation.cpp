@@ -145,7 +145,7 @@ TEST_CASE("VNext VLESS managed edits preserve nested opaque data and array membe
 
     const auto editedVNext = edited.value("vnext").toArray();
     REQUIRE(editedVNext.size() == 2);
-    REQUIRE(editedVNext.at(1) == secondServer);
+    REQUIRE(editedVNext.at(1).toObject() == secondServer);
 
     const auto editedServer = editedVNext.first().toObject();
     REQUIRE(editedServer.value("address") == "edited-vnext.example");
@@ -154,7 +154,7 @@ TEST_CASE("VNext VLESS managed edits preserve nested opaque data and array membe
 
     const auto editedUsers = editedServer.value("users").toArray();
     REQUIRE(editedUsers.size() == 2);
-    REQUIRE(editedUsers.at(1) == secondUser);
+    REQUIRE(editedUsers.at(1).toObject() == secondUser);
     const auto editedUser = editedUsers.first().toObject();
     REQUIRE(editedUser.value("id") == UPDATED_UUID);
     REQUIRE(editedUser.value("encryption") == MODERN_ENCRYPTION);
@@ -162,6 +162,69 @@ TEST_CASE("VNext VLESS managed edits preserve nested opaque data and array membe
     REQUIRE(editedUser.value("level") == 9);
     REQUIRE(editedUser.value("email") == "opaque-user@example.test");
     REQUIRE(editedUser.value("futureUserField") == firstUser.value("futureUserField"));
+}
+
+TEST_CASE("VLESS initialization adds required defaults without normalizing persisted missing fields")
+{
+    VLESSServerObject newModel;
+    if (newModel.users.isEmpty())
+        newModel.users.push_back({});
+    const auto newBaseline = newModel.toJson();
+    newModel.address = "new.example";
+    newModel.port = 443;
+    newModel.users.front().id = TEST_UUID;
+
+    const auto initialized = Qv2ray::base::vless_settings::ApplyManagedServerChanges({}, newBaseline, newModel.toJson());
+    REQUIRE_FALSE(initialized.contains("address"));
+    const auto initializedServer = initialized.value("vnext").toArray().first().toObject();
+    REQUIRE(initializedServer.value("address") == "new.example");
+    REQUIRE(initializedServer.value("port") == 443);
+    const auto initializedUser = initializedServer.value("users").toArray().first().toObject();
+    REQUIRE(initializedUser.value("id") == TEST_UUID);
+    REQUIRE(initializedUser.value("encryption") == "none");
+
+    const QJsonObject existingUser{
+        { "id", TEST_UUID },
+        { "futureUserField", "keep" }
+    };
+    const QJsonObject existingSettings{
+        { "vnext",
+          QJsonArray{ QJsonObject{ { "address", "existing.example" },
+                                  { "port", 443 },
+                                  { "users", QJsonArray{ existingUser } },
+                                  { "futureServerField", true } } } }
+    };
+    auto existingModel = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(existingSettings));
+    const auto existingBaseline = existingModel.toJson();
+    existingModel.address = "host-only-edit.example";
+    const auto existingEdited =
+        Qv2ray::base::vless_settings::ApplyManagedServerChanges(existingSettings, existingBaseline, existingModel.toJson());
+    const auto preservedUser = existingEdited.value("vnext").toArray().first().toObject().value("users").toArray().first().toObject();
+    REQUIRE(preservedUser.value("id") == TEST_UUID);
+    REQUIRE_FALSE(preservedUser.contains("encryption"));
+    REQUIRE(preservedUser.value("futureUserField") == "keep");
+
+    const QJsonObject noUsersSettings{
+        { "vnext", QJsonArray{ QJsonObject{ { "address", "no-users.example" }, { "port", 443 }, { "futureServerField", 9 } } } }
+    };
+    auto noUsersModel = VLESSServerObject::fromJson(Qv2ray::base::vless_settings::ServerForEditing(noUsersSettings));
+    if (noUsersModel.users.isEmpty())
+        noUsersModel.users.push_back({});
+    const auto noUsersBaseline = noUsersModel.toJson();
+    noUsersModel.address = "host-only-no-users.example";
+    const auto hostOnly = Qv2ray::base::vless_settings::ApplyManagedServerChanges(noUsersSettings, noUsersBaseline, noUsersModel.toJson());
+    const auto hostOnlyServer = hostOnly.value("vnext").toArray().first().toObject();
+    REQUIRE(hostOnlyServer.value("address") == "host-only-no-users.example");
+    REQUIRE_FALSE(hostOnlyServer.contains("users"));
+    REQUIRE(hostOnlyServer.value("futureServerField") == 9);
+
+    noUsersModel.address = "no-users.example";
+    noUsersModel.users.front().id = UPDATED_UUID;
+    const auto userCreated =
+        Qv2ray::base::vless_settings::ApplyManagedServerChanges(noUsersSettings, noUsersBaseline, noUsersModel.toJson());
+    const auto createdUser = userCreated.value("vnext").toArray().first().toObject().value("users").toArray().first().toObject();
+    REQUIRE(createdUser.value("id") == UPDATED_UUID);
+    REQUIRE(createdUser.value("encryption") == "none");
 }
 
 TEST_CASE("Malformed VLESS settings fail closed instead of guessing a representation")
