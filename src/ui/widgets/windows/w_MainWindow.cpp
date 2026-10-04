@@ -209,7 +209,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     logRCM_Menu->addSeparator();
     logRCM_Menu->addAction(action_RCM_SwitchCoreLog);
     logRCM_Menu->addAction(action_RCM_SwitchQv2rayLog);
-    connect(masterLogBrowser, &QTextBrowser::customContextMenuRequested, [this](const QPoint &) { logRCM_Menu->popup(QCursor::pos()); });
+    connect(masterLogBrowser, &QTextBrowser::customContextMenuRequested, [this](const QPoint &) { masterLogBrowser->setContextMenuPolicy(Qt::CustomContextMenu); });
     connect(action_RCM_SwitchCoreLog, &QAction::triggered, [this] { masterLogBrowser->setDocument(vCoreLogDocument); });
     connect(action_RCM_SwitchQv2rayLog, &QAction::triggered, [this] { masterLogBrowser->setDocument(qvLogDocument); });
     connect(action_RCM_CopyRecentLogs, &QAction::triggered, this, &MainWindow::Action_CopyRecentLogs);
@@ -798,7 +798,7 @@ void MainWindow::OnVCoreLogAvailable(const ConnectionGroupPair &id, const QStrin
 {
     Q_UNUSED(id);
     FastAppendTextDocument(log.trimmed(), vCoreLogDocument);
-    // vCoreLogDocument->setPlainText(vCoreLogDocument->toPlainText() + log);
+    // vCoreLogHighlighter->setPlainText(vCoreLogHighlighter->toPlainText() + log);
     // From https://gist.github.com/jemyzhang/7130092
     auto maxLines = GlobalConfig.uiConfig.maximumLogLines;
     auto block = vCoreLogDocument->begin();
@@ -841,9 +841,7 @@ void MainWindow::OnEditRequested(const ConnectionId &id)
         auto outboundEntry = w.OpenEditor();
         isChanged = w.result() == QDialog::Accepted;
         editedDisplayName = w.GetDisplayName();
-        QJsonArray outboundsList;
-        outboundsList.push_back(outboundEntry);
-        root.insert("outbounds", outboundsList);
+        root = Qv2ray::core::connection::ReplaceEditedSingleOutbound(outBoundRoot, outboundEntry);
     }
 
     if (isChanged)
@@ -940,7 +938,7 @@ void MainWindow::on_chartVisibilityBtn_clicked()
 
 void MainWindow::on_logVisibilityBtn_clicked()
 {
-    masterLogBrowser->setVisible(!masterLogBrowser->isVisible());
+    speedChartHolderWidget->setVisible(!speedChartWidget->isVisible());
 }
 
 void MainWindow::on_clearChartBtn_clicked()
