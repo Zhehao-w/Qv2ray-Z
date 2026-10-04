@@ -12,6 +12,7 @@
 #include <QHostAddress>
 #include <QMainWindow>
 #include <QMenu>
+#include <QSignalBlocker>
 
 namespace Qv2rayPlugin
 {
@@ -100,6 +101,31 @@ class MainWindow
     //
     void UpdateActionTranslations();
     void OnPluginButtonClicked();
+    void EnsureBypassCNTrayToggle()
+    {
+        if (!property("bypassCNTrayToggleConfigured").toBool())
+        {
+            setProperty("bypassCNTrayToggleConfigured", true);
+            QObject::disconnect(tray_action_SetBypassCN, &QAction::triggered, this, &MainWindow::on_setBypassCNBtn_clicked);
+            tray_action_SetBypassCN->setCheckable(true);
+            tray_action_ClearBypassCN->setVisible(false);
+            tray_RootMenu->removeAction(tray_BypassCNMenu->menuAction());
+            tray_RootMenu->insertAction(tray_SystemProxyMenu->menuAction(), tray_action_SetBypassCN);
+            connect(tray_action_SetBypassCN, &QAction::toggled, this, [this](bool enabled) {
+                GlobalConfig.defaultRouteConfig.connectionConfig.bypassCN = enabled;
+                SaveGlobalSettings();
+                if (!KernelInstance->CurrentConnection().isEmpty())
+                {
+                    qApp->processEvents();
+                    ConnectionManager->RestartConnection();
+                }
+            });
+        }
+
+        const QSignalBlocker blocker(tray_action_SetBypassCN);
+        tray_action_SetBypassCN->setChecked(GlobalConfig.defaultRouteConfig.connectionConfig.bypassCN);
+        tray_action_SetBypassCN->setText(tr("Bypass CN Mainland"));
+    }
 
   protected:
     void showEvent(QShowEvent *event) override
@@ -184,6 +210,8 @@ class MainWindow
     DECL_ACTION(logRCM_Menu, action_RCM_CopyRecentLogs);
     DECL_ACTION(logRCM_Menu, action_RCM_CopySelected);
 #undef DECL_ACTION
+    QMetaObject::Connection trayBypassCNSyncConnection =
+        connect(tray_RootMenu, &QMenu::aboutToShow, this, [this] { EnsureBypassCNTrayToggle(); });
 
     QTextDocument *vCoreLogDocument = new QTextDocument(this);
     QTextDocument *qvLogDocument = new QTextDocument(this);
