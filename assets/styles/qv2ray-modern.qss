@@ -293,12 +293,8 @@ QLabel#appSubtitleLabel {
     padding-left: 4px;
 }
 
-QPushButton#subsButton,
-QPushButton#preferencesBtn,
-QPushButton#importConfigButton,
-QPushButton#newComplexConnectionBtn,
-QPushButton#editBtn {
-    background: #ffffff;
+QPushButton#connectBtn {
+    min-width: 68px;
 }
 
 QPushButton#newConnectionBtn,

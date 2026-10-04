@@ -24,7 +24,7 @@ ConnectionItemWidget::ConnectionItemWidget(const ConnectionGroupPair &id, QWidge
     groupId = id.groupId;
     originalItemName = GetDisplayName(id.connectionId);
     //
-    indentSpacer->changeSize(10, indentSpacer->sizeHint().height());
+    indentSpacer->changeSize(0, indentSpacer->sizeHint().height());
     //
     auto latency = GetConnectionLatency(id.connectionId);
     latencyLabel->setText(latency == LATENCY_TEST_VALUE_NODATA ?     //

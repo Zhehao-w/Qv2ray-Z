@@ -6,11 +6,13 @@
 #include "ui/widgets/models/ConnectionModelHelper.hpp"
 #include "ui/widgets/widgets/ConnectionInfoWidget.hpp"
 #include "ui/widgets/widgets/ConnectionItemWidget.hpp"
+#include "ui/widgets/windows/UiPolishPolicy.hpp"
 #include "ui_w_MainWindow.h"
 
 #include <QHostAddress>
 #include <QMainWindow>
 #include <QMenu>
+#include <QSignalBlocker>
 
 namespace Qv2rayPlugin
 {
@@ -99,8 +101,51 @@ class MainWindow
     //
     void UpdateActionTranslations();
     void OnPluginButtonClicked();
+    void EnsureBypassCNTrayToggle()
+    {
+        if (!property("bypassCNTrayToggleConfigured").toBool())
+        {
+            setProperty("bypassCNTrayToggleConfigured", true);
+            QObject::disconnect(tray_action_SetBypassCN, &QAction::triggered, this, &MainWindow::on_setBypassCNBtn_clicked);
+            tray_action_SetBypassCN->setCheckable(true);
+            tray_action_ClearBypassCN->setVisible(false);
+            tray_RootMenu->removeAction(tray_BypassCNMenu->menuAction());
+            tray_RootMenu->insertAction(tray_SystemProxyMenu->menuAction(), tray_action_SetBypassCN);
+            connect(tray_action_SetBypassCN, &QAction::toggled, this, [this](bool enabled) {
+                if (enabled)
+                    on_setBypassCNBtn_clicked();
+                else
+                    on_clearBypassCNBtn_clicked();
+            });
+        }
+
+        const QSignalBlocker blocker(tray_action_SetBypassCN);
+        tray_action_SetBypassCN->setChecked(GlobalConfig.defaultRouteConfig.connectionConfig.bypassCN);
+        tray_action_SetBypassCN->setText(tr("Bypass CN Mainland"));
+    }
 
   protected:
+    void showEvent(QShowEvent *event) override
+    {
+        QMainWindow::showEvent(event);
+        if (property("defaultConnectionWidthApplied").toBool())
+            return;
+        setProperty("defaultConnectionWidthApplied", true);
+
+#if QV2RAY_FEATURE(ui_has_store_state)
+        const auto hasStoredWindowWidth = QvWidgetApplication->UIStates.value("MainWindow").toObject().contains("width");
+#else
+        constexpr auto hasStoredWindowWidth = false;
+#endif
+        const auto currentSizes = splitter->sizes();
+        if (currentSizes.size() < 2)
+            return;
+        const auto layout = Qv2ray::ui::polish::ResolveMainWindowStartupLayout(hasStoredWindowWidth, width(), currentSizes[0], currentSizes[1]);
+        if (layout.windowWidth != width())
+            resize(layout.windowWidth, height());
+        splitter->setSizes({ layout.connectionWidth, layout.contentWidth });
+    }
+
     void timerEvent(QTimerEvent *event) override;
     void keyPressEvent(QKeyEvent *e) override;
     void keyReleaseEvent(QKeyEvent *e) override;
@@ -162,6 +207,8 @@ class MainWindow
     DECL_ACTION(logRCM_Menu, action_RCM_CopyRecentLogs);
     DECL_ACTION(logRCM_Menu, action_RCM_CopySelected);
 #undef DECL_ACTION
+    QMetaObject::Connection trayBypassCNSyncConnection =
+        connect(tray_RootMenu, &QMenu::aboutToShow, this, [this] { EnsureBypassCNTrayToggle(); });
 
     QTextDocument *vCoreLogDocument = new QTextDocument(this);
     QTextDocument *qvLogDocument = new QTextDocument(this);

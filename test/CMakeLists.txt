@@ -40,6 +40,8 @@ target_sources(generation PRIVATE
     src/core/connection/TestConfigEditorPersistence.cpp)
 ADD_QV2RAY_TEST(qjsonio libs/QJsonStruct/QJsonIO.cpp)
 ADD_QV2RAY_TEST(settings_compatibility src/core/settings/TestSettingsCompatibility.cpp)
+target_sources(settings_compatibility PRIVATE
+    src/ui/widgets/TestUiPolishPolicy.cpp)
 ADD_QV2RAY_TEST(realping src/components/latency/TestRealPing.cpp)
 ADD_QV2RAY_TEST(kernel_path_resolver src/core/kernel/TestKernelPathResolver.cpp)
 ADD_QV2RAY_TEST(kernel_process_lifecycle src/core/kernel/TestKernelProcessLifecycle.cpp)

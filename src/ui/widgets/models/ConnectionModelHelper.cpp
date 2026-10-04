@@ -251,8 +251,10 @@ void ConnectionListHelper::Filter(const QString &key)
 
 QStandardItem *ConnectionListHelper::addConnectionItem(const ConnectionGroupPair &id)
 {
+    constexpr auto connectionRowHeight = 68;
     // Create Standard Item
     auto connectionItem = new QStandardItem();
+    connectionItem->setSizeHint(QSize(0, connectionRowHeight));
     connectionItem->setData(GetDisplayName(id.connectionId), ConnectionInfoRole::ROLE_DISPLAYNAME);
     connectionItem->setData(NumericString(GetConnectionLatency(id.connectionId)), ConnectionInfoRole::ROLE_LATENCY);
     connectionItem->setData(NumericString(GetConnectionTotalData(id.connectionId)), ConnectionInfoRole::ROLE_DATA_USAGE);
@@ -270,6 +272,7 @@ QStandardItem *ConnectionListHelper::addConnectionItem(const ConnectionGroupPair
     const auto connectionIndex = connectionItem->index();
     //
     auto widget = new ConnectionItemWidget(id, parentView);
+    widget->setMinimumHeight(connectionRowHeight);
     widget->SetFlexibleContext(!groupedView);
     connect(widget, &ConnectionItemWidget::RequestWidgetFocus, [widget, connectionIndex, this]() {
         parentView->setCurrentIndex(connectionIndex);
