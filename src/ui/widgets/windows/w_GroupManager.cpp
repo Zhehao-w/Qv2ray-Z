@@ -396,10 +396,10 @@ void GroupManager::on_updateButton_clicked()
 
 void GroupManager::on_removeGroupButton_clicked()
 {
-    if (!saveCurrentRouteSettings())
-        return;
     if (QvMessageBoxAsk(this, tr("Remove a Group"), tr("All connections will be moved to default group, do you want to continue?")) == Yes)
     {
+        if (!saveCurrentRouteSettings())
+            return;
         if (const auto error = ConnectionManager->DeleteGroup(currentGroupId))
         {
             QvMessageBoxWarn(this, tr("Remove Group"), *error);

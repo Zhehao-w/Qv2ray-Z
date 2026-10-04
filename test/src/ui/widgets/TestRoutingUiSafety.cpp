@@ -30,6 +30,7 @@ namespace
         int warnings = 0;
         QString warning;
         bool modalWarnings = false;
+        MessageOpt answer = Yes;
         void MessageBoxWarn(QWidget *parent, const QString &title, const QString &text) override
         {
             ++warnings;
@@ -48,7 +49,7 @@ namespace
         }
         MessageOpt MessageBoxAsk(QWidget *, const QString &, const QString &, const QList<MessageOpt> &) override
         {
-            return Yes;
+            return answer;
         }
     };
 
@@ -70,6 +71,7 @@ namespace
             application->warnings = 0;
             application->warning.clear();
             application->modalWarnings = false;
+            application->answer = Yes;
             if (directoryInsteadOfFile)
                 REQUIRE(QDir().mkpath(application->ConfigPath + "routes.json"));
             else if (!routes.isEmpty())
@@ -477,4 +479,27 @@ TEST_CASE("Group export rejects damaged route dependencies before any file dialo
     REQUIRE(application->warnings == 1);
     REQUIRE(application->warning.contains("routes.json"));
     REQUIRE(StringFromFile(application->ConfigPath + "routes.json") == "{broken");
+}
+
+TEST_CASE("Declining group deletion and canceling the dialog do not persist pending route edits")
+{
+    Fixture fixture("{}");
+    const auto second = ConnectionManager->CreateGroup("second", false);
+    REQUIRE(second != NullGroupId);
+    GroupManager manager;
+    auto *list = Child<QListWidget>(manager, "groupList");
+    for (int i = 0; i < list->count(); ++i)
+        if (list->item(i)->data(Qt::UserRole).toString() == second.toString())
+            list->setCurrentItem(list->item(i));
+    const auto before = StringFromFile(application->ConfigPath + "routes.json");
+    EditLine(Child<QLineEdit>(manager, "dnsTagTxt"), "uncommitted-tag");
+    application->answer = No;
+    REQUIRE(QMetaObject::invokeMethod(&manager, "on_removeGroupButton_clicked", Qt::DirectConnection));
+    REQUIRE(application->warnings == 0);
+    REQUIRE(ConnectionManager->AllGroups().contains(second));
+    REQUIRE(StringFromFile(application->ConfigPath + "routes.json") == before);
+    manager.reject();
+    REQUIRE(StringFromFile(application->ConfigPath + "routes.json") == before);
+    const auto routeId = ConnectionManager->GetGroupRoutingId(second);
+    REQUIRE(std::get<1>(RouteManager->GetDNSSettings(routeId)).tag != "uncommitted-tag");
 }
