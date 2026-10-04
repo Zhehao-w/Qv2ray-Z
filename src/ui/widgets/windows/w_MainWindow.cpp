@@ -209,7 +209,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     logRCM_Menu->addSeparator();
     logRCM_Menu->addAction(action_RCM_SwitchCoreLog);
     logRCM_Menu->addAction(action_RCM_SwitchQv2rayLog);
-    connect(masterLogBrowser, &QTextBrowser::customContextMenuRequested, [this](const QPoint &) { masterLogBrowser->setContextMenuPolicy(Qt::CustomContextMenu); });
+    connect(masterLogBrowser, &QTextBrowser::customContextMenuRequested, [this](const QPoint &) { logRCM_Menu->popup(QCursor::pos()); });
     connect(action_RCM_SwitchCoreLog, &QAction::triggered, [this] { masterLogBrowser->setDocument(vCoreLogDocument); });
     connect(action_RCM_SwitchQv2rayLog, &QAction::triggered, [this] { masterLogBrowser->setDocument(qvLogDocument); });
     connect(action_RCM_CopyRecentLogs, &QAction::triggered, this, &MainWindow::Action_CopyRecentLogs);
@@ -798,7 +798,7 @@ void MainWindow::OnVCoreLogAvailable(const ConnectionGroupPair &id, const QStrin
 {
     Q_UNUSED(id);
     FastAppendTextDocument(log.trimmed(), vCoreLogDocument);
-    // vCoreLogHighlighter->setPlainText(vCoreLogHighlighter->toPlainText() + log);
+    // vCoreLogDocument->setPlainText(vCoreLogDocument->toPlainText() + log);
     // From https://gist.github.com/jemyzhang/7130092
     auto maxLines = GlobalConfig.uiConfig.maximumLogLines;
     auto block = vCoreLogDocument->begin();
@@ -938,7 +938,7 @@ void MainWindow::on_chartVisibilityBtn_clicked()
 
 void MainWindow::on_logVisibilityBtn_clicked()
 {
-    speedChartHolderWidget->setVisible(!speedChartWidget->isVisible());
+    masterLogBrowser->setVisible(!masterLogBrowser->isVisible());
 }
 
 void MainWindow::on_clearChartBtn_clicked()
