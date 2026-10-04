@@ -145,7 +145,8 @@ jobs:
       - name: Configure Qv2ray-Z with regression tests
         shell: pwsh
         run: |
-          $routingUiSafety = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "ON" } else { "OFF" }
+          $runRoutingUiSafety = ("${{ github.event_name }}" -eq "workflow_dispatch") -or ([int]"${{ github.run_attempt }}" -gt 1)
+          $routingUiSafety = if ($runRoutingUiSafety) { "ON" } else { "OFF" }
           cmake -S . -B build -G Ninja `
             -DBUILD_TESTING=ON `
             -DCMAKE_BUILD_TYPE=Release `
@@ -175,7 +176,7 @@ jobs:
 
       - name: Build routing UI safety regression
         id: build-routing-ui-safety
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.run_attempt > 1
         shell: pwsh
         run: |
           cmake --build build --config Release --target routing_ui_safety --parallel 2>&1 | Tee-Object -FilePath routing-ui-build.log
@@ -208,7 +209,7 @@ jobs:
 
       - name: Run routing UI safety regression
         id: run-routing-ui-safety
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.run_attempt > 1
         shell: pwsh
         run: |
           ctest --test-dir build --output-on-failure -C Release -R '^QV2RAY_TEST_routing_ui_safety$' 2>&1 | Tee-Object -FilePath routing-ui-safety.log
