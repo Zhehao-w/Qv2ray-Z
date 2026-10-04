@@ -64,17 +64,20 @@ namespace Qv2ray::base::single_server_settings
         const auto serverChanged = HasManagedChanges(baselineServer, editedServer, managedServerFields);
         const auto userChanged = !managedUserFields.isEmpty() && HasManagedChanges(baselineUser, editedUser, managedUserFields);
 
+        // Empty settings belong to a newly created editor entry. There is no
+        // persisted opaque state to retain, so emit the complete typed server
+        // even when the user accepts without touching a field.
+        if (originalSettings.isEmpty())
+            return QJsonObject{ { serverArrayField, QJsonArray{ editedServer } } };
+
         if (!serverChanged && !userChanged)
             return originalSettings;
 
-        // No persisted server exists yet: there is no opaque state to retain,
-        // so use the editor model as the initial representation.
+        // A non-empty settings object without the expected server array is
+        // persisted opaque state. Do not rewrite that unsupported shape merely
+        // because the graphical editor produced defaults.
         if (!originalSettings.contains(serverArrayField))
-        {
-            auto result = originalSettings;
-            result.insert(serverArrayField, QJsonArray{ editedServer });
-            return result;
-        }
+            return originalSettings;
 
         if (!originalSettings.value(serverArrayField).isArray())
             return originalSettings;
