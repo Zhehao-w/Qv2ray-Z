@@ -92,6 +92,12 @@ namespace Qv2ray::components::proxy::safety
         Error,
     };
 
+    enum class ProxyDisconnectCleanupMode
+    {
+        RecoverOwnership,
+        ClearWithNotification,
+    };
+
     inline QString ProxySafetyDirectoryForBase(const QString &basePath)
     {
         if (basePath.isEmpty())
@@ -133,10 +139,20 @@ namespace Qv2ray::components::proxy::safety
     {
         const auto path = ProxyRecoveryRecordPathForConfig(configPath);
         // Windows proxy writes are applied only after the recovery record has
-        // been durably written. Treat any existing record, including one that
-        // later proves malformed or unreadable, as a reason to attempt the
-        // fail-closed ownership cleanup path.
+        // been durably written. Record visibility is useful for choosing the
+        // notification path, but it must never gate lifecycle recovery because
+        // the active ownership snapshot may already be loaded in memory.
         return !path.isEmpty() && QFile::exists(path);
+    }
+
+    inline ProxyDisconnectCleanupMode SelectProxyDisconnectCleanupMode(bool automaticProxy, bool recoveryRecordVisible)
+    {
+        // Automatic mode keeps MainWindow's existing clear notification. Manual
+        // mode can emit it here when the durable record is still visible. If the
+        // record disappeared, still run non-notifying recovery so loaded in-memory
+        // ownership is released before the kernel endpoint goes away.
+        return !automaticProxy && recoveryRecordVisible ? ProxyDisconnectCleanupMode::ClearWithNotification
+                                                        : ProxyDisconnectCleanupMode::RecoverOwnership;
     }
 
     inline QString ProxyProcessLockPath()
