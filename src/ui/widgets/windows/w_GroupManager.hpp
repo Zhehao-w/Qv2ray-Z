@@ -66,7 +66,7 @@ class GroupManager
     void onRCMActionTriggered_Copy();
     void onRCMActionTriggered_Link();
     void reloadGroupRCMActions();
-    bool saveCurrentRouteSettings();
+    bool saveCurrentRouteSettings(QString *error = nullptr);
     void loadCurrentGroup(QListWidgetItem *item);
     //
     void exportConnectionFilter(CONFIGROOT &root);
@@ -81,7 +81,7 @@ class GroupManager
     QMenu *connectionListRCMenu_MoveToMenu = new QMenu(tr("Move to..."), connectionListRCMenu);
     QMenu *connectionListRCMenu_LinkToMenu = new QMenu(tr("Link to..."), connectionListRCMenu);
     bool isUpdateInProgress = false;
-    bool groupSwitchRejected = false;
+    bool routeSaveErrorPending = false;
     GroupId currentGroupId = NullGroupId;
     ConnectionId currentConnectionId = NullConnectionId;
 };

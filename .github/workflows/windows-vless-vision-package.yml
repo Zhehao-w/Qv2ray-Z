@@ -179,12 +179,30 @@ jobs:
           $testExitCode = $LASTEXITCODE
           if ($testExitCode -ne 0) { exit $testExitCode }
 
+      - name: Diagnose isolated routing UI failures
+        if: failure() && steps.run-regressions.outcome == 'failure'
+        shell: pwsh
+        timeout-minutes: 2
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $tests = @('Successful mouse*', 'Failed modal*', 'Actual filesystem*')
+          foreach ($test in $tests) {
+            "Running isolated case: $test" | Tee-Object -FilePath routing-ui-diagnostic.log -Append
+            & ./build/test/routing_ui_safety.exe $test 2>&1 | Tee-Object -FilePath routing-ui-diagnostic.log -Append
+            "Exit code: $LASTEXITCODE" | Tee-Object -FilePath routing-ui-diagnostic.log -Append
+          }
+          # Keep the original CTest failure as the authoritative result.
+          exit 0
+
       - name: Upload Windows test log on failure
         if: failure() && steps.run-regressions.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-authoritative-test-log
-          path: ctest.log
+          path: |
+            ctest.log
+            routing-ui-diagnostic.log
           if-no-files-found: error
 
       - name: Install Qv2ray-Z Release

@@ -14,6 +14,7 @@
 #include <QFileDialog>
 #include <QListWidgetItem>
 #include <QSignalBlocker>
+#include <QTimer>
 
 using namespace Qv2ray::ui::group_manager_safety;
 
@@ -335,7 +336,7 @@ QvMessageBusSlotImpl(GroupManager)
 
 GroupManager::~GroupManager(){};
 
-bool GroupManager::saveCurrentRouteSettings()
+bool GroupManager::saveCurrentRouteSettings(QString *error)
 {
     if (currentGroupId == NullGroupId)
         return true;
@@ -350,8 +351,11 @@ bool GroupManager::saveCurrentRouteSettings()
     auto reason = RouteManager->GetRouteStorageError();
     if (reason.isEmpty())
         reason = tr("routes.json is read-only for this session.");
-    QvMessageBoxWarn(this, tr("Could not save routing settings"),
-                     tr("Routing settings could not be saved. The Group Editor will remain open on the current group.\n\n%1").arg(reason));
+    const auto message = tr("Routing settings could not be saved. The Group Editor will remain open on the current group.\n\n%1").arg(reason);
+    if (error)
+        *error = message;
+    else
+        QvMessageBoxWarn(this, tr("Could not save routing settings"), message);
     return false;
 }
 
@@ -436,15 +440,7 @@ void GroupManager::on_buttonBox_accepted()
 
 void GroupManager::on_groupList_itemSelectionChanged()
 {
-    // QListWidget can finish changing its selection after currentItemChanged returns,
-    // including after a modal save error has restored the previous current item.
-    if (groupSwitchRejected && groupList->currentItem())
-    {
-        const QSignalBlocker blocker(groupList);
-        groupList->clearSelection();
-        groupList->currentItem()->setSelected(true);
-    }
-    groupInfoGroupBox->setEnabled(groupList->selectedItems().count() > 0);
+    groupInfoGroupBox->setEnabled(!routeSaveErrorPending && groupList->selectedItems().count() > 0);
 }
 
 void GroupManager::loadCurrentGroup(QListWidgetItem *item)
@@ -534,12 +530,32 @@ void GroupManager::on_ExcludeKeywords_textChanged()
 
 void GroupManager::on_groupList_currentItemChanged(QListWidgetItem *current, QListWidgetItem *priv)
 {
-    groupSwitchRejected = false;
-    if (priv && !saveCurrentRouteSettings())
+    if (routeSaveErrorPending)
+        return;
+    QString error;
+    if (priv && !saveCurrentRouteSettings(&error))
     {
-        groupSwitchRejected = true;
-        const QSignalBlocker blocker(groupList);
-        groupList->setCurrentItem(priv);
+        routeSaveErrorPending = true;
+        groupInfoGroupBox->setEnabled(false);
+        const auto groupId = currentGroupId;
+        // Finish Qt's current/selection update before restoring it or entering a modal event loop.
+        QTimer::singleShot(0, this,
+                           [this, groupId, error]()
+                           {
+                               for (int i = 0; i < groupList->count(); ++i)
+                               {
+                                   auto *item = groupList->item(i);
+                                   if (GroupId(item->data(Qt::UserRole).toString()) == groupId)
+                                   {
+                                       const QSignalBlocker blocker(groupList);
+                                       groupList->setCurrentItem(item, QItemSelectionModel::ClearAndSelect);
+                                       break;
+                                   }
+                               }
+                               routeSaveErrorPending = false;
+                               on_groupList_itemSelectionChanged();
+                               QvMessageBoxWarn(this, tr("Could not save routing settings"), error);
+                           });
         return;
     }
     if (current)

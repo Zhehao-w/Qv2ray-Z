@@ -357,6 +357,7 @@ TEST_CASE("Failed modal group save keeps selected group form and subsequent writ
         QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier, list->visualItemRect(target).center());
     else
         list->setCurrentItem(target);
+    application->processEvents();
     REQUIRE(application->warnings == 1);
     REQUIRE(list->currentItem() == previous);
     REQUIRE(list->selectedItems() == QList<QListWidgetItem *>{ previous });
@@ -446,6 +447,7 @@ TEST_CASE("Actual filesystem save failure also keeps group selection and pending
     REQUIRE(QDir().mkpath(application->ConfigPath + "routes.json"));
     application->modalWarnings = true;
     QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier, list->visualItemRect(target).center());
+    application->processEvents();
     REQUIRE(application->warnings == 1);
     REQUIRE(list->currentItem() == previous);
     REQUIRE(Child<QLineEdit>(manager, "dnsTagTxt")->text() == "pending-tag");
