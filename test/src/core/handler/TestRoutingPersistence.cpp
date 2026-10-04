@@ -157,7 +157,8 @@ TEST_CASE("graphical routing managed edit preserves opaque predicates and nested
     current["domain"] = QJsonArray{ "edited.example" };
 
     const auto merged = MergeManagedRoutingRule(originalRule, baseline, current);
-    REQUIRE(merged.value("domain").toArray() == QJsonArray{ "edited.example" });
+    const QJsonArray expectedDomain{ "edited.example" };
+    REQUIRE(merged.value("domain").toArray() == expectedDomain);
     REQUIRE(merged.value("process") == originalRule.value("process"));
     REQUIRE(merged.value("user") == originalRule.value("user"));
     REQUIRE(merged.value("localIP") == originalRule.value("localIP"));
@@ -180,7 +181,8 @@ TEST_CASE("graphical routing preserves unknown root and balancer fields")
 
     REQUIRE(mergedBalancer.value("fallbackTag").toString() == "direct");
     REQUIRE(mergedBalancer.value("strategy").toObject().value("futureStrategyField").toObject().value("keep").toBool());
-    REQUIRE(mergedBalancer.value("selector").toArray() == QJsonArray{ "proxy", "proxy-2" });
+    const QJsonArray expectedSelector{ "proxy", "proxy-2" };
+    REQUIRE(mergedBalancer.value("selector").toArray() == expectedSelector);
 
     const QJsonObject originalRule{ { "type", "field" }, { "domain", QJsonArray{ "example.com" } }, { "outboundTag", "proxy" } };
     const QJsonObject originalRouting{

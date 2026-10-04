@@ -359,14 +359,12 @@ void RouteEditor::on_addDefaultBtn_clicked()
                                            { inboundConfig.socksSettings.account },                       //
                                            inboundConfig.socksSettings.enableUDP,                         //
                                            inboundConfig.socksSettings.localIP);
-        const auto socksConfig = GenerateInboundEntry("GlobalConfig-Socks",    //
-                                                      "socks",                //
-                                                      inboundConfig.listenip,  //
+        const auto socksConfig = GenerateInboundEntry("GlobalConfig-Socks", "socks",    //
+                                                      inboundConfig.listenip,           //
                                                       inboundConfig.socksSettings.port, //
                                                       socks,                            //
                                                       (inboundConfig.socksSettings.sniffing ? sniffingOn : sniffingOff));
         const auto _ = nodeDispatcher->CreateInbound(socksConfig);
-        Q_UNUSED(_)
     }
 
     if (inboundConfig.useTPROXY)
@@ -433,7 +431,6 @@ void RouteEditor::on_addOutboundBtn_clicked()
     if (w.result() == QDialog::Accepted)
     {
         auto _ = nodeDispatcher->CreateOutbound(make_normal_outbound(_result));
-        Q_UNUSED(_)
     }
 }
 
