@@ -67,6 +67,7 @@ class GroupManager
     void onRCMActionTriggered_Copy();
     void onRCMActionTriggered_Link();
     void reloadGroupRCMActions();
+    bool saveCurrentRouteSettings();
     //
     void exportConnectionFilter(CONFIGROOT &root);
     //

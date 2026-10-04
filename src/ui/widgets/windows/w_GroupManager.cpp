@@ -1,5 +1,6 @@
 #include "w_GroupManager.hpp"
 
+#include "GroupRoutePersistenceSafety.hpp"
 #include "core/connection/Generation.hpp"
 #include "core/handler/ConfigHandler.hpp"
 #include "core/handler/RouteHandler.hpp"
@@ -11,6 +12,9 @@
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QListWidgetItem>
+#include <QSignalBlocker>
+
+using namespace Qv2ray::ui::group_manager_safety;
 
 #define SELECTED_ROWS_INDEX                                                                                                                          \
     ([&]() {                                                                                                                                         \
@@ -42,6 +46,7 @@ GroupManager::GroupManager(QWidget *parent) : QvDialog("GroupManager", parent)
 
     setupUi(this);
     QvMessageBusConnect(GroupManager);
+    disconnect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
 
     for (const auto &plugin : PluginHost->UsablePlugins())
     {
@@ -278,6 +283,27 @@ QvMessageBusSlotImpl(GroupManager)
 }
 
 GroupManager::~GroupManager(){};
+
+bool GroupManager::saveCurrentRouteSettings()
+{
+    if (currentGroupId == NullGroupId)
+        return true;
+
+    const auto routeId = ConnectionManager->GetGroupRoutingId(currentGroupId);
+    const auto &[dns, fakedns] = dnsSettingsWidget->GetDNSObject();
+    const auto dnsAccepted = RouteManager->SetDNSSettings(routeId, dnsSettingsGB->isChecked(), dns, fakedns);
+    const auto routeAccepted = RouteManager->SetAdvancedRouteSettings(routeId, routeSettingsGB->isChecked(), routeSettingsWidget->GetRouteConfig());
+    if (GroupRouteSettersAccepted(dnsAccepted, routeAccepted))
+        return true;
+
+    auto reason = RouteManager->GetRouteStorageError();
+    if (reason.isEmpty())
+        reason = tr("routes.json is read-only for this session.");
+    QvMessageBoxWarn(this, tr("Routing settings are read-only"),
+                     tr("Routing settings could not be saved. The Group Editor will remain open on the current group.\n\n%1").arg(reason));
+    return false;
+}
+
 void GroupManager::on_addGroupButton_clicked()
 {
     auto const key = tr("New Group") + " - " + GenerateRandomString(5);
@@ -348,14 +374,8 @@ void GroupManager::on_removeGroupButton_clicked()
 
 void GroupManager::on_buttonBox_accepted()
 {
-    if (currentGroupId != NullGroupId)
-    {
-        const auto routeId = ConnectionManager->GetGroupRoutingId(currentGroupId);
-        const auto &[dns, fakedns] = dnsSettingsWidget->GetDNSObject();
-        RouteManager->SetDNSSettings(routeId, dnsSettingsGB->isChecked(), dns, fakedns);
-        RouteManager->SetAdvancedRouteSettings(routeId, routeSettingsGB->isChecked(), routeSettingsWidget->GetRouteConfig());
-    }
-    // Nothing?
+    if (saveCurrentRouteSettings())
+        accept();
 }
 
 void GroupManager::on_groupList_itemSelectionChanged()
@@ -450,12 +470,11 @@ void GroupManager::on_ExcludeKeywords_textChanged()
 
 void GroupManager::on_groupList_currentItemChanged(QListWidgetItem *current, QListWidgetItem *priv)
 {
-    if (priv)
+    if (priv && !saveCurrentRouteSettings())
     {
-        const auto group = ConnectionManager->GetGroupMetaObject(currentGroupId);
-        const auto &[dns, fakedns] = dnsSettingsWidget->GetDNSObject();
-        RouteManager->SetDNSSettings(group.routeConfigId, dnsSettingsGB->isChecked(), dns, fakedns);
-        RouteManager->SetAdvancedRouteSettings(group.routeConfigId, routeSettingsGB->isChecked(), routeSettingsWidget->GetRouteConfig());
+        const QSignalBlocker blocker(groupList);
+        groupList->setCurrentItem(priv);
+        return;
     }
     if (current)
     {

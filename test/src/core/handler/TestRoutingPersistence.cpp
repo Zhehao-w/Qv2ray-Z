@@ -1,5 +1,6 @@
 #include "core/connection/RoutingJsonPreservation.hpp"
 #include "core/handler/RouteStorage.hpp"
+#include "ui/widgets/windows/GroupRoutePersistenceSafety.hpp"
 
 #include <QDir>
 #include <QFile>
@@ -12,6 +13,7 @@
 
 using namespace Qv2ray::core::connection::routing_json;
 using namespace Qv2ray::core::handler::route_storage;
+using namespace Qv2ray::ui::group_manager_safety;
 
 namespace
 {
@@ -106,6 +108,14 @@ TEST_CASE("routes.json save failures propagate")
     REQUIRE_FALSE(SaveRouteStorage(path, RouteStorageState::Valid, QJsonObject{ { "route", true } }, &error));
     REQUIRE_FALSE(error.isEmpty());
     REQUIRE(QFileInfo(path).isDir());
+}
+
+TEST_CASE("group route editor requires both setter results before leaving current state")
+{
+    REQUIRE(GroupRouteSettersAccepted(true, true));
+    REQUIRE_FALSE(GroupRouteSettersAccepted(false, true));
+    REQUIRE_FALSE(GroupRouteSettersAccepted(true, false));
+    REQUIRE_FALSE(GroupRouteSettersAccepted(false, false));
 }
 
 TEST_CASE("graphical routing no-op merge preserves modern and opaque rule fields")
