@@ -16,10 +16,11 @@ namespace Qv2ray::base::vless_settings
     inline Representation DetectRepresentation(const QJsonObject &settings)
     {
         // Xray's simplified VLESS outbound form is authoritative whenever a
-        // direct address is present. Keep that precedence even if a stale or
-        // opaque vnext value is also present.
-        if (settings.contains(QStringLiteral("address")))
-            return settings.value(QStringLiteral("address")).isString() ? Representation::Flat : Representation::Unsupported;
+        // non-null direct address is present. A JSON null leaves Xray's
+        // *Address nil, so vnext remains authoritative in that case.
+        const auto directAddress = settings.value(QStringLiteral("address"));
+        if (!directAddress.isUndefined() && !directAddress.isNull())
+            return directAddress.isString() ? Representation::Flat : Representation::Unsupported;
 
         // New editor content historically starts in vnext form.
         if (settings.isEmpty())
