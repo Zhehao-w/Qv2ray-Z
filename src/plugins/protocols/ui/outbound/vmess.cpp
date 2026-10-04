@@ -23,11 +23,13 @@ void VmessOutboundEditor::SetContent(const QJsonObject &content)
 {
     this->content = content;
     PLUGIN_EDITOR_LOADING_SCOPE({
-        if (content["vnext"].toArray().isEmpty())
-            content["vnext"] = QJsonArray{ QJsonObject{} };
-        vmess = VMessServerObject::fromJson(content["vnext"].toArray().first().toObject());
+        auto editableContent = content;
+        if (editableContent["vnext"].toArray().isEmpty())
+            editableContent["vnext"] = QJsonArray{ QJsonObject{} };
+        vmess = VMessServerObject::fromJson(editableContent["vnext"].toArray().first().toObject());
         if (vmess.users.empty())
             vmess.users.push_back({});
+        originalManagedServer = vmess.toJson();
         const auto &user = vmess.users.front();
         idLineEdit->setText(user.id);
         alterLineEdit->setValue(user.alterId);
