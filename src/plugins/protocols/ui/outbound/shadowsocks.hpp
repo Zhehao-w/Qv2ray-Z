@@ -2,6 +2,7 @@
 
 #include "CommonTypes.hpp"
 #include "QvGUIPluginInterface.hpp"
+#include "base/SingleServerSettingsCompatibility.hpp"
 #include "ui_shadowsocks.h"
 
 class ShadowsocksOutboundEditor
@@ -25,22 +26,20 @@ class ShadowsocksOutboundEditor
 
     void SetContent(const QJsonObject &content) override
     {
+        this->content = content;
         PLUGIN_EDITOR_LOADING_SCOPE({
-            if (content["servers"].toArray().isEmpty())
-                content["servers"] = QJsonArray{ QJsonObject{} };
-            // ShadowSocks Configs
-            shadowsocks = ShadowSocksServerObject::fromJson(content["servers"].toArray().first().toObject());
+            const auto servers = content["servers"].toArray();
+            shadowsocks = ShadowSocksServerObject::fromJson(servers.isEmpty() ? QJsonObject{} : servers.first().toObject());
+            originalManagedServer = shadowsocks.toJson();
             ss_passwordTxt->setText(shadowsocks.password);
             ss_encryptionMethod->setCurrentText(shadowsocks.method);
         })
     }
     const QJsonObject GetContent() const override
     {
-        auto result = content;
-        QJsonArray servers;
-        servers.append(shadowsocks.toJson());
-        result.insert("servers", servers);
-        return result;
+        return Qv2ray::base::single_server_settings::ApplyManagedFirstServerChanges(
+            content, QStringLiteral("servers"), originalManagedServer, shadowsocks.toJson(),
+            { QStringLiteral("address"), QStringLiteral("port"), QStringLiteral("method"), QStringLiteral("password") });
     }
 
   protected:
@@ -52,4 +51,5 @@ class ShadowsocksOutboundEditor
 
   private:
     ShadowSocksServerObject shadowsocks;
+    QJsonObject originalManagedServer;
 };
