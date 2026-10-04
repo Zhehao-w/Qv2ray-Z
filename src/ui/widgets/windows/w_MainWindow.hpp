@@ -167,7 +167,7 @@ class MainWindow
     DECL_ACTION(connectionListRCM_Menu, action_RCM_RenameConnection);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_DuplicateConnection);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_TestLatency);
-    DECL_ACTION(connectionListRCM_Menu, action_RCM_TestRealLatency);
+    DECL_ACTION(connectionListRCM_Menu, action_RCM_RealLatencyTest);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_ResetStats);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_DeleteConnection);
     DECL_ACTION(sortMenu, sortAction_ViewFlat);
