@@ -159,7 +159,7 @@ jobs:
         id: build-regressions
         shell: pwsh
         run: |
-          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety connection_context_resolver http_request_safety crash_diagnostic_safety settings_compatibility --parallel 2>&1 | Tee-Object -FilePath build.log
+          cmake --build build --config Release --target qv2ray parse_ss_url parse_vmess_url parse_vless_url generation qjsonio kernel_path_resolver kernel_process_lifecycle threading_hygiene windows_integration_safety data_safety routing_ui_safety connection_context_resolver http_request_safety crash_diagnostic_safety settings_compatibility --parallel 2>&1 | Tee-Object -FilePath build.log
           $buildExitCode = $LASTEXITCODE
           if ($buildExitCode -ne 0) { exit $buildExitCode }
 
@@ -175,7 +175,7 @@ jobs:
         id: run-regressions
         shell: pwsh
         run: |
-          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety|connection_context_resolver|http_request_safety|crash_diagnostic_safety|settings_compatibility)' 2>&1 | Tee-Object -FilePath ctest.log
+          ctest --test-dir build --output-on-failure -C Release -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety|routing_ui_safety|connection_context_resolver|http_request_safety|crash_diagnostic_safety|settings_compatibility)' 2>&1 | Tee-Object -FilePath ctest.log
           $testExitCode = $LASTEXITCODE
           if ($testExitCode -ne 0) { exit $testExitCode }
 

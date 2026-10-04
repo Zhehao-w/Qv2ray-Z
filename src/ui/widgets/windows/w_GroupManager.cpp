@@ -335,13 +335,13 @@ bool GroupManager::saveCurrentRouteSettings()
     const auto &[dns, fakedns] = dnsSettingsWidget->GetDNSObject();
     const auto dnsAccepted = RouteManager->SetDNSSettings(routeId, dnsSettingsGB->isChecked(), dns, fakedns);
     const auto routeAccepted = RouteManager->SetAdvancedRouteSettings(routeId, routeSettingsGB->isChecked(), routeSettingsWidget->GetRouteConfig());
-    if (GroupRouteSettersAccepted(dnsAccepted, routeAccepted))
+    if (GroupRouteSettersAccepted(dnsAccepted, routeAccepted) && RouteManager->SaveRoutes())
         return true;
 
     auto reason = RouteManager->GetRouteStorageError();
     if (reason.isEmpty())
         reason = tr("routes.json is read-only for this session.");
-    QvMessageBoxWarn(this, tr("Routing settings are read-only"),
+    QvMessageBoxWarn(this, tr("Could not save routing settings"),
                      tr("Routing settings could not be saved. The Group Editor will remain open on the current group.\n\n%1").arg(reason));
     return false;
 }
@@ -381,12 +381,14 @@ void GroupManager::on_updateButton_clicked()
         qApp->processEvents();
         ConnectionManager->UpdateSubscription(currentGroupId);
         this->setEnabled(true);
-        on_groupList_itemClicked(groupList->currentItem());
+        loadCurrentGroup(groupList->currentItem());
     }
 }
 
 void GroupManager::on_removeGroupButton_clicked()
 {
+    if (!saveCurrentRouteSettings())
+        return;
     if (QvMessageBoxAsk(this, tr("Remove a Group"), tr("All connections will be moved to default group, do you want to continue?")) == Yes)
     {
         if (const auto error = ConnectionManager->DeleteGroup(currentGroupId))
@@ -397,14 +399,17 @@ void GroupManager::on_removeGroupButton_clicked()
 
         auto item = groupList->currentItem();
         int index = groupList->row(item);
-        groupList->removeItemWidget(item);
-        delete item;
+        {
+            const QSignalBlocker blocker(groupList);
+            currentGroupId = NullGroupId;
+            delete groupList->takeItem(index);
+            groupList->setCurrentItem(nullptr);
+        }
         if (groupList->count() > 0)
         {
             index = std::max(index, 0);
             index = std::min(index, groupList->count() - 1);
             groupList->setCurrentItem(groupList->item(index));
-            on_groupList_itemClicked(groupList->item(index));
         }
         else
         {
@@ -422,10 +427,18 @@ void GroupManager::on_buttonBox_accepted()
 
 void GroupManager::on_groupList_itemSelectionChanged()
 {
+    // QListWidget can finish changing its selection after currentItemChanged returns,
+    // including after a modal save error has restored the previous current item.
+    if (groupSwitchRejected && groupList->currentItem())
+    {
+        const QSignalBlocker blocker(groupList);
+        groupList->clearSelection();
+        groupList->currentItem()->setSelected(true);
+    }
     groupInfoGroupBox->setEnabled(groupList->selectedItems().count() > 0);
 }
 
-void GroupManager::on_groupList_itemClicked(QListWidgetItem *item)
+void GroupManager::loadCurrentGroup(QListWidgetItem *item)
 {
     if (item == nullptr)
     {
@@ -512,15 +525,17 @@ void GroupManager::on_ExcludeKeywords_textChanged()
 
 void GroupManager::on_groupList_currentItemChanged(QListWidgetItem *current, QListWidgetItem *priv)
 {
+    groupSwitchRejected = false;
     if (priv && !saveCurrentRouteSettings())
     {
+        groupSwitchRejected = true;
         const QSignalBlocker blocker(groupList);
         groupList->setCurrentItem(priv);
         return;
     }
     if (current)
     {
-        on_groupList_itemClicked(current);
+        loadCurrentGroup(current);
     }
 }
 

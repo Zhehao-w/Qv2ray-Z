@@ -46,7 +46,6 @@ class GroupManager
     void on_ExcludeRelation_currentTextChanged(const QString &arg1);
     void on_IncludeKeywords_textChanged();
     void on_ExcludeKeywords_textChanged();
-    void on_groupList_itemClicked(QListWidgetItem *item);
     void on_groupList_currentItemChanged(QListWidgetItem *current, QListWidgetItem *previous);
     void on_subAddrTxt_textEdited(const QString &arg1);
     void on_updateIntervalSB_valueChanged(double arg1);
@@ -68,6 +67,7 @@ class GroupManager
     void onRCMActionTriggered_Link();
     void reloadGroupRCMActions();
     bool saveCurrentRouteSettings();
+    void loadCurrentGroup(QListWidgetItem *item);
     //
     void exportConnectionFilter(CONFIGROOT &root);
     //
@@ -81,6 +81,7 @@ class GroupManager
     QMenu *connectionListRCMenu_MoveToMenu = new QMenu(tr("Move to..."), connectionListRCMenu);
     QMenu *connectionListRCMenu_LinkToMenu = new QMenu(tr("Link to..."), connectionListRCMenu);
     bool isUpdateInProgress = false;
+    bool groupSwitchRejected = false;
     GroupId currentGroupId = NullGroupId;
     ConnectionId currentConnectionId = NullConnectionId;
 };

@@ -67,6 +67,7 @@ jobs:
             threading_hygiene \
             windows_integration_safety \
             data_safety \
+            routing_ui_safety \
             connection_context_resolver \
             http_request_safety \
             crash_diagnostic_safety \
@@ -84,7 +85,7 @@ jobs:
       - name: Run supported regression tests
         run: >-
           ctest --test-dir build --output-on-failure
-          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety|connection_context_resolver|http_request_safety|crash_diagnostic_safety|settings_compatibility)'
+          -R 'QV2RAY_TEST_(parse_ss_url|parse_vmess_url|parse_vless_url|generation|qjsonio|kernel_path_resolver|kernel_process_lifecycle|threading_hygiene|windows_integration_safety|data_safety|routing_ui_safety|connection_context_resolver|http_request_safety|crash_diagnostic_safety|settings_compatibility)'
 
       - name: Check committed whitespace
         shell: bash

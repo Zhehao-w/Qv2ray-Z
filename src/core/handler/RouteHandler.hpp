@@ -35,6 +35,7 @@ namespace Qv2ray::core::handler
         //
         OUTBOUNDS ExpandExternalConnection(const OUTBOUNDS &outbounds) const;
         //
+        std::optional<QString> GetRuntimeConfigError(const CONFIGROOT &root) const;
         // Final Config Generation
         CONFIGROOT GenerateFinalConfig(const ConnectionGroupPair &pair, bool hasAPI = true) const;
         CONFIGROOT GenerateFinalConfig(CONFIGROOT root, const GroupRoutingId &routingId, bool hasAPI = true) const;

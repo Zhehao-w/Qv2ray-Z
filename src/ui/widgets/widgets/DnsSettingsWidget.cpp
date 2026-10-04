@@ -1,9 +1,12 @@
 #include "DnsSettingsWidget.hpp"
 
 #include "components/geosite/QvGeositeReader.hpp"
+#include "core/connection/Generation.hpp"
 #include "ui/widgets/common/WidgetUIBase.hpp"
 #include "ui/widgets/widgets/QvAutoCompleteTextEdit.hpp"
 #include "utils/QvHelpers.hpp"
+
+#include <QScopedValueRollback>
 
 using Qv2ray::common::validation::IsIPv4Address;
 using Qv2ray::common::validation::IsIPv6Address;
@@ -47,9 +50,17 @@ DnsSettingsWidget::DnsSettingsWidget(QWidget *parent) : QWidget(parent)
     domainListTxt = new AutoCompleteTextEdit("geosite", sourceStringsDomain, this);
     ipListTxt = new AutoCompleteTextEdit("geoip", sourceStringsIP, this);
     connect(domainListTxt, &AutoCompleteTextEdit::textChanged,
-            [&]() { this->dns.servers[currentServerIndex].domains = SplitLines(domainListTxt->toPlainText()); });
+            [&]()
+            {
+                if (!isLoading && currentServerIndex >= 0)
+                    this->dns.servers[currentServerIndex].domains = SplitLines(domainListTxt->toPlainText());
+            });
     connect(ipListTxt, &AutoCompleteTextEdit::textChanged,
-            [&]() { this->dns.servers[currentServerIndex].expectIPs = SplitLines(ipListTxt->toPlainText()); });
+            [&]()
+            {
+                if (!isLoading && currentServerIndex >= 0)
+                    this->dns.servers[currentServerIndex].expectIPs = SplitLines(ipListTxt->toPlainText());
+            });
 
     domainsLayout->addWidget(domainListTxt);
     expectedIPsLayout->addWidget(ipListTxt);
@@ -76,6 +87,9 @@ QvMessageBusSlotImpl(DnsSettingsWidget)
 
 void DnsSettingsWidget::SetDNSObject(const DNSObject &_dns, const FakeDNSObject &_fakeDNS)
 {
+    const QScopedValueRollback<bool> loading(isLoading, true);
+    preserveJson = false;
+    serverJsonStates.clear();
     this->dns = _dns;
     this->fakeDNS = _fakeDNS;
 
@@ -91,7 +105,7 @@ void DnsSettingsWidget::SetDNSObject(const DNSObject &_dns, const FakeDNSObject 
         ShowCurrentDnsServerDetails();
     }
 
-    staticResolvedDomainsTable->clearContents();
+    staticResolvedDomainsTable->setRowCount(0);
     for (const auto &[host, ip] : dns.hosts.toStdMap())
     {
         const auto rowId = staticResolvedDomainsTable->rowCount();
@@ -133,6 +147,10 @@ void DnsSettingsWidget::ProcessDnsPortEnabledState()
 
 void DnsSettingsWidget::ShowCurrentDnsServerDetails()
 {
+    if (currentServerIndex < 0 || currentServerIndex >= dns.servers.size())
+        return;
+    const QScopedValueRollback<bool> loading(isLoading, true);
+    detailsSettingsGB->setCheckable(!preserveJson || !serverJsonStates[currentServerIndex].original.isObject());
     serverAddressTxt->setText(dns.servers[currentServerIndex].address);
     //
     domainListTxt->setPlainText(dns.servers[currentServerIndex].domains.join(NEWLINE));
@@ -167,11 +185,15 @@ std::pair<DNSObject, FakeDNSObject> DnsSettingsWidget::GetDNSObject()
 
 void DnsSettingsWidget::on_dnsClientIPTxt_textEdited(const QString &arg1)
 {
+    if (isLoading)
+        return;
     dns.clientIp = arg1;
 }
 
 void DnsSettingsWidget::on_dnsTagTxt_textEdited(const QString &arg1)
 {
+    if (isLoading)
+        return;
     dns.tag = arg1;
 }
 void DnsSettingsWidget::on_addServerBtn_clicked()
@@ -180,6 +202,8 @@ void DnsSettingsWidget::on_addServerBtn_clicked()
     o.address = "1.1.1.1";
     o.port = 53;
     dns.servers.push_back(o);
+    if (preserveJson)
+        serverJsonStates.push_back({ QJsonValue(QJsonValue::Undefined), o });
     serversListbox->addItem(o.address);
     serversListbox->setCurrentRow(serversListbox->count() - 1);
     UPDATE_UI_ENABLED_STATE
@@ -188,6 +212,10 @@ void DnsSettingsWidget::on_addServerBtn_clicked()
 
 void DnsSettingsWidget::on_removeServerBtn_clicked()
 {
+    if (currentServerIndex < 0)
+        return;
+    if (preserveJson)
+        serverJsonStates.removeAt(currentServerIndex);
     dns.servers.removeAt(currentServerIndex);
     // Block the signals
     serversListbox->blockSignals(true);
@@ -226,6 +254,8 @@ void DnsSettingsWidget::on_serversListbox_currentRowChanged(int currentRow)
 
 void DnsSettingsWidget::on_moveServerUpBtn_clicked()
 {
+    if (preserveJson)
+        serverJsonStates.swapItemsAt(currentServerIndex - 1, currentServerIndex);
     auto temp = dns.servers[currentServerIndex - 1];
     dns.servers[currentServerIndex - 1] = dns.servers[currentServerIndex];
     dns.servers[currentServerIndex] = temp;
@@ -237,6 +267,8 @@ void DnsSettingsWidget::on_moveServerUpBtn_clicked()
 
 void DnsSettingsWidget::on_moveServerDownBtn_clicked()
 {
+    if (preserveJson)
+        serverJsonStates.swapItemsAt(currentServerIndex + 1, currentServerIndex);
     auto temp = dns.servers[currentServerIndex + 1];
     dns.servers[currentServerIndex + 1] = dns.servers[currentServerIndex];
     dns.servers[currentServerIndex] = temp;
@@ -248,6 +280,10 @@ void DnsSettingsWidget::on_moveServerDownBtn_clicked()
 
 void DnsSettingsWidget::on_serverAddressTxt_textEdited(const QString &arg1)
 {
+    if (currentServerIndex < 0)
+        return;
+    if (isLoading)
+        return;
     dns.servers[currentServerIndex].address = arg1;
     serversListbox->currentItem()->setText(arg1);
     if (arg1.isEmpty() || IsValidDNSServer(arg1))
@@ -264,6 +300,10 @@ void DnsSettingsWidget::on_serverAddressTxt_textEdited(const QString &arg1)
 
 void DnsSettingsWidget::on_serverPortSB_valueChanged(int arg1)
 {
+    if (currentServerIndex < 0)
+        return;
+    if (isLoading)
+        return;
     dns.servers[currentServerIndex].port = arg1;
 }
 
@@ -287,6 +327,8 @@ void DnsSettingsWidget::on_staticResolvedDomainsTable_cellChanged(int, int)
 
 void DnsSettingsWidget::on_detailsSettingsGB_toggled(bool arg1)
 {
+    if (isLoading)
+        return;
     if (currentServerIndex >= 0)
         dns.servers[currentServerIndex].QV2RAY_DNS_IS_COMPLEX_DNS = arg1;
     // detailsSettingsGB->setChecked(dns.servers[currentServerIndex].QV2RAY_DNS_IS_COMPLEX_DNS);
@@ -294,25 +336,127 @@ void DnsSettingsWidget::on_detailsSettingsGB_toggled(bool arg1)
 
 void DnsSettingsWidget::on_fakeDNSIPPool_currentTextChanged(const QString &arg1)
 {
+    if (isLoading)
+        return;
     fakeDNS.ipPool = arg1;
 }
 
 void DnsSettingsWidget::on_fakeDNSIPPoolSize_valueChanged(int arg1)
 {
+    if (isLoading)
+        return;
     fakeDNS.poolSize = arg1;
 }
 
 void DnsSettingsWidget::on_dnsDisableCacheCB_stateChanged(int arg1)
 {
+    if (isLoading)
+        return;
     dns.disableCache = arg1 == Qt::Checked;
 }
 
 void DnsSettingsWidget::on_dnsDisableFallbackCB_stateChanged(int arg1)
 {
+    if (isLoading)
+        return;
     dns.disableFallback = arg1 == Qt::Checked;
 }
 
 void DnsSettingsWidget::on_dnsQueryStrategyCB_currentTextChanged(const QString &arg1)
 {
+    if (isLoading)
+        return;
     dns.queryStrategy = arg1;
+}
+
+void DnsSettingsWidget::SetDNSJson(const QJsonValue &value)
+{
+    auto model = DNSObject::fromJson(value.toObject());
+    const auto servers = value.toObject().value("servers").toArray();
+    for (int i = 0; i < servers.size(); ++i)
+        model.servers[i].QV2RAY_DNS_IS_COMPLEX_DNS = servers[i].isObject();
+    SetDNSObject(model, fakeDNS);
+    const QScopedValueRollback<bool> loading(isLoading, true);
+    originalJson = value;
+    baselineDns = dns;
+    preserveJson = true;
+    for (int i = 0; i < servers.size(); ++i)
+        serverJsonStates.push_back({ servers[i], dns.servers[i] });
+
+    const auto hosts = value.toObject().value("hosts").toObject();
+    for (int row = 0; row < staticResolvedDomainsTable->rowCount(); ++row)
+    {
+        const auto key = staticResolvedDomainsTable->item(row, 0)->text();
+        auto item = staticResolvedDomainsTable->item(row, 1);
+        const auto raw = hosts.value(key);
+        if (!raw.isString())
+        {
+            const auto bytes = QJsonDocument(QJsonArray{ raw }).toJson(QJsonDocument::Compact);
+            item->setText(QString::fromUtf8(bytes.mid(1, bytes.size() - 2)));
+            item->setData(Qt::UserRole, QVariant::fromValue(raw));
+            item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+            item->setToolTip(tr("This DNS host value is preserved. Use the JSON editor to change it."));
+        }
+    }
+    ShowCurrentDnsServerDetails();
+}
+
+QJsonValue DnsSettingsWidget::GetDNSJson()
+{
+    GetDNSObject();
+    if (!preserveJson)
+        return GenerateDNS(dns);
+    auto result = originalJson.toObject();
+    const auto baseline = baselineDns.toJson();
+    const auto current = dns.toJson();
+    for (const auto &key : { "clientIp", "tag", "disableCache", "disableFallback", "queryStrategy" })
+        if (baseline.value(key) != current.value(key))
+            result[key] = current.value(key);
+
+    QJsonObject hosts;
+    for (int row = 0; row < staticResolvedDomainsTable->rowCount(); ++row)
+    {
+        const auto key = staticResolvedDomainsTable->item(row, 0);
+        const auto value = staticResolvedDomainsTable->item(row, 1);
+        if (key && value)
+            hosts[key->text()] = value->data(Qt::UserRole).isValid() ? value->data(Qt::UserRole).value<QJsonValue>() : QJsonValue(value->text());
+    }
+    if (hosts != originalJson.toObject().value("hosts").toObject())
+        result["hosts"] = hosts;
+
+    QJsonArray servers;
+    for (int i = 0; i < dns.servers.size(); ++i)
+    {
+        const auto &state = serverJsonStates[i];
+        const auto &server = dns.servers[i];
+        if (state.original.isUndefined())
+        {
+            auto object = server.toJson();
+            object.remove("QV2RAY_DNS_IS_COMPLEX_DNS");
+            servers.append(server.QV2RAY_DNS_IS_COMPLEX_DNS ? QJsonValue(object) : QJsonValue(server.address));
+        }
+        else if (server == state.baseline)
+        {
+            servers.append(state.original);
+        }
+        else if (state.original.isString() && !server.QV2RAY_DNS_IS_COMPLEX_DNS)
+        {
+            servers.append(server.address);
+        }
+        else
+        {
+            auto object = state.original.toObject();
+            const auto before = state.baseline.toJson();
+            const auto after = server.toJson();
+            if (state.original.isString())
+                object["address"] = server.address;
+            for (const auto &key : { "address", "port", "domains", "expectIPs" })
+                if (before.value(key) != after.value(key))
+                    object[key] = after.value(key);
+            servers.append(object);
+        }
+    }
+    if (servers != originalJson.toObject().value("servers").toArray())
+        result["servers"] = servers;
+    return result == originalJson.toObject() ? originalJson : QJsonValue(result);
 }
