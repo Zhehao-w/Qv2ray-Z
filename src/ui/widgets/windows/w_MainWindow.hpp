@@ -112,13 +112,10 @@ class MainWindow
             tray_RootMenu->removeAction(tray_BypassCNMenu->menuAction());
             tray_RootMenu->insertAction(tray_SystemProxyMenu->menuAction(), tray_action_SetBypassCN);
             connect(tray_action_SetBypassCN, &QAction::toggled, this, [this](bool enabled) {
-                GlobalConfig.defaultRouteConfig.connectionConfig.bypassCN = enabled;
-                SaveGlobalSettings();
-                if (!KernelInstance->CurrentConnection().isEmpty())
-                {
-                    qApp->processEvents();
-                    ConnectionManager->RestartConnection();
-                }
+                if (enabled)
+                    on_setBypassCNBtn_clicked();
+                else
+                    on_clearBypassCNBtn_clicked();
             });
         }
 
