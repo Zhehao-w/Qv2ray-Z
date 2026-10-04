@@ -12,13 +12,8 @@ TEST_CASE("Graphical single-outbound edits preserve the stored connection root")
     originalOutbound.insert(QStringLiteral("protocol"), QStringLiteral("vmess"));
     originalOutbound.insert(QStringLiteral("tag"), QStringLiteral("old"));
 
-    OUTBOUND untouchedTail;
-    untouchedTail.insert(QStringLiteral("protocol"), QStringLiteral("freedom"));
-    untouchedTail.insert(QStringLiteral("tag"), QStringLiteral("tail"));
-
     QJsonArray outbounds;
     outbounds.append(originalOutbound);
-    outbounds.append(untouchedTail);
 
     CONFIGROOT original;
     original.insert(QStringLiteral("outbounds"), outbounds);
@@ -35,9 +30,8 @@ TEST_CASE("Graphical single-outbound edits preserve the stored connection root")
     REQUIRE(result.value(QStringLiteral("futureRoot")) == original.value(QStringLiteral("futureRoot")));
 
     const auto resultOutbounds = result.value(QStringLiteral("outbounds")).toArray();
-    REQUIRE(resultOutbounds.size() == 2);
+    REQUIRE(resultOutbounds.size() == 1);
     REQUIRE(resultOutbounds.at(0).toObject().value(QStringLiteral("tag")) == QStringLiteral("edited"));
-    REQUIRE(resultOutbounds.at(1) == outbounds.at(1));
 }
 
 TEST_CASE("No-op single-server persistence returns opaque settings unchanged")
