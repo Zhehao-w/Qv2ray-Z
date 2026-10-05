@@ -41,11 +41,11 @@ Qv2ray-Z is maintained and packaged for Windows with Qt 5.15.2, MSVC 14.2, and a
 
 ## Download and run
 
-Download the current Windows package from the [Releases](https://github.com/Zhehao-w/Qv2ray-Z/releases) page, extract the ZIP, and launch Qv2ray-Z from the extracted folder.
+Download the current Windows package from the [Releases](https://github.com/Zhehao-w/Qv2ray-Z/releases) page, extract the ZIP, and launch `Qv2ray-Z.exe` from the extracted folder.
 
 The release package includes:
 
-- Qv2ray-Z
+- `Qv2ray-Z.exe`
 - the required Qt runtime and plugins
 - a verified official Xray-core Windows x64 binary
 - `geoip.dat`
