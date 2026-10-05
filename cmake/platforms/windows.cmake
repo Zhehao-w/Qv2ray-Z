@@ -19,5 +19,5 @@ if(QV2RAY_AUTO_DEPLOY)
     endif()
     add_custom_command(TARGET qv2ray
         POST_BUILD
-        COMMAND ${QV2RAY_QtX_DIR}/../../../bin/windeployqt ${CMAKE_BINARY_DIR}/Qv2ray-Z.exe --compiler-runtime --verbose 2 --dir ${CMAKE_BINARY_DIR}/winqt/)
+        COMMAND ${QV2RAY_QtX_DIR}/../../../bin/windeployqt ${CMAKE_BINARY_DIR}/Qv2ray-Z.exe --compiler-runtime --no-translations --verbose 2 --dir ${CMAKE_BINARY_DIR}/winqt/)
 endif()

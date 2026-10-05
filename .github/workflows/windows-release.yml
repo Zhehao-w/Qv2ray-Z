@@ -130,7 +130,7 @@ jobs:
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
-          windeployqt --release --compiler-runtime --verbose 2 --dir "$deployment" "$deployment/Qv2ray-Z.exe"
+          windeployqt --release --compiler-runtime --no-translations --verbose 2 --dir "$deployment" "$deployment/Qv2ray-Z.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $legacyPluginDir = Join-Path $deployment 'plugins'
@@ -147,6 +147,11 @@ jobs:
             if ($legacyTranslationBundles) {
               throw 'Release unexpectedly contains retired Qv2ray translation bundles.'
             }
+          }
+
+          $qtTranslationDir = Join-Path $deployment 'translations'
+          if (Test-Path $qtTranslationDir) {
+            throw 'Release unexpectedly contains Qt translation bundles.'
           }
 
       - name: Download and verify pinned official Xray Windows x64 release

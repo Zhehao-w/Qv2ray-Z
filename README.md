@@ -29,9 +29,9 @@ Qv2ray-Z is not intended to restore every historical Qv2ray platform, plugin, pr
 
 ## Development status
 
-The latest published stable release is **v3.0.0**. The `dev` branch currently identifies itself as **3.1.0** and is being prepared for the next Windows release.
+The latest published stable release is **v3.1.0**. The `dev` branch currently identifies itself as **3.1.1** and is being prepared for the next Windows patch release.
 
-There is no v3.1.0 release tag yet. v3.1.0 remains blocked until the latest `dev` commit completes authoritative Windows validation and the packaged UI receives a final manual sanity check. See the current [v3.1.0 release notes](docs/release-notes/3.1.0.md) for the release scope.
+v3.1.1 remains unreleased until the final `dev` commit completes authoritative Windows validation and the packaged UI receives a final manual sanity check. See the current [v3.1.1 release notes](docs/release-notes/3.1.1.md) for the patch scope.
 
 ## Platform
 
