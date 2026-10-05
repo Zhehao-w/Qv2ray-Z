@@ -234,7 +234,7 @@ jobs:
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
-          windeployqt --release --compiler-runtime --verbose 2 --dir "$deployment" "$deployment/Qv2ray-Z.exe"
+          windeployqt --release --compiler-runtime --no-translations --verbose 2 --dir "$deployment" "$deployment/Qv2ray-Z.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $legacyPluginDir = Join-Path $deployment 'plugins'
@@ -251,6 +251,11 @@ jobs:
             if ($legacyLanguageFiles) {
               throw 'Deployment unexpectedly contains retired Qv2ray translation bundles.'
             }
+          }
+
+          $qtTranslationDir = Join-Path $deployment 'translations'
+          if (Test-Path $qtTranslationDir) {
+            throw 'Deployment unexpectedly contains Qt translation bundles.'
           }
 
       - name: Download and verify pinned official Xray Windows x64 release
@@ -308,7 +313,6 @@ jobs:
             geoip_asset = $env:GEOIP_ASSET
             geoip_sha256 = $geoipHash
             geosite_asset = $env:GEOSITE_ASSET
-            geosite_sha256 = $geositeHash
             geo_cn_private_source = $env:GEO_CN_PRIVATE_SOURCE
             geo_cn_private_version = $env:GEO_CN_PRIVATE_VERSION
             geoip_cn_private_asset = $env:GEOIP_CN_PRIVATE_ASSET
