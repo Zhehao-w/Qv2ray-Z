@@ -313,6 +313,7 @@ jobs:
             geoip_asset = $env:GEOIP_ASSET
             geoip_sha256 = $geoipHash
             geosite_asset = $env:GEOSITE_ASSET
+            geosite_sha256 = $geositeHash
             geo_cn_private_source = $env:GEO_CN_PRIVATE_SOURCE
             geo_cn_private_version = $env:GEO_CN_PRIVATE_VERSION
             geoip_cn_private_asset = $env:GEOIP_CN_PRIVATE_ASSET
