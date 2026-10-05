@@ -41,21 +41,35 @@ class PreferencesWindow
   protected:
     void showEvent(QShowEvent *event) override
     {
-        QvDialog::showEvent(event);
-        if (property("systemProxyPreferenceMovedToGeneral").toBool())
-            return;
-        setProperty("systemProxyPreferenceMovedToGeneral", true);
+        // Inbound Settings is the only Preferences tab whose page layout wraps
+        // another top-level layout inside a scroll area. Keep only the tab-page
+        // margin so the scroll contents do not pay the style margin twice.
+        verticalLayout_2->setContentsMargins(0, 0, 0, 0);
 
-        label_59->hide();
-        setSysProxyCB->setParent(groupBox9);
-        setSysProxyCB->setText(tr("Enabled"));
-        setSysProxyCB->setToolTip(
-            tr("Automatically set the system proxy when a connection starts and restore it when disconnected. The tray menu can still enable or disable the current system proxy manually."));
-        formLayout_9->insertRow(2, tr("System Proxy on Connect"), setSysProxyCB);
-        setSysProxyCB->show();
-        QWidget::setTabOrder(quietModeCB, setSysProxyCB);
-        QWidget::setTabOrder(setSysProxyCB, exitByCloseEventCB);
-        QWidget::setTabOrder(exitByCloseEventCB, noAutoConnectRB);
+        if (!property("systemProxyPreferenceMovedToGeneral").toBool())
+        {
+            setProperty("systemProxyPreferenceMovedToGeneral", true);
+
+            label_59->hide();
+            setSysProxyCB->setParent(groupBox9);
+            setSysProxyCB->setText(tr("Enabled"));
+            setSysProxyCB->setToolTip(
+                tr("Automatically set the system proxy when a connection starts and restore it when disconnected. The tray menu can still enable or disable the current system proxy manually."));
+            formLayout_9->insertRow(2, tr("System Proxy on Connect"), setSysProxyCB);
+            setSysProxyCB->show();
+            QWidget::setTabOrder(quietModeCB, setSysProxyCB);
+            QWidget::setTabOrder(setSysProxyCB, exitByCloseEventCB);
+            QWidget::setTabOrder(exitByCloseEventCB, noAutoConnectRB);
+
+            // Reparenting the System Proxy control changes the Inbound page's
+            // size hint. Invalidate the nested layouts before the dialog's base
+            // show handling so QScrollArea can resize the contents immediately.
+            formLayout_4->invalidate();
+            verticalLayout_2->invalidate();
+            scrollAreaWidgetContents_2->updateGeometry();
+        }
+
+        QvDialog::showEvent(event);
     }
 
   private:
