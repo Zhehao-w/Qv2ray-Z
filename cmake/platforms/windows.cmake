@@ -7,7 +7,7 @@ if(QV2RAY_AUTO_DEPLOY)
     install(DIRECTORY ${CMAKE_BINARY_DIR}/winqt/ DESTINATION .)
 endif()
 
-set(APPS "\${CMAKE_INSTALL_PREFIX}/qv2ray.exe")
+set(APPS "\${CMAKE_INSTALL_PREFIX}/Qv2ray-Z.exe")
 
 include(cmake/deployment.cmake)
 
@@ -19,5 +19,5 @@ if(QV2RAY_AUTO_DEPLOY)
     endif()
     add_custom_command(TARGET qv2ray
         POST_BUILD
-        COMMAND ${QV2RAY_QtX_DIR}/../../../bin/windeployqt ${CMAKE_BINARY_DIR}/qv2ray.exe --compiler-runtime --verbose 2 --dir ${CMAKE_BINARY_DIR}/winqt/)
+        COMMAND ${QV2RAY_QtX_DIR}/../../../bin/windeployqt ${CMAKE_BINARY_DIR}/Qv2ray-Z.exe --compiler-runtime --verbose 2 --dir ${CMAKE_BINARY_DIR}/winqt/)
 endif()

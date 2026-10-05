@@ -234,7 +234,7 @@ jobs:
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
-          windeployqt --release --compiler-runtime --verbose 2 --dir "$deployment" "$deployment/qv2ray.exe"
+          windeployqt --release --compiler-runtime --verbose 2 --dir "$deployment" "$deployment/Qv2ray-Z.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $legacyPluginDir = Join-Path $deployment 'plugins'
@@ -324,7 +324,7 @@ jobs:
         shell: pwsh
         run: |
           $deployment = (Resolve-Path "build/deployment").Path
-          foreach ($file in @('qv2ray.exe', 'xray.exe', 'geoip.dat', 'geosite.dat', 'geoip-only-cn-private.dat', 'release-manifest.json')) {
+          foreach ($file in @('Qv2ray-Z.exe', 'xray.exe', 'geoip.dat', 'geosite.dat', 'geoip-only-cn-private.dat', 'release-manifest.json')) {
             $packagedFile = Join-Path $deployment $file
             if (-not (Test-Path $packagedFile -PathType Leaf)) { throw "Deployment is missing $file" }
           }
@@ -336,11 +336,11 @@ jobs:
             throw "Packaged xray.exe did not report pinned version $env:XRAY_VERSION"
           }
 
-          $qv2rayVersionOutput = & "$deployment/qv2ray.exe" --version 2>&1 | Out-String
+          $qv2rayVersionOutput = & "$deployment/Qv2ray-Z.exe" --version 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $metadata = Get-Content "$deployment/release-manifest.json" -Raw | ConvertFrom-Json
           if ($qv2rayVersionOutput -notmatch [regex]::Escape($metadata.qv2ray_version)) {
-            throw "Packaged qv2ray.exe did not report source version $($metadata.qv2ray_version)"
+            throw "Packaged Qv2ray-Z.exe did not report source version $($metadata.qv2ray_version)"
           }
           if ($metadata.schema_version -ne 2 -or
               $metadata.qv2ray_commit -ne $env:GITHUB_SHA -or

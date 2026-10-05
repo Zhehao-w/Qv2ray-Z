@@ -56,8 +56,8 @@ if(WIN32)
         VERSION_REVISION   ${QV2RAY_BUILD_VERSION}
         COMPANY_NAME       "Qv2ray-Z community; based on Qv2ray"
         COMPANY_COPYRIGHT  "Copyright (c) 2019-2021 Qv2ray Development Group; Qv2ray-Z contributors"
-        ORIGINAL_FILENAME  "qv2ray.exe"
-        INTERNAL_NAME      "qv2ray"
+        ORIGINAL_FILENAME  "Qv2ray-Z.exe"
+        INTERNAL_NAME      "Qv2ray-Z"
         FILE_DESCRIPTION   "Qv2ray-Z Main Application"
         )
     add_definitions(-DUNICODE -D_UNICODE -DNOMINMAX)
@@ -250,6 +250,9 @@ set(QV2RAY_FULL_SOURCES
 
 QVLOG(QV2RAY_QRC_RESOURCES)
 add_executable(qv2ray ${GUI_TYPE} ${QV2RAY_FULL_SOURCES})
+if(WIN32)
+    set_target_properties(qv2ray PROPERTIES OUTPUT_NAME "Qv2ray-Z")
+endif()
 
 target_include_directories(qv2ray PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

@@ -2245,7 +2245,7 @@ Custom DNS Settings</string>
          <item>
           <widget class="QTextBrowser" name="textBrowser">
            <property name="lineWrapMode">
-            <enum>QTextEdit::NoWrap</enum>
+            <enum>QTextEdit::WidgetWidth</enum>
            </property>
            <property name="readOnly">
             <bool>true</bool>
