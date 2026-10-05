@@ -27,12 +27,6 @@ The project keeps the familiar Qt desktop workflow while narrowing maintenance a
 
 Qv2ray-Z is not intended to restore every historical Qv2ray platform, plugin, protocol, or compatibility mode. The primary day-to-day target is modern VLESS with TLS or REALITY and Vision, including REALITY ML-DSA-65 verification where configured.
 
-## Development status
-
-The latest published stable release is **v3.1.0**. The `dev` branch currently identifies itself as **3.1.1** and is being prepared for the next Windows patch release.
-
-v3.1.1 remains unreleased until the final `dev` commit completes authoritative Windows validation and the packaged UI receives a final manual sanity check. See the current [v3.1.1 release notes](docs/release-notes/3.1.1.md) for the patch scope.
-
 ## Platform
 
 **Supported release target:** Windows 10/11 x64
