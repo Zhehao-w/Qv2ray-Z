@@ -58,7 +58,13 @@ class PreferencesWindow
             formLayout_9->insertRow(2, tr("System Proxy on Connect"), setSysProxyCB);
             setSysProxyCB->show();
             QWidget::setTabOrder(quietModeCB, setSysProxyCB);
+#ifdef Q_OS_WIN
+            formLayout_9->insertRow(3, tr("AppContainer Loopback"), loopbackButton);
+            QWidget::setTabOrder(setSysProxyCB, loopbackButton);
+            QWidget::setTabOrder(loopbackButton, exitByCloseEventCB);
+#else
             QWidget::setTabOrder(setSysProxyCB, exitByCloseEventCB);
+#endif
             QWidget::setTabOrder(exitByCloseEventCB, noAutoConnectRB);
 
             // Reparenting the System Proxy control changes the Inbound page's
@@ -73,6 +79,9 @@ class PreferencesWindow
     }
 
   private:
+#ifdef Q_OS_WIN
+    QPushButton *loopbackButton;
+#endif
     void updateColorScheme() override{};
     QvMessageBusSlotDecl override;
 

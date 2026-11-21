@@ -15,7 +15,9 @@
 #include "utils/DiagnosticSafety.hpp"
 #include "utils/QvHelpers.hpp"
 
-#ifndef Q_OS_WIN
+#ifdef Q_OS_WIN
+#include "platform/windows/AppContainerLoopback.hpp"
+#else
 #include <QSocketNotifier>
 #include <atomic>
 #include <cerrno>
@@ -183,6 +185,11 @@ const QString SayLastWords() noexcept
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_WIN
+    if (const auto result = Qv2ray::platform::windows::loopback::RunElevatedRequest(argc, argv))
+        return *result;
+#endif
+
     globalArgc = argc;
     globalArgv = argv;
 
