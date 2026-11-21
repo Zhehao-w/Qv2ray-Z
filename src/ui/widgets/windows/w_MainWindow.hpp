@@ -181,6 +181,9 @@ class MainWindow
     DECL_ACTION(tray_RootMenu, tray_action_ClearBypassCN);
     DECL_ACTION(tray_RootMenu, tray_action_SetSystemProxy);
     DECL_ACTION(tray_RootMenu, tray_action_ClearSystemProxy);
+#ifdef Q_OS_WIN
+    DECL_ACTION(tray_RootMenu, tray_action_AppContainerLoopback);
+#endif
     DECL_ACTION(connectionListRCM_Menu, action_RCM_Start);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_SetAutoConnection);
     DECL_ACTION(connectionListRCM_Menu, action_RCM_UpdateSubscription);

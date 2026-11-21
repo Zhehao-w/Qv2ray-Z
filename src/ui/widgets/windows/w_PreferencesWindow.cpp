@@ -11,6 +11,10 @@
 #include "utils/HTTPRequestHelper.hpp"
 #include "utils/QvHelpers.hpp"
 
+#ifdef Q_OS_WIN
+#include "w_AppContainerLoopback.hpp"
+#endif
+
 #include <QColorDialog>
 #include <QCompleter>
 #include <QDesktopServices>
@@ -49,6 +53,17 @@ PreferencesWindow::PreferencesWindow(QWidget *parent) : QvDialog("PreferenceWind
     addStateOptions("y", { [&] { return y(); }, [&](QJsonValue val) { move(x(), val.toInt()); } });
 
     setupUi(this);
+#ifdef Q_OS_WIN
+    loopbackButton = new QPushButton(tr("Manage…"), groupBox9);
+    loopbackButton->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    loopbackButton->setAutoDefault(false);
+    loopbackButton->setAccessibleName(tr("Manage AppContainer Loopback Exemptions"));
+    loopbackButton->setToolTip(tr("Allow Windows Store apps to reach the local system proxy."));
+    connect(loopbackButton, &QPushButton::clicked, this, [this] {
+        AppContainerLoopbackDialog dialog(this);
+        dialog.exec();
+    });
+#endif
     //
     QvMessageBusConnect(PreferencesWindow);
     textBrowser->setHtml(StringFromFile(":/assets/credit.html"));
