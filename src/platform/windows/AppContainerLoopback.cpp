@@ -139,10 +139,12 @@ namespace Qv2ray::platform::windows::loopback
         {
             if (fullName.isEmpty())
                 return {};
-            wchar_t family[PACKAGE_FAMILY_NAME_MAX_LENGTH + 1];
-            UINT32 length = ARRAYSIZE(family);
-            if (PackageFamilyNameFromFullName(Wide(fullName), &length, family) == ERROR_SUCCESS)
-                return QString::fromWCharArray(family);
+            UINT32 length = 0;
+            if (PackageFamilyNameFromFullName(Wide(fullName), &length, nullptr) != ERROR_INSUFFICIENT_BUFFER || length == 0)
+                return {};
+            std::vector<wchar_t> family(length);
+            if (PackageFamilyNameFromFullName(Wide(fullName), &length, family.data()) == ERROR_SUCCESS)
+                return QString::fromWCharArray(family.data());
             return {};
         }
 
