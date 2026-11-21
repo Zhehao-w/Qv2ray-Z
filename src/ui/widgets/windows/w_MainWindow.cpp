@@ -13,6 +13,10 @@
 #include "ui/widgets/windows/w_ImportConfig.hpp"
 #include "ui/widgets/windows/w_PreferencesWindow.hpp"
 
+#ifdef Q_OS_WIN
+#include "w_AppContainerLoopback.hpp"
+#endif
+
 #include <QClipboard>
 #include <QInputDialog>
 #include <QScrollBar>
@@ -171,6 +175,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     tray_RootMenu->addAction(tray_action_Preferences);
     tray_RootMenu->addMenu(tray_BypassCNMenu);
     tray_RootMenu->addMenu(tray_SystemProxyMenu);
+#ifdef Q_OS_WIN
+    tray_RootMenu->addAction(tray_action_AppContainerLoopback);
+    connect(tray_action_AppContainerLoopback, &QAction::triggered, this, [this] {
+        AppContainerLoopbackDialog dialog(isVisible() && !isMinimized() ? this : nullptr);
+        dialog.exec();
+    });
+#endif
     //
     tray_RootMenu->addSeparator();
     tray_RootMenu->addMenu(tray_RecentConnectionsMenu);

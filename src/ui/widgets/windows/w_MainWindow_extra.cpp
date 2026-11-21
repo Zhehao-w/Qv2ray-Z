@@ -316,6 +316,9 @@ void MainWindow::UpdateActionTranslations()
     tray_action_ClearBypassCN->setText(tr("Disable Bypassing CN Mainland"));
     tray_action_SetSystemProxy->setText(tr("Enable System Proxy"));
     tray_action_ClearSystemProxy->setText(tr("Disable System Proxy"));
+#ifdef Q_OS_WIN
+    tray_action_AppContainerLoopback->setText(tr("AppContainer Loopback…"));
+#endif
     //
     action_RCM_Start->setText(tr("Connect to this"));
     action_RCM_SetAutoConnection->setText(tr("Set as automatically connected"));

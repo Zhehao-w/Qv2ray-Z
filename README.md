@@ -122,7 +122,7 @@ The maintained application UI is English-only.
 
 ### Windows AppContainer loopback exemptions
 
-If a packaged Windows app such as Teams cannot connect while Windows uses a local system proxy, open **Preferences → General → AppContainer Loopback → Manage…**. Search for the app by name, package, or SID. Use the checkbox for a single AppContainer. To enable a group's verified related containers together, select the group and choose **Enable Selected**.
+If a packaged Windows app such as Teams cannot connect while Windows uses a local system proxy, right-click the Qv2ray-Z tray icon and choose **AppContainer Loopback…**. You can also open **Preferences → General → AppContainer Loopback → Manage…**. Search for the app by name, package, or SID. Use the checkbox for a single AppContainer. To enable a group's verified related containers together, select the group and choose **Enable Selected**.
 
 **Enable All** and **Disable All** apply to every detected AppContainer, including rows hidden by search or filters. Enabling all lets those apps reach local services and reduces their local network isolation. Exemptions without a detected app appear under **Unmatched exemptions**, where you can remove them explicitly.
 
