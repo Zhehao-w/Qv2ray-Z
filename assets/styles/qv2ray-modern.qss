@@ -79,6 +79,16 @@ QComboBox::drop-down {
     width: 24px;
 }
 
+QComboBox#loopbackStatusFilter {
+    padding-right: 24px;
+}
+
+QComboBox#loopbackStatusFilter::down-arrow {
+    image: url(:/assets/icons/filter.svg);
+    width: 14px;
+    height: 14px;
+}
+
 /* Keep numeric fields visually consistent with the rest of the form. Values
    remain keyboard- and wheel-editable; the dated Fusion +/- buttons are hidden. */
 QSpinBox,

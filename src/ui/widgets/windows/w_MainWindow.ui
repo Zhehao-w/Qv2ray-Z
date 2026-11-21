@@ -104,6 +104,19 @@
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="appContainerLoopbackBtn">
+           <property name="accessibleName">
+            <string>AppContainer Loopback</string>
+           </property>
+           <property name="toolTip">
+            <string>Manage Windows AppContainer loopback exemptions</string>
+           </property>
+           <property name="text">
+            <string>Loopback</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="preferencesBtn">
            <property name="text">
             <string>Preferences</string>

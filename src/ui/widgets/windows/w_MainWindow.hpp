@@ -66,6 +66,9 @@ class MainWindow
     // Do not declare as slots, we connect them manually.
 
     void Action_Exit();
+#ifdef Q_OS_WIN
+    void OpenAppContainerLoopback();
+#endif
     void Action_Start();
     void Action_SetAutoConnection();
     void Action_Edit();
