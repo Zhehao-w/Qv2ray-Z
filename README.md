@@ -120,6 +120,16 @@ Qv2ray-Z keeps the familiar Qv2ray connection workflow while focusing the mainta
 
 The maintained application UI is English-only.
 
+### Windows AppContainer loopback exemptions
+
+If a packaged Windows app such as Teams cannot connect while Windows uses a local system proxy, open **Preferences → General → AppContainer Loopback → Manage…**. Search for the app by name, package, or SID. Use the checkbox for a single AppContainer. To enable a group's verified related containers together, select the group and choose **Enable Selected**.
+
+**Enable All** and **Disable All** apply to every detected AppContainer, including rows hidden by search or filters. Enabling all lets those apps reach local services and reduces their local network isolation. Exemptions without a detected app appear under **Unmatched exemptions**, where you can remove them explicitly.
+
+Windows may ask for administrator approval when you apply a change. Exemptions take effect immediately and stay in Windows after you disconnect or exit Qv2ray-Z. Use **Refresh** to detect newly installed apps before choosing whether to grant them an exemption.
+
+See the [v3.2.0 release notes](docs/release-notes/3.2.0.md).
+
 ## Desktop improvements
 
 Qv2ray-Z keeps the desktop workflow intentionally compact while modernizing the parts that matter for daily use:
