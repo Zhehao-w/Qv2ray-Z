@@ -88,6 +88,11 @@ void MainWindow::OnRecentConnectionsMenuReadyToShow()
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("MainWindow")
 {
     setupUi(this);
+#ifdef Q_OS_WIN
+    connect(appContainerLoopbackBtn, &QPushButton::clicked, this, &MainWindow::OpenAppContainerLoopback);
+#else
+    appContainerLoopbackBtn->hide();
+#endif
     addStateOptions("width", { [&] { return width(); }, [&](QJsonValue val) { resize(val.toInt(), size().height()); } });
     addStateOptions("height", { [&] { return height(); }, [&](QJsonValue val) { resize(size().width(), val.toInt()); } });
     addStateOptions("x", { [&] { return x(); }, [&](QJsonValue val) { move(val.toInt(), y()); } });
@@ -177,10 +182,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), QvStateObject("Ma
     tray_RootMenu->addMenu(tray_SystemProxyMenu);
 #ifdef Q_OS_WIN
     tray_RootMenu->addAction(tray_action_AppContainerLoopback);
-    connect(tray_action_AppContainerLoopback, &QAction::triggered, this, [this] {
-        AppContainerLoopbackDialog dialog(isVisible() && !isMinimized() ? this : nullptr);
-        dialog.exec();
-    });
+    connect(tray_action_AppContainerLoopback, &QAction::triggered, this, &MainWindow::OpenAppContainerLoopback);
 #endif
     //
     tray_RootMenu->addSeparator();
@@ -552,6 +554,14 @@ void MainWindow::on_preferencesBtn_clicked()
 {
     PreferencesWindow{ this }.exec();
 }
+
+#ifdef Q_OS_WIN
+void MainWindow::OpenAppContainerLoopback()
+{
+    AppContainerLoopbackDialog dialog(isVisible() && !isMinimized() ? this : nullptr);
+    dialog.exec();
+}
+#endif
 
 void MainWindow::on_setBypassCNBtn_clicked()
 {

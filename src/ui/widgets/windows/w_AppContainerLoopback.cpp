@@ -53,6 +53,7 @@ AppContainerLoopbackDialog::AppContainerLoopbackDialog(QWidget *parent) : QDialo
     search->setAccessibleName(tr("Search apps, packages or SIDs"));
     search->setClearButtonEnabled(true);
     filter = new QComboBox(this);
+    filter->setObjectName(QStringLiteral("loopbackStatusFilter"));
     filter->setAccessibleName(tr("Exemption status"));
     filter->addItems({ tr("All statuses"), tr("Enabled"), tr("Disabled") });
     refreshButton = new QPushButton(tr("Refresh"), this);

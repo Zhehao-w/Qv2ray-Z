@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
+        <file>assets/icons/filter.svg</file>
         <file>assets/icons/ui_dark/add.svg</file>
         <file>assets/icons/ui_dark/minus.svg</file>
         <file>assets/icons/ui_dark/adjust.svg</file>
